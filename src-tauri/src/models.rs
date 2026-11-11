@@ -142,6 +142,7 @@ pub struct Task {
     pub deadline_at: Option<String>,
     pub target_at: Option<String>,
     pub completed_at: Option<String>,
+    pub priority: Option<String>,
     pub sort_order: i64,
     pub created_at: String,
     pub parts: Vec<TaskPart>,
@@ -157,6 +158,8 @@ pub struct TaskInput {
     pub notes: String,
     pub deadline_at: Option<String>,
     pub target_at: Option<String>,
+    #[serde(default)]
+    pub priority: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -327,6 +330,7 @@ pub struct SpaceInsight {
     pub class: i64,
     pub self_study: i64,
     pub other: i64,
+    pub sleep: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -356,6 +360,10 @@ pub struct Insights {
     pub sleep_average: Option<i64>,
     /// Days of the period that have started, for per-day averages.
     pub elapsed_days: i64,
+    /// Tasks completed within the period.
+    pub tasks_done: i64,
+    /// Number of class or self-study events that count, for the average session length.
+    pub productive_sessions: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

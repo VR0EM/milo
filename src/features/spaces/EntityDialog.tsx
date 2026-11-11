@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { PALETTE, colorVar } from "../../lib/colors";
+import { PALETTE, colorVar, isCustomColor } from "../../lib/colors";
 import { useArchiveWithUndo, useGroups, useSpaces } from "../../lib/queries";
 import { useUi, type Dialog } from "../../lib/store";
 import type { ActivityCategory, SpaceRole } from "../../lib/types";
@@ -84,6 +84,18 @@ function Form({ dialog }: { dialog: Dialog }) {
                     <span className="swatch big" style={{ ["--c" as string]: colorVar(c) }} />
                   </label>
                 ))}
+                <label title="Your own colour" className="custom-swatch">
+                  <input
+                    type="color"
+                    aria-label="Your own colour"
+                    value={isCustomColor(color) ? color : "#3fa7d6"}
+                    onChange={(e) => setColor(e.target.value)}
+                  />
+                  <span
+                    className={`swatch big${isCustomColor(color) ? " picked" : " rainbow"}`}
+                    style={isCustomColor(color) ? { ["--c" as string]: color } : undefined}
+                  />
+                </label>
               </div>
             </fieldset>
             <label className="field">
@@ -108,7 +120,7 @@ function Form({ dialog }: { dialog: Dialog }) {
             <select value={category} onChange={(e) => setCategory(e.target.value as ActivityCategory)}>
               <option value="class">Class time</option>
               <option value="self_study">Self-study</option>
-              <option value="other">Other</option>
+              <option value="other">Not productive</option>
             </select>
           </label>
         )}

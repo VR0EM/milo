@@ -3,6 +3,7 @@
 // Never runs inside the desktop app.
 
 import { api } from "./api";
+import { mockInvoke } from "./mockBackend";
 
 export async function seedDemo() {
   const g = (await api.listGroups())[0];
@@ -45,13 +46,15 @@ export async function seedDemo() {
     x.setHours(h, m, 0, 0);
     return x.toISOString();
   };
-  const t1 = await api.createTask({ spaceId: an.id, typeId: "seed-type-theory", title: "Chapters 4-6", notes: "", deadlineAt: due(9), targetAt: due(6) });
+  const t1 = await api.createTask({ spaceId: an.id, typeId: "seed-type-theory", title: "Chapters 4-6", notes: "", deadlineAt: due(9), targetAt: due(6), priority: "medium" });
   for (const p of ["Chapter 4", "Chapter 5", "Chapter 6"]) await api.createTaskPart(t1.id, p);
   const withParts = (await api.listTasks()).find((t) => t.id === t1.id)!;
   await api.setPartDone(withParts.parts[0].id, true);
-  await api.createTask({ spaceId: ph.id, typeId: "seed-type-assignment", title: "Problem set 3", notes: "", deadlineAt: due(2, 17, 0), targetAt: null });
-  const t3 = await api.createTask({ spaceId: ch.id, typeId: "seed-type-lab", title: "Lab report titration", notes: "", deadlineAt: due(5), targetAt: due(3) });
+  await api.createTask({ spaceId: ph.id, typeId: "seed-type-assignment", title: "Problem set 3", notes: "", deadlineAt: due(2, 17, 0), targetAt: null, priority: "high" });
+  const t3 = await api.createTask({ spaceId: ch.id, typeId: "seed-type-lab", title: "Lab report titration", notes: "", deadlineAt: due(5), targetAt: due(3), priority: "low" });
   for (const p of ["Data", "Discussion", "Conclusion"]) await api.createTaskPart(t3.id, p);
+
+  await mockInvoke("demo_seed_import", {});
 
   const [morning, evening] = await api.listRoutines();
   for (const s of ["Medication", "Glass of water", "Check Today"]) await api.createRoutineItem(morning.id, s);

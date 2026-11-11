@@ -320,6 +320,7 @@ fn task_from(r: &Row) -> rusqlite::Result<Task> {
         deadline_at: r.get("deadline_at")?,
         target_at: r.get("target_at")?,
         completed_at: r.get("completed_at")?,
+        priority: r.get("priority")?,
         sort_order: r.get("sort_order")?,
         created_at: r.get("created_at")?,
         parts: Vec::new(),
@@ -350,11 +351,19 @@ pub fn get_task(c: &Connection, id: &str) -> Result<Task> {
     Ok(t)
 }
 
+fn check_priority(p: &Option<String>) -> Result<()> {
+    match p.as_deref() {
+        None | Some("low") | Some("medium") | Some("high") => Ok(()),
+        Some(other) => Err(AppError::Invalid(format!("Unknown priority: {other}"))),
+    }
+}
+
 pub fn create_task(c: &Connection, input: TaskInput) -> Result<Task> {
+    check_priority(&input.priority)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO tasks (id, space_id, type_id, title, notes, deadline_at, target_at, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+        "INSERT INTO tasks (id, space_id, type_id, title, notes, deadline_at, target_at, priority, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
         params![
             id,
             input.space_id,
@@ -363,6 +372,7 @@ pub fn create_task(c: &Connection, input: TaskInput) -> Result<Task> {
             input.notes,
             input.deadline_at,
             input.target_at,
+            input.priority,
             next_sort(c, "tasks")?,
             ts
         ],
@@ -371,10 +381,11 @@ pub fn create_task(c: &Connection, input: TaskInput) -> Result<Task> {
 }
 
 pub fn update_task(c: &Connection, id: &str, input: TaskInput) -> Result<Task> {
+    check_priority(&input.priority)?;
     changed(c.execute(
         "UPDATE tasks SET space_id = ?2, type_id = ?3, title = ?4, notes = ?5, deadline_at = ?6, target_at = ?7,
-         updated_at = ?8 WHERE id = ?1",
-        params![id, input.space_id, input.type_id, input.title.trim(), input.notes, input.deadline_at, input.target_at, now()],
+         priority = ?8, updated_at = ?9 WHERE id = ?1",
+        params![id, input.space_id, input.type_id, input.title.trim(), input.notes, input.deadline_at, input.target_at, input.priority, now()],
     )?)?;
     get_task(c, id)
 }
@@ -858,9 +869,15 @@ mod tests {
                 notes: String::new(),
                 deadline_at: Some("2026-12-01T22:59:00.000Z".into()),
                 target_at: None,
+                priority: Some("high".into()),
             },
         )
         .unwrap();
+        assert_eq!(t.priority.as_deref(), Some("high"));
+        let mut bad = TaskInput { space_id: t.space_id.clone(), type_id: None, title: "x".into(), notes: String::new(), deadline_at: None, target_at: None, priority: Some("urgent".into()) };
+        assert!(update_task(&c, &t.id, bad.clone()).is_err(), "only low, medium, high");
+        bad.priority = None;
+        assert_eq!(update_task(&c, &t.id, bad).unwrap().priority, None);
         assert!(set_task_completed(&c, &t.id, true).unwrap().completed_at.is_some());
         set_task_completed(&c, &t.id, false).unwrap();
 

@@ -43,6 +43,10 @@ pub fn export_all(c: &Connection, path: &str) -> Result<usize> {
     // Write next to the target first, so a failed write never leaves half a file.
     let tmp = format!("{path}.partial");
     std::fs::write(&tmp, serde_json::to_vec_pretty(&doc).expect("JSON values always serialize"))?;
+    // Windows refuses to rename onto an existing file, so an overwrite removes it first.
+    if std::path::Path::new(path).exists() {
+        std::fs::remove_file(path)?;
+    }
     std::fs::rename(&tmp, path)?;
     Ok(total)
 }
@@ -59,5 +63,7 @@ mod tests {
         assert_eq!(doc["tables"]["spaces"].as_array().unwrap().len(), 3);
         assert!(doc["tables"]["title_mappings"].is_array());
         assert!(n > 10);
+        // Exporting again to the same file replaces it (the Save dialog's "Replace").
+        assert!(super::export_all(&c, path.to_str().unwrap()).is_ok());
     }
 }

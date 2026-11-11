@@ -163,9 +163,25 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         if (!a.input.weekdays) throw "Pick at least one day";
         return update("reminder_rule", a.id, a.input);
       case "send_test_reminder": return null;
-      case "list_import_sources": return [];
+      case "list_import_sources": return (tables.import_source ?? []).filter((r) => !r.deletedAt).map((r) => ({ ...r }));
+      case "demo_seed_import": {
+        // Browser demo only: a calendar link with a few imported deadlines.
+        tables.import_source = [{ ...base("demo-source", 0), kind: "ics_url", name: "Deadlines", location: "https://learning.example.edu/calendar/export.php?userid=1&authtoken=secret", spaceId: "seed-space-personal", enabled: true, lastSyncedAt: ts(), lastError: null }];
+        const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(23, 59, 0, 0); return d; };
+        ["01 M365 intro labo moet worden ingeleverd", "02 Entra ID labo moet worden ingeleverd", "03 Intune labo moet worden ingeleverd", "Bedrijfsbezoek Umicore"].forEach((title, i) => {
+          const start = day(i * 3 + 1);
+          create("event", { spaceId: "seed-space-personal", activityId: null, title, startAt: new Date(start.getTime() - 3600000).toISOString(), endAt: start.toISOString(), allDay: false, notes: "", status: "planned" }, { source: "import", sourceId: "demo-source", locallyModified: false });
+        });
+        return null;
+      }
       case "list_title_mappings": return tables.title_mapping.filter((r) => !r.deletedAt).map((r) => ({ ...r }));
-      case "list_unmapped_titles": return [];
+      case "list_unmapped_titles": {
+        const maps = tables.title_mapping.filter((m) => !m.deletedAt);
+        const hit = (t: string) => maps.some((m) => (m.matchType === "exact" ? m.pattern.toLowerCase() === t.toLowerCase() : t.toLowerCase().includes(m.pattern.toLowerCase())));
+        const counts = new Map<string, number>();
+        tables.event.filter((e) => e.source === "import" && !e.deletedAt && !hit(e.title)).forEach((e) => counts.set(e.title, (counts.get(e.title) ?? 0) + 1));
+        return [...counts].map(([title, count]) => ({ title, count }));
+      }
       case "create_title_mapping": return create("title_mapping", a.input);
       case "update_title_mapping": return update("title_mapping", a.id, a.input);
       case "follow_import": return update("event", a.id, { locallyModified: false });
@@ -219,7 +235,8 @@ function mockInsights(from: string, to: string) {
   const buckets = new Map<string, { class: number; selfStudy: number }>();
   for (const d = new Date(f); d < t; d.setDate(d.getDate() + 1)) if (!buckets.has(bucketOf(d))) buckets.set(bucketOf(d), { class: 0, selfStudy: 0 });
   const totals = { class: 0, selfStudy: 0, other: 0, sleep: 0 };
-  const spaces = new Map<string, { spaceId: string; class: number; selfStudy: number; other: number }>();
+  const spaces = new Map<string, { spaceId: string; class: number; selfStudy: number; other: number; sleep: number }>();
+  let sessions = 0;
   const nights = new Map<string, number>();
   const limit = Math.min(t.getTime(), Date.now());
   for (const e of tables.event) {
@@ -229,16 +246,18 @@ function mockInsights(from: string, to: string) {
     if (b <= a) continue;
     const m = Math.floor((b - a) / 60000);
     const space = tables.space.find((s) => s.id === e.spaceId);
+    const s = spaces.get(e.spaceId) ?? { spaceId: e.spaceId, class: 0, selfStudy: 0, other: 0, sleep: 0 };
+    spaces.set(e.spaceId, s);
     if (space?.role === "sleep") {
+      s.sleep += m;
       totals.sleep += m;
       const k = key(new Date(e.endAt));
       nights.set(k, (nights.get(k) ?? 0) + m);
       continue;
     }
     const cat = tables.activity.find((x) => x.id === e.activityId)?.category;
-    const s = spaces.get(e.spaceId) ?? { spaceId: e.spaceId, class: 0, selfStudy: 0, other: 0 };
-    spaces.set(e.spaceId, s);
     if (cat !== "class" && cat !== "self_study") { totals.other += m; s.other += m; continue; }
+    sessions += 1;
     const field = cat === "class" ? "class" : "selfStudy";
     totals[field] += m; s[field] += m;
     const bk = buckets.get(bucketOf(new Date(a)));
@@ -249,7 +268,9 @@ function mockInsights(from: string, to: string) {
     bucket: weekly ? "week" : "day",
     buckets: [...buckets].map(([start, v]) => ({ start, ...v })),
     totals,
-    spaces: [...spaces.values()].sort((x, y) => y.class + y.selfStudy + y.other - (x.class + x.selfStudy + x.other)),
+    spaces: [...spaces.values()].sort((x, y) => y.class + y.selfStudy + y.other + y.sleep - (x.class + x.selfStudy + x.other + x.sleep)),
+    tasksDone: tables.task.filter((t) => !t.deletedAt && t.completedAt && t.completedAt >= f.toISOString() && t.completedAt < new Date(limit).toISOString()).length,
+    productiveSessions: sessions,
     nights: nightList,
     sleepAverage: nightList.length ? Math.floor(nightList.reduce((n, x) => n + x.minutes, 0) / nightList.length) : null,
     elapsedDays: Math.max(0, Math.ceil((limit - f.getTime()) / 864e5)),

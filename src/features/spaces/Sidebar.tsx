@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
 import { colorVar } from "../../lib/colors";
 import { useActiveFocus, useGroups, useSpaces } from "../../lib/queries";
@@ -59,6 +60,40 @@ function NavButton({ view: v, label, icon, shortcut }: { view: View; label: stri
   );
 }
 
+/** "+" next to Spaces: a new space or a new group. */
+function AddMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("mousedown", away);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const pick = (kind: "space" | "group") => {
+    setOpen(false);
+    useUi.getState().openDialog(kind === "space" ? { kind: "space", groupId: null } : { kind: "group" });
+  };
+  return (
+    <div className="add-menu" ref={ref}>
+      <button className="icon-btn" title="Add a space or group" aria-label="Add a space or group" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name="plus" size={14} />
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          <button role="menuitem" onClick={() => pick("space")}>New space</button>
+          <button role="menuitem" onClick={() => pick("group")}>New group</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const groups = (useGroups().data ?? []).filter((g) => !g.deletedAt);
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
@@ -99,9 +134,7 @@ export function Sidebar() {
       <section className="side-spaces" aria-label="Spaces">
         <div className="side-head">
           <h2>Spaces</h2>
-          <button className="icon-btn" title="New space" aria-label="New space" onClick={() => openDialog({ kind: "space", groupId: null })}>
-            <Icon name="plus" size={14} />
-          </button>
+          <AddMenu />
         </div>
         <ul>{loose.map(row)}</ul>
         {groups.map((g) => {

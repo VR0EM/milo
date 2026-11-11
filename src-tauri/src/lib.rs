@@ -52,6 +52,19 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Fit the window on smaller screens (a 1366x768 laptop at 125% has about 1090x610
+            // points to work with): never larger than 92% of the screen, and centred.
+            if let Some(window) = app.get_webview_window("main") {
+                if let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) {
+                    let screen = monitor.size();
+                    let (w, h) = ((screen.width as f64 * 0.92) as u32, (screen.height as f64 * 0.92) as u32);
+                    if size.width > w || size.height > h {
+                        let _ = window.set_size(tauri::PhysicalSize::new(size.width.min(w), size.height.min(h)));
+                    }
+                    let _ = window.center();
+                }
+            }
+
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("milo.sqlite"))?;

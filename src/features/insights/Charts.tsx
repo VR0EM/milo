@@ -32,7 +32,17 @@ export function fmtMinutes(min: number) {
  * Stacked columns, one axis in hours. Hover or focus a column for its numbers.
  * The first series sits at the bottom.
  */
-export function ColumnChart({ columns, series, label }: { columns: Column[]; series: Series[]; label: string }) {
+/** "3.2 h": short enough to sit above a bar. */
+export const fmtHoursShort = (min: number) => `${(min / 60).toFixed(min >= 600 ? 0 : 1)} h`;
+
+export function ColumnChart({ columns, series, label, height = 180, totals = false }: {
+  columns: Column[];
+  series: Series[];
+  label: string;
+  height?: number;
+  /** Show each column's total above it (only readable for a week or so of columns). */
+  totals?: boolean;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const axis = ticks(Math.max(0, ...columns.map((c) => c.values.reduce((a, b) => a + b, 0))));
   const top = axis[axis.length - 1] * 60;
@@ -40,7 +50,7 @@ export function ColumnChart({ columns, series, label }: { columns: Column[]; ser
 
   return (
     <div>
-      <div className="chart" role="img" aria-label={label}>
+      <div className="chart" role="img" aria-label={label} style={{ height }}>
         <div className="chart-axis">
           {axis.map((t) => (
             <span key={t} style={{ bottom: `${(t * 60 / top) * 100}%` }}>{t} h</span>
@@ -60,10 +70,13 @@ export function ColumnChart({ columns, series, label }: { columns: Column[]; ser
               onFocus={() => setHover(i)}
               onBlur={() => setHover(null)}
             >
+              {totals && c.values.some((v) => v > 0) && (
+                <span className="col-total">{fmtHoursShort(c.values.reduce((a, b) => a + b, 0))}</span>
+              )}
               <div className="chart-stack">
                 {c.values.map((v, j) =>
                   v > 0 ? (
-                    <div key={j} className="chart-seg" style={{ height: `${(v / top) * 180}px`, ["--s" as string]: series[j].color }} />
+                    <div key={j} className="chart-seg" style={{ height: `${(v / top) * height}px`, ["--s" as string]: series[j].color }} />
                   ) : null,
                 )}
               </div>

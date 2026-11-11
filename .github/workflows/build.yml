@@ -1,0 +1,55 @@
+# Builds Milo on Windows and macOS for every push, runs the tests there, and keeps the
+# installers as downloadable artifacts (Actions > the run > Artifacts). Nothing is published.
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install
+        run: npm ci
+
+      - name: Check types
+        run: npx tsc --noEmit
+
+      - name: Test the data layer
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Build the app
+        run: npm run tauri build
+
+      - name: Keep the installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: milo-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/dmg/*.dmg

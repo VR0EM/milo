@@ -79,11 +79,13 @@ export interface Task {
   deadlineAt: string | null;
   targetAt: string | null;
   completedAt: string | null;
+  priority: Priority | null;
   sortOrder: number;
   createdAt: string;
   parts: TaskPart[];
 }
-export type TaskInput = Pick<Task, "spaceId" | "typeId" | "title" | "notes" | "deadlineAt" | "targetAt">;
+export type Priority = "low" | "medium" | "high";
+export type TaskInput = Pick<Task, "spaceId" | "typeId" | "title" | "notes" | "deadlineAt" | "targetAt" | "priority">;
 
 export const toTaskInput = (t: Task): TaskInput => ({
   spaceId: t.spaceId,
@@ -92,6 +94,7 @@ export const toTaskInput = (t: Task): TaskInput => ({
   notes: t.notes,
   deadlineAt: t.deadlineAt,
   targetAt: t.targetAt,
+  priority: t.priority,
 });
 
 /** 0..1. With parts: the done share by weight. Without: done or not. */
@@ -194,10 +197,12 @@ export interface Insights {
   bucket: "day" | "week";
   buckets: { start: string; class: number; selfStudy: number }[];
   totals: { class: number; selfStudy: number; other: number; sleep: number };
-  spaces: { spaceId: string; class: number; selfStudy: number; other: number }[];
+  spaces: { spaceId: string; class: number; selfStudy: number; other: number; sleep: number }[];
   nights: { date: string; minutes: number }[];
   sleepAverage: number | null;
   elapsedDays: number;
+  tasksDone: number;
+  productiveSessions: number;
 }
 
 export interface Semester {

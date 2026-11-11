@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
+import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
 import { useArchiveWithUndo, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { fmtTime, fromInputs, toDateInput } from "../../lib/time";
@@ -92,6 +93,19 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="field">
+        <span>Priority</span>
+        <div className="segmented prio-picker" role="radiogroup" aria-label="Priority">
+          <button type="button" role="radio" aria-checked={!task.priority} className={!task.priority ? "on" : ""} onClick={() => save({ priority: null })}>None</button>
+          {PRIORITIES.map(([p, label]) => (
+            <button key={p} type="button" role="radio" aria-checked={task.priority === p} className={task.priority === p ? "on" : ""} onClick={() => save({ priority: p })}>
+              <PriorityMark priority={p} label={false} />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <MomentField label="Deadline" value={task.deadlineAt} onChange={(v) => save({ deadlineAt: v })} />

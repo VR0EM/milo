@@ -78,6 +78,7 @@ pub fn insights(c: &Connection, from: NaiveDate, to: NaiveDate, now: DateTime<Ut
     let mut totals = InsightTotals::default();
     let mut spaces: BTreeMap<String, SpaceInsight> = BTreeMap::new();
     let mut nights: BTreeMap<NaiveDate, i64> = BTreeMap::new();
+    let mut sessions = 0i64;
 
     for (start, end, space_id, role, category) in rows {
         let (Ok(start), Ok(end)) = (DateTime::parse_from_rfc3339(&start), DateTime::parse_from_rfc3339(&end)) else { continue };
@@ -87,21 +88,23 @@ pub fn insights(c: &Connection, from: NaiveDate, to: NaiveDate, now: DateTime<Ut
             continue;
         }
 
+        let m = minutes(a, b);
+        let entry = spaces.entry(space_id.clone()).or_insert_with(|| SpaceInsight { space_id, ..Default::default() });
         if role == "sleep" {
-            let m = minutes(a, b);
             totals.sleep += m;
+            entry.sleep += m;
             *nights.entry(end.with_timezone(&Local).date_naive()).or_default() += m;
             continue;
         }
 
-        let m = minutes(a, b);
-        let entry = spaces.entry(space_id.clone()).or_insert_with(|| SpaceInsight { space_id, ..Default::default() });
         match category.as_str() {
             "class" => {
+                sessions += 1;
                 totals.class += m;
                 entry.class += m;
             }
             "self_study" => {
+                sessions += 1;
                 totals.self_study += m;
                 entry.self_study += m;
             }
@@ -129,12 +132,20 @@ pub fn insights(c: &Connection, from: NaiveDate, to: NaiveDate, now: DateTime<Ut
     }
 
     let mut spaces: Vec<SpaceInsight> = spaces.into_values().collect();
-    spaces.sort_by_key(|s| -(s.class + s.self_study + s.other));
+    spaces.sort_by_key(|s| -(s.class + s.self_study + s.other + s.sleep));
     let nights: Vec<Night> = nights.into_iter().filter(|(d, _)| *d >= from && *d < to).map(|(d, m)| Night { date: d.to_string(), minutes: m }).collect();
     let sleep_average = (!nights.is_empty()).then(|| nights.iter().map(|n| n.minutes).sum::<i64>() / nights.len() as i64);
     let elapsed_days = ((limit - from_utc).num_hours() as f64 / 24.0).ceil().max(0.0) as i64;
 
+    let tasks_done: i64 = c.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL AND completed_at >= ?1 AND completed_at < ?2",
+        params![iso(from_utc), iso(limit.max(from_utc))],
+        |r| r.get(0),
+    )?;
+
     Ok(Insights {
+        tasks_done,
+        productive_sessions: sessions,
         bucket: if weekly { "week".into() } else { "day".into() },
         buckets: buckets.into_iter().map(|(d, (class, self_study))| Bucket { start: d.to_string(), class, self_study }).collect(),
         totals,
@@ -238,7 +249,13 @@ mod tests {
         assert_eq!(r.nights.len(), 1);
         assert_eq!((r.nights[0].date.as_str(), r.nights[0].minutes), ("2026-11-10", 480));
         assert_eq!(r.sleep_average, Some(480));
-        assert_eq!(r.spaces[0].space_id, p);
+        assert_eq!(r.spaces[0].space_id, "seed-space-sleep", "sorted by total time");
+        let personal = r.spaces.iter().find(|s| s.space_id == p).unwrap();
+        assert_eq!((personal.class, personal.self_study), (120, 150));
+        assert_eq!(r.productive_sessions, 3, "the skipped one does not count; the running one does");
+        let sleep = r.spaces.iter().find(|s| s.space_id == "seed-space-sleep").unwrap();
+        assert_eq!(sleep.sleep, 480, "sleep is listed with the other spaces");
+        assert_eq!(r.tasks_done, 0);
 
         // A longer range is bucketed per week (Monday start).
         let r = insights(&c, NaiveDate::from_ymd_opt(2026, 9, 21).unwrap(), NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(), now).unwrap();

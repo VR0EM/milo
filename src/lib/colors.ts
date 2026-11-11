@@ -4,5 +4,8 @@ export const PALETTE = [
   "gray", "brown", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "red",
 ] as const;
 
+/** A custom colour is stored as "#rrggbb"; anything else is a palette key. */
+export const isCustomColor = (key: string) => /^#[0-9a-f]{6}$/i.test(key);
+
 export const colorVar = (key: string) =>
-  `var(--c-${(PALETTE as readonly string[]).includes(key) ? key : "gray"})`;
+  isCustomColor(key) ? key : `var(--c-${(PALETTE as readonly string[]).includes(key) ? key : "gray"})`;

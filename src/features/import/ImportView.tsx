@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, files } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
+import { HelpTip } from "../../components/HelpTip";
+import { Icon } from "../../components/Icon";
 import {
   useActivities, useArchiveWithUndo, useImportSources, useSpaces, useTitleMappings, useUnmappedTitles,
 } from "../../lib/queries";
@@ -64,10 +66,20 @@ function SpaceSelect({ spaces, value, onChange, label }: { spaces: Space[]; valu
   );
 }
 
+/** Only the site of a link: the rest often holds a personal key and is noise on screen. */
+function host(url: string) {
+  try {
+    return new URL(url.replace(/^webcal:/i, "https:")).host;
+  } catch {
+    return url;
+  }
+}
+
 function CalendarLinks({ spaces }: { spaces: Space[] }) {
   const sources = (useImportSources().data ?? []).filter((s) => s.kind === "ics_url");
   const refresh = useRefresh();
   const archive = useArchiveWithUndo();
+  const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [spaceId, setSpaceId] = useState("");
@@ -78,76 +90,83 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
     setBusy(key);
     try {
       notify(describe(label, await work()));
+      return true;
     } catch (e) {
       fail(e);
+      return false;
     } finally {
       setBusy(null);
       refresh();
     }
   };
 
-  const add = () =>
-    run("new", name.trim() || "Calendar", async () => {
-      const report = await api.addCalendarLink({ name: name.trim() || "Calendar", location: url.trim(), spaceId: space, enabled: true });
+  const add = async () => {
+    const ok = await run("new", name.trim() || "Calendar", () =>
+      api.addCalendarLink({ name: name.trim() || "Calendar", location: url.trim(), spaceId: space, enabled: true }),
+    );
+    if (ok) {
       setName("");
       setUrl("");
-      return report;
-    });
+      setAdding(false);
+    }
+  };
 
   return (
     <section className="block">
-      <h2>Calendar links</h2>
-      <p className="muted small">
-        A link to an .ics calendar, such as a school timetable or the secret iCal address of a Google calendar.
-        Links sync when Milo starts and every {6} hours, and with "Sync now".
-      </p>
+      <div className="block-head">
+        <h2>
+          Calendar links
+          <HelpTip>
+            A link to an online calendar (.ics), such as a school timetable or the secret iCal address of a Google calendar.
+            Milo checks each link when it starts and every 6 hours, or when you press Sync. If you change an imported event
+            yourself, your version is kept.
+          </HelpTip>
+        </h2>
+        <span className="spacer" />
+        {!adding && <button className="btn small" onClick={() => setAdding(true)}><Icon name="plus" size={12} />Add link</button>}
+      </div>
 
-      {sources.map((s) => (
-        <div key={s.id} className="import-row">
-          <div className="grow">
-            <div className="name">{s.name}</div>
-            <div className="muted small ellipsis" title={s.location}>{s.location}</div>
-            <div className={`small ${s.lastError ? "late" : "muted"}`}>
-              {s.lastError ? `Last sync failed: ${s.lastError}` : lastSynced(s)}
-            </div>
-          </div>
-          <SpaceSelect
-            spaces={spaces}
-            label="Space for titles without a link"
-            value={s.spaceId}
-            onChange={(id) => api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: id, enabled: s.enabled }).then(refresh, fail)}
-          />
-          <button className="btn" disabled={busy !== null} onClick={() => run(s.id, s.name, () => api.syncCalendarLink(s.id))}>
-            {busy === s.id ? "Syncing…" : "Sync now"}
-          </button>
-          <button className="link" onClick={() => archive("import_source", s.id, s.name)}>Archive</button>
-        </div>
-      ))}
+      {sources.length === 0 && !adding && <p className="muted">No calendar links yet.</p>}
+      {sources.length > 0 && (
+        <ul className="rows">
+          {sources.map((s) => (
+            <li key={s.id} className="row">
+              <div className="row-main">
+                <span className="row-title">{s.name}</span>
+                <span className={`row-sub ${s.lastError ? "late" : ""}`} title={s.lastError ?? s.location}>
+                  {host(s.location)} · {s.lastError ? "last sync failed" : lastSynced(s)}
+                </span>
+              </div>
+              <SpaceSelect
+                spaces={spaces}
+                label={`Space for ${s.name}`}
+                value={s.spaceId}
+                onChange={(id) => api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: id, enabled: s.enabled }).then(refresh, fail)}
+              />
+              <button className="btn small" disabled={busy !== null} onClick={() => run(s.id, s.name, () => api.syncCalendarLink(s.id))}>
+                {busy === s.id ? "Syncing…" : "Sync"}
+              </button>
+              <button className="link" onClick={() => archive("import_source", s.id, s.name)}>Archive</button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <form
-        className="form-grid"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (url.trim()) add();
-        }}
-      >
-        <label className="field">
-          <span>Name</span>
-          <input placeholder="School timetable" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Link</span>
-          <input placeholder="https://… or webcal://…" value={url} onChange={(e) => setUrl(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Default space</span>
-          <SpaceSelect spaces={spaces} value={space} onChange={setSpaceId} />
-        </label>
-        <button className="btn primary" type="submit" disabled={!url.trim() || !space || busy !== null}>
-          {busy === "new" ? "Adding…" : "Add"}
-        </button>
-      </form>
-      <p className="muted small">The default space is used for titles that have no title link yet.</p>
+      {adding && (
+        <form
+          className="add-link"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (url.trim()) add();
+          }}
+        >
+          <input autoFocus placeholder="Name, e.g. Timetable" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder="https://… or webcal://…" aria-label="Link" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <SpaceSelect spaces={spaces} value={space} onChange={setSpaceId} label="Space for new events" />
+          <button className="btn primary small" type="submit" disabled={!url.trim() || !space || busy !== null}>{busy === "new" ? "Adding…" : "Add"}</button>
+          <button className="link" type="button" onClick={() => setAdding(false)}>Cancel</button>
+        </form>
+      )}
     </section>
   );
 }
@@ -186,16 +205,20 @@ function FileImport({ spaces }: { spaces: Space[] }) {
 
   return (
     <section className="block">
-      <h2>Import a file</h2>
-      <p className="muted small">
-        An .ics file, for example a Google Calendar export (Settings, Import &amp; export), or a CSV file exported from a
-        Notion database. Importing the same file again updates the events instead of adding them twice.
-      </p>
+      <div className="block-head">
+        <h2>
+          Import a file
+          <HelpTip>
+            An .ics file, for example exported from Google Calendar (Settings, Import &amp; export), or a CSV file exported
+            from a Notion database. Importing the same file again updates its events instead of adding them twice.
+          </HelpTip>
+        </h2>
+      </div>
       <div className="inline">
-        <span>Into</span>
-        <SpaceSelect spaces={spaces} value={space} onChange={setSpaceId} label="Default space for the file" />
-        <button className="btn" disabled={!files.available || !space} onClick={pickIcs}>Choose .ics file…</button>
-        <button className="btn" disabled={!files.available || !space} onClick={pickCsv}>Choose CSV file…</button>
+        <button className="btn" disabled={!files.available || !space} onClick={pickIcs}>Calendar file (.ics)…</button>
+        <button className="btn" disabled={!files.available || !space} onClick={pickCsv}>Notion export (.csv)…</button>
+        <span className="muted">into</span>
+        <SpaceSelect spaces={spaces} value={space} onChange={setSpaceId} label="Space for the imported events" />
         {!files.available && <span className="muted small">Only in the desktop app.</span>}
       </div>
 
@@ -236,7 +259,7 @@ function FileImport({ spaces }: { spaces: Space[] }) {
               ))}
             </tbody>
           </table>
-          <p className="muted small">The other columns are kept in each event's notes. Rows without a readable date are skipped.</p>
+          <p className="muted small">Other columns go into each event's notes.</p>
           <div>
             <button
               className="btn primary"
@@ -263,33 +286,74 @@ function TitleLinks({ spaces, activities }: { spaces: Space[]; activities: Activ
   const unmapped = useUnmappedTitles().data ?? [];
   const mappings = useTitleMappings().data ?? [];
   const refresh = useRefresh();
+  const [reviewing, setReviewing] = useState(false);
+  const [rule, setRule] = useState(false);
 
   return (
     <section className="block">
-      <h2>Title links</h2>
-      <p className="muted small">
-        Imported events with the same title always go to the same space and activity. Events you changed yourself are
-        left as they are.
-      </p>
+      <div className="block-head">
+        <h2>
+          Title links
+          <HelpTip>
+            Tell Milo where imported events belong, by their title. "Title is" matches one exact title; "Title contains"
+            matches every title with those words, for example "ingeleverd" for all hand-in deadlines. Events you changed
+            yourself are left as they are.
+          </HelpTip>
+        </h2>
+        <span className="spacer" />
+        {!rule && <button className="btn small" onClick={() => setRule(true)}><Icon name="plus" size={12} />Add link</button>}
+      </div>
+
+      {rule && <NewRule spaces={spaces} activities={activities} onDone={() => { setRule(false); refresh(); }} />}
 
       {unmapped.length > 0 && (
-        <>
-          <h2 className="sub">Titles without a link</h2>
+        <div className="callout">
+          <span>
+            {unmapped.length} imported {unmapped.length === 1 ? "title has" : "titles have"} no link yet and use the calendar's own space.
+          </span>
+          <button className="link" onClick={() => setReviewing(!reviewing)}>{reviewing ? "Hide" : "Review"}</button>
+        </div>
+      )}
+      {reviewing && (
+        <ul className="rows">
           {unmapped.map((u) => (
             <NewLink key={u.title} title={u.title} count={u.count} spaces={spaces} activities={activities} onDone={refresh} />
           ))}
-        </>
+        </ul>
       )}
 
       {mappings.length > 0 && (
-        <>
-          <h2 className="sub">Links</h2>
+        <ul className="rows">
           {mappings.map((m) => <LinkRow key={m.id} mapping={m} spaces={spaces} activities={activities} />)}
-        </>
+        </ul>
       )}
-
-      {unmapped.length === 0 && mappings.length === 0 && <p className="muted">Links appear here after the first import.</p>}
+      {mappings.length === 0 && unmapped.length === 0 && !rule && <p className="muted">No links yet.</p>}
     </section>
+  );
+}
+
+function NewRule({ spaces, activities, onDone }: { spaces: Space[]; activities: Activity[]; onDone: () => void }) {
+  const [pattern, setPattern] = useState("");
+  const [spaceId, setSpaceId] = useState("");
+  const [activityId, setActivityId] = useState("");
+  return (
+    <form
+      className="add-link"
+      onSubmit={(e) => {
+        e.preventDefault();
+        api.createTitleMapping({ pattern, matchType: "contains", spaceId, activityId: activityId || null }).then(onDone, fail);
+      }}
+    >
+      <span className="muted">Title contains</span>
+      <input autoFocus placeholder="e.g. ingeleverd" aria-label="Words in the title" value={pattern} onChange={(e) => setPattern(e.target.value)} />
+      <select aria-label="Space" value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
+        <option value="">Choose a space…</option>
+        {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+      </select>
+      <ActivitySelect activities={activities} value={activityId} onChange={setActivityId} />
+      <button className="btn primary small" type="submit" disabled={!pattern.trim() || !spaceId}>Add</button>
+      <button className="link" type="button" onClick={onDone}>Cancel</button>
+    </form>
   );
 }
 
@@ -306,10 +370,10 @@ function NewLink({ title, count, spaces, activities, onDone }: {
   title: string; count: number; spaces: Space[]; activities: Activity[]; onDone: () => void;
 }) {
   const [spaceId, setSpaceId] = useState("");
-  const [activityId, setActivityId] = useState(() => activities.find((a) => a.category === "class")?.id ?? "");
+  const [activityId, setActivityId] = useState("");
   return (
-    <div className="import-row mapping-row">
-      <span className="title ellipsis" title={title}>{title}</span>
+    <li className="row mapping-row">
+      <span className="row-title ellipsis" title={title}>{title}</span>
       <span className="muted small">{count}×</span>
       <select aria-label="Space" value={spaceId} onChange={(e) => setSpaceId(e.target.value)}>
         <option value="">Choose a space…</option>
@@ -327,7 +391,7 @@ function NewLink({ title, count, spaces, activities, onDone }: {
       >
         Link
       </button>
-    </div>
+    </li>
   );
 }
 
@@ -341,7 +405,7 @@ function LinkRow({ mapping, spaces, activities }: { mapping: TitleMapping; space
     api.updateTitleMapping(id, { ...current, ...patch }).then(refresh, fail);
   };
   return (
-    <div className="import-row mapping-row" style={{ ["--c" as string]: colorVar(space?.color ?? "gray") }}>
+    <li className="row mapping-row" style={{ ["--c" as string]: colorVar(space?.color ?? "gray") }}>
       <select aria-label="Match" value={mapping.matchType} onChange={(e) => save({ matchType: e.target.value as TitleMapping["matchType"] })}>
         <option value="exact">Title is</option>
         <option value="contains">Title contains</option>
@@ -358,7 +422,7 @@ function LinkRow({ mapping, spaces, activities }: { mapping: TitleMapping; space
       <SpaceSelect spaces={spaces} value={mapping.spaceId} onChange={(spaceId) => save({ spaceId })} />
       <ActivitySelect activities={activities} value={mapping.activityId ?? ""} onChange={(id) => save({ activityId: id || null })} />
       <button className="link" onClick={() => archive("title_mapping", mapping.id, `Link "${mapping.pattern}"`)}>Archive</button>
-    </div>
+    </li>
   );
 }
 
@@ -379,13 +443,13 @@ function Export() {
   };
   return (
     <section className="block">
-      <h2>Export</h2>
-      <p className="muted small">
-        One JSON file with everything in Milo, archived items included. Daily backups of the database are made
-        automatically as well.
-      </p>
-      <div>
-        <button className="btn" disabled={!files.available || busy} onClick={run}>{busy ? "Exporting…" : "Export all data…"}</button>
+      <div className="block-head">
+        <h2>
+          Export
+          <HelpTip>One JSON file with everything in Milo, archived items included. Daily backups are made automatically as well.</HelpTip>
+        </h2>
+        <span className="spacer" />
+        <button className="btn small" disabled={!files.available || busy} onClick={run}>{busy ? "Exporting…" : "Export all data…"}</button>
       </div>
     </section>
   );

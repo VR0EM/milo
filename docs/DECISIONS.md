@@ -47,8 +47,10 @@ ones marked *(assumption)* are kept easy to change.
   Without parts, the task has its own checkbox.
 - `task_parts.weight` exists (default 1) so parts can count unequally later; the UI does
   not expose it yet.
-- The Tasks screen groups cards per space, nearest deadline first. Completed tasks are
-  hidden behind "Show completed"; they are never removed.
+- The Tasks screen is a list (one row per task: done box, title with part progress, space,
+  type, deadline) with a filter bar: search, space, deadline (overdue, next 7 days, later, no
+  deadline) and status (open, done, all). Sorting by task, space or deadline. Ticking a task
+  with parts finishes its remaining parts; it reopens by unticking a part.
 - An overdue deadline is shown in a muted red text, nothing more.
 - **Tasks in the calendar.** A row above the hours shows each task on its deadline day
   ("Due", filled) and on its target day ("Aim", dashed outline). The row is always there,
@@ -121,6 +123,12 @@ ones marked *(assumption)* are kept easy to change.
 
 ## Insights
 
+- **Layout follows a sketch by the end user (2026-11-11):** four numbers (productive time,
+  average per day, tasks done, average session) with a plain-words comparison to the previous
+  week or month, productive time per day with totals above the bars, time per space for every
+  space (sleep, transport and work included), and class versus self-study with sleep.
+  "Study time" is called **productive time**: class plus self-study.
+
 - **Computed live** in Rust (`insights.rs`) every time the screen is shown; nothing is cached
   or stored, so Insights can never disagree with the calendar.
 - **What counts:** events that are not archived, not marked "Did not happen" and not all-day,
@@ -134,6 +142,16 @@ ones marked *(assumption)* are kept easy to change.
   in two colours validated for colour-blind separation and contrast in light and dark mode
   (`--series-class`, `--series-study`, `--series-sleep`), a legend, hover and keyboard-focus
   tooltips, and a "Show table" view on every chart. No comparisons, streaks or goals.
+
+## Help and colours
+
+- Explanations sit behind small "?" buttons (Settings, Import & export) instead of paragraphs.
+- Spaces and the accent can use any colour: a colour picker next to the palette. A custom space
+  colour is stored as "#rrggbb"; a custom accent is lightened automatically for dark mode.
+- The "+" next to Spaces offers New space and New group.
+- Import & export shows only the site of a calendar link (the full link often holds a personal
+  key), hides the add form until "Add link", and keeps titles without a link behind "Review".
+  "Title contains" links map many imported titles at once (e.g. all hand-in deadlines).
 
 ## Archive and shortcuts
 

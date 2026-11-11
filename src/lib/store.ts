@@ -17,7 +17,7 @@ export type Dialog =
 
 export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "import" | "archive" | "settings";
 export type Theme = "system" | "light" | "dark";
-export type Accent = "blue" | "teal" | "green" | "plum" | "clay";
+export type Accent = "blue" | "teal" | "green" | "plum" | "clay" | "custom";
 export type Font = "system" | "rounded" | "humanist" | "serif";
 export type TextSize = "small" | "default" | "large";
 export const TEXT_SCALE: Record<TextSize, number> = { small: 0.92, default: 1, large: 1.1 };
@@ -26,13 +26,15 @@ export const TEXT_SCALE: Record<TextSize, number> = { small: 0.92, default: 1, l
 export interface Prefs {
   theme: Theme;
   accent: Accent;
+  /** Used when accent is "custom". */
+  customAccent: string;
   font: Font;
   textSize: TextSize;
   showWeekends: boolean;
   eventMinutes: number;
   dayStartHour: number;
 }
-export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", font: "system", textSize: "default", showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
+export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
 export type InsightsPeriod = "week" | "month" | "semester";
 
 interface Notice {

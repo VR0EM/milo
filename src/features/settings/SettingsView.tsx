@@ -5,6 +5,7 @@ import { useActivities, useGroups, useTaskTypes } from "../../lib/queries";
 import { useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { MOD_LABEL } from "../shortcuts/keys";
 import { Icon } from "../../components/Icon";
+import { HelpTip } from "../../components/HelpTip";
 
 const ACCENTS: [Accent, string][] = [["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["plum", "Violet"], ["clay", "Coral"]];
 const FONTS: [Font, string, string][] = [
@@ -15,15 +16,15 @@ const FONTS: [Font, string, string][] = [
 ];
 const SIZES: [TextSize, string][] = [["small", "Small"], ["default", "Default"], ["large", "Large"]];
 const THEMES: [Theme, string][] = [["system", "Match the computer"], ["light", "Light"], ["dark", "Dark"]];
-const CATEGORY: Record<string, string> = { class: "Counts as class", self_study: "Counts as self-study", other: "Not study time" };
+const CATEGORY: Record<string, string> = { class: "Class", self_study: "Self-study", other: "Not productive" };
 
-/** One labelled setting: what it is on the left, the control on the right. */
-function Row({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
+/** One labelled setting: the name (with an optional "?" explanation) on the left, the control on the right. */
+function Row({ title, info, children }: { title: string; info?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="setting">
       <div className="setting-text">
-        <div className="setting-title">{title}</div>
-        {help && <div className="muted small">{help}</div>}
+        <span className="setting-title">{title}</span>
+        {info && <HelpTip label={`About ${title.toLowerCase()}`}>{info}</HelpTip>}
       </div>
       <div className="setting-control">{children}</div>
     </div>
@@ -42,7 +43,7 @@ export function SettingsView() {
       <div className="page-scroll settings">
         <section className="block">
           <h2>Appearance</h2>
-          <Row title="Theme">
+          <Row title="Theme" info="Match the computer follows the light or dark setting of Windows or macOS.">
             <div className="segmented" role="radiogroup" aria-label="Theme">
               {THEMES.map(([t, label]) => (
                 <button key={t} role="radio" aria-checked={prefs.theme === t} className={prefs.theme === t ? "on" : ""} onClick={() => setPrefs({ theme: t })}>
@@ -51,7 +52,7 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
-          <Row title="Accent colour" help="Used for today, the current selection and buttons.">
+          <Row title="Accent colour" info="Marks today in the calendar, the selected item, buttons and checkboxes. The last circle lets you pick any colour.">
             <div className="accent-picker" role="radiogroup" aria-label="Accent colour">
               {ACCENTS.map(([a, label]) => (
                 <button
@@ -65,13 +66,22 @@ export function SettingsView() {
                   onClick={() => setPrefs({ accent: a })}
                 />
               ))}
+              <label className={`accent-custom${prefs.accent === "custom" ? " on" : ""}`} title="Your own colour" style={{ ["--sw" as string]: prefs.customAccent }}>
+                <input
+                  type="color"
+                  aria-label="Your own accent colour"
+                  value={prefs.customAccent}
+                  onChange={(e) => setPrefs({ accent: "custom", customAccent: e.target.value })}
+                  onClick={() => setPrefs({ accent: "custom" })}
+                />
+              </label>
             </div>
           </Row>
         </section>
 
         <section className="block">
           <h2>Text</h2>
-          <Row title="Typeface">
+          <Row title="Typeface" info="Only typefaces already on the computer are used. Rounded is rounded on a Mac and looks like Standard on Windows.">
             <div className="font-picker" role="radiogroup" aria-label="Typeface">
               {FONTS.map(([f, label, hint]) => (
                 <button
@@ -89,7 +99,7 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
-          <Row title="Text size">
+          <Row title="Text size" info="Makes all text in Milo smaller or larger.">
             <div className="segmented" role="radiogroup" aria-label="Text size">
               {SIZES.map(([t, label]) => (
                 <button key={t} role="radio" aria-checked={prefs.textSize === t} className={prefs.textSize === t ? "on" : ""} onClick={() => setPrefs({ textSize: t })}>
@@ -102,18 +112,18 @@ export function SettingsView() {
 
         <section className="block">
           <h2>Calendar</h2>
-          <Row title="Show weekends">
+          <Row title="Show weekends" info="Off hides Saturday and Sunday in the calendar. Events on those days are kept.">
             <label className="switch-control">
               <input type="checkbox" role="switch" checked={prefs.showWeekends} onChange={(e) => setPrefs({ showWeekends: e.target.checked })} />
               <span>{prefs.showWeekends ? "On" : "Off"}</span>
             </label>
           </Row>
-          <Row title="New events last" help="For double-click and the N key. Dragging draws any length.">
+          <Row title="New events last" info="The length of an event made by double-clicking or pressing N. Dragging on the calendar draws any length.">
             <select value={prefs.eventMinutes} onChange={(e) => setPrefs({ eventMinutes: Number(e.target.value) })}>
               {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? "s" : ""}`}</option>)}
             </select>
           </Row>
-          <Row title="Open the calendar at" help="The hour shown at the top when the calendar opens.">
+          <Row title="Open the calendar at" info="The hour shown at the top when the calendar opens. Earlier hours are a scroll away.">
             <select value={prefs.dayStartHour} onChange={(e) => setPrefs({ dayStartHour: Number(e.target.value) })}>
               {Array.from({ length: 13 }, (_, h) => h).map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
             </select>
@@ -126,7 +136,7 @@ export function SettingsView() {
 
         <section className="block">
           <h2>Keyboard</h2>
-          <Row title="Keyboard shortcuts" help={`Press ? anywhere, or ${MOD_LABEL}, to come back here.`}>
+          <Row title="Keyboard shortcuts" info={`Press ? anywhere for the list. ${MOD_LABEL}, opens Settings.`}>
             <button className="btn" onClick={() => useUi.setState({ shortcutsOpen: true })}>Show shortcuts</button>
           </Row>
         </section>
@@ -135,11 +145,11 @@ export function SettingsView() {
   );
 }
 
-function ListBox({ title, add, children }: { title: string; add: () => void; children: React.ReactNode }) {
+function ListBox({ title, info, add, children }: { title: string; info: string; add: () => void; children: React.ReactNode }) {
   return (
     <div className="list-box">
       <div className="list-box-head">
-        <h3>{title}</h3>
+        <h3>{title}<HelpTip label={`About ${title.toLowerCase()}`}>{info}</HelpTip></h3>
         <button className="btn small" onClick={add}><Icon name="plus" size={12} />Add</button>
       </div>
       <ul>{children}</ul>
@@ -166,14 +176,13 @@ function Lists() {
   return (
     <section className="block">
       <h2>Lists</h2>
-      <p className="muted small">The choices offered when you plan events and tasks. Archived items keep their history.</p>
-      <ListBox title="Activities" add={() => open({ kind: "activity" })}>
+      <ListBox title="Activities" info="What kind of time an event was: class, self-study, lab, exam and so on. Each one counts as class, self-study or not productive, which is what Insights adds up." add={() => open({ kind: "activity" })}>
         {activities.map((a) => <ListItem key={a.id} name={a.name} meta={CATEGORY[a.category]} onEdit={() => open({ kind: "activity", item: a })} />)}
       </ListBox>
-      <ListBox title="Task types" add={() => open({ kind: "task_type" })}>
+      <ListBox title="Task types" info="Kinds of tasks, such as an assignment, theory to study, or a lab. Shown on every task." add={() => open({ kind: "task_type" })}>
         {types.map((t) => <ListItem key={t.id} name={t.name} onEdit={() => open({ kind: "task_type", item: t })} />)}
       </ListBox>
-      <ListBox title="Groups of spaces" add={() => open({ kind: "group" })}>
+      <ListBox title="Groups of spaces" info="Groups bundle spaces in the sidebar, for example School with one space per course. A group can be folded away." add={() => open({ kind: "group" })}>
         {groups.map((g) => <ListItem key={g.id} name={g.name} onEdit={() => open({ kind: "group", item: g })} />)}
       </ListBox>
     </section>
@@ -190,7 +199,7 @@ function Startup() {
       <h2>Startup</h2>
       <Row
         title="Start Milo when the computer starts"
-        help={autostart.available ? "Needed for reminders to arrive without opening Milo yourself." : "Only in the desktop app."}
+        info="Milo then waits quietly in the tray, so reminders arrive without opening it yourself. Only in the desktop app."
       >
         <label className="switch-control">
           <input
@@ -220,15 +229,15 @@ function Data() {
   return (
     <section className="block">
       <h2>Your data</h2>
-      <Row title="Stored on this computer" help="One database file. No account, nothing in the cloud.">
+      <Row title="Stored on this computer" info="Everything is in one database file in this folder. No account, nothing in the cloud.">
         <code className="path" title={data?.dataDir}>{data?.dataDir ?? "…"}</code>
       </Row>
-      <Row title="Daily backups" help="A full copy is made once a day and kept, next to the database.">
+      <Row title="Daily backups" info="Once a day Milo saves a full copy of the database in a backups folder next to it. Old copies are kept.">
         <span className="muted">
           {data ? (data.backupCount ? `${data.backupCount} kept · newest ${data.lastBackup?.replace(/^milo-|\.sqlite$/g, "")}` : "None yet") : "…"}
         </span>
       </Row>
-      <Row title="Export everything" help="One JSON file with all data, archived items included.">
+      <Row title="Export everything" info="One JSON file with all your data, archived items included, to keep or move elsewhere.">
         <button className="btn" onClick={() => useUi.getState().setView("import")}>Go to Import &amp; export</button>
       </Row>
       {data && <p className="muted small">Milo {data.version}</p>}
