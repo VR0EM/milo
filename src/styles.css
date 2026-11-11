@@ -197,7 +197,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 .grid-body { display: flex; position: relative; }
 .hour-label { position: absolute; right: 8px; transform: translateY(-50%); font-size: calc(11px * var(--text-scale)); color: var(--muted); font-variant-numeric: tabular-nums; }
-.grid-cols { flex: 1; display: flex; min-width: 0; background-image: linear-gradient(to bottom, var(--line-soft) 1px, transparent 1px); }
+.grid-cols { flex: 1; min-width: 0; overflow: hidden; position: relative; background-image: linear-gradient(to bottom, var(--line-soft) 1px, transparent 1px); }
+/* The moving strips: header, all-day row and body share one transform. */
+.h-viewport { flex: 1; min-width: 0; overflow: hidden; }
+.h-strip { display: flex; will-change: transform; backface-visibility: hidden; }
+.body-strip { height: 100%; }
 .day-col { flex: 1; min-width: 0; position: relative; border-left: 1px solid var(--line-soft); }
 .day-col.today { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .now-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--accent); z-index: 3; pointer-events: none; }

@@ -7,6 +7,7 @@ import { ignoreForShortcut } from "../shortcuts/keys";
 import { TaskPanel } from "../tasks/TaskPanel";
 import { EventPanel } from "./EventPanel";
 import { WeekGrid } from "./WeekGrid";
+import { BUFFER, firstShown, shiftShown } from "./days";
 
 export function CalendarView() {
   const viewStart = useUi((s) => s.viewStart);
@@ -19,15 +20,19 @@ export function CalendarView() {
 
   const showWeekends = useUi((s) => s.prefs.showWeekends);
   const eventMinutes = useUi((s) => s.prefs.eventMinutes);
+  const visibleCount = showWeekends ? 7 : 5;
+  const start = firstShown(viewStart, showWeekends);
+  // Visible days plus a buffer on both sides, so scrolling sideways never shows an empty column.
   const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(viewStart, i)).filter((d) => showWeekends || (d.getDay() !== 0 && d.getDay() !== 6)),
-    [viewStart, showWeekends],
+    () => Array.from({ length: visibleCount + 2 * BUFFER }, (_, i) => shiftShown(start, i - BUFFER, showWeekends)),
+    [start.getTime(), showWeekends, visibleCount], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const to = useMemo(() => addDays(viewStart, 7), [viewStart]);
+  const from = days[0];
+  const to = useMemo(() => addDays(days[days.length - 1], 1), [days]);
 
   const spaces = useSpaces().data ?? [];
   const activities = useActivities().data ?? [];
-  const events = useEvents(viewStart, to).data ?? [];
+  const events = useEvents(from, to).data ?? [];
   const allTasks = useTasks().data ?? [];
   const taskTypes = useTaskTypes().data ?? [];
   const selectedTaskId = useUi((s) => s.selectedTaskId);
@@ -87,7 +92,7 @@ export function CalendarView() {
             </div>
           </div>
         </header>
-        <WeekGrid days={days} events={visible} tasks={tasks} spaces={spaces} defaultSpaceId={defaultSpaceId} />
+        <WeekGrid days={days} visibleCount={visibleCount} buffer={BUFFER} weekends={showWeekends} events={visible} tasks={tasks} spaces={spaces} defaultSpaceId={defaultSpaceId} />
       </main>
       {selectedTask ? (
         <TaskPanel task={selectedTask} spaces={spaces} types={taskTypes} />

@@ -6,6 +6,7 @@ import {
   MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes,
 } from "../../lib/time";
 import type { CalEvent, Space, Task } from "../../lib/types";
+import { firstShown, shiftShown, shownDistance } from "./days";
 import { layoutDay } from "./layout";
 
 type Mode = "move" | "start" | "end" | "create";
@@ -26,14 +27,20 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 interface Props {
+  /** The rendered strip: BUFFER hidden days, the visible days, BUFFER hidden days. */
   days: Date[];
+  visibleCount: number;
+  buffer: number;
+  weekends: boolean;
   events: CalEvent[];
   tasks: Task[];
   spaces: Space[];
   defaultSpaceId: string | null;
 }
 
-export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props) {
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, spaces, defaultSpaceId }: Props) {
   const selectedTaskId = useUi((s) => s.selectedTaskId);
   const hourHeight = useUi((s) => s.hourHeight);
   const selectedId = useUi((s) => s.selectedEventId);
@@ -42,15 +49,113 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
   const updateEvent = useUpdateEvent();
 
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const colsRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null); // the visible window of the body
+  const colsRef = useRef<HTMLDivElement>(null); // the moving strip of day columns
+  const headStripRef = useRef<HTMLDivElement>(null);
+  const alldayStripRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const pendingScroll = useRef<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   // Keep the latest values reachable from long-lived listeners.
-  const live = useRef({ days, hourHeight });
-  live.current = { days, hourHeight };
+  const live = useRef({ days, hourHeight, visibleCount, buffer, weekends });
+  live.current = { days, hourHeight, visibleCount, buffer, weekends };
+
+  // ---- smooth horizontal scrolling --------------------------------------------------------
+  // The strip is moved with a transform only; React renders again only when a whole day has
+  // been passed. `pos` is the fraction of a day scrolled past the first visible day, and
+  // `pending` counts days the store has moved on that are not rendered yet.
+  const pos = useRef(0);
+  const pending = useRef(0);
+  const anim = useRef<number | null>(null);
+  const renderedStart = useRef(days[buffer]);
+
+  const applyPos = () => {
+    const { buffer: b, days: d } = live.current;
+    const offset = Math.min(Math.max(b + pending.current + pos.current, 0), 2 * b);
+    const t = `translate3d(${(-offset / d.length) * 100}%, 0, 0)`;
+    for (const el of [headStripRef.current, alldayStripRef.current, colsRef.current]) if (el) el.style.transform = t;
+  };
+
+  const stopAnim = () => {
+    if (anim.current !== null) cancelAnimationFrame(anim.current);
+    anim.current = null;
+  };
+
+  /** Move by a number of days (fractions allowed). Whole days passed update the store. */
+  const moveBy = (deltaDays: number) => {
+    const { buffer: b, weekends: w } = live.current;
+    const room = b - 1 - Math.abs(pending.current);
+    const p = pos.current + Math.max(-room, Math.min(room, deltaDays));
+    const whole = Math.floor(p);
+    pos.current = p - whole;
+    if (whole !== 0) {
+      pending.current += whole;
+      const ui = useUi.getState();
+      ui.setViewStart(shiftShown(firstShown(ui.viewStart, w), whole, w));
+    }
+    applyPos();
+  };
+
+  const animateTo = (target: number, ms: number, done?: () => void) => {
+    stopAnim();
+    const from = pos.current;
+    if (ms <= 0 || reducedMotion() || from === target) {
+      pos.current = target;
+      applyPos();
+      done?.();
+      return;
+    }
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      const eased = 1 - Math.pow(1 - k, 3);
+      pos.current = from + (target - from) * eased;
+      applyPos();
+      if (k < 1) anim.current = requestAnimationFrame(step);
+      else {
+        anim.current = null;
+        done?.();
+      }
+    };
+    anim.current = requestAnimationFrame(step);
+  };
+
+  /** After scrolling stops, settle softly on the nearest whole day. */
+  const settle = () => {
+    const target = Math.round(pos.current);
+    animateTo(target, 220, () => {
+      if (target !== 0) moveBy(0); // folds a full day into the store
+    });
+  };
+
+  // Every render re-centres the strip on the store's day. Moves from the scroll gesture are
+  // already on screen; moves from elsewhere (week buttons, T, the mini month) slide in.
+  useLayoutEffect(() => {
+    const prev = renderedStart.current;
+    const next = days[buffer];
+    renderedStart.current = next;
+    const moved = shownDistance(prev, next, weekends, 3 * buffer);
+    if (moved === null) {
+      pending.current = 0;
+      pos.current = 0;
+    } else if (pending.current !== 0) {
+      pending.current -= moved;
+    } else if (moved !== 0) {
+      stopAnim();
+      if (Math.abs(moved) <= buffer && !reducedMotion()) {
+        pos.current = -moved;
+        applyPos();
+        animateTo(0, 320);
+        return;
+      }
+      pos.current = 0;
+    }
+    applyPos();
+  });
+
+  useEffect(() => stopAnim, []);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
@@ -72,11 +177,15 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
     }
   }, [hourHeight]);
 
-  // Pinch or Ctrl+wheel zooms the time axis; a sideways swipe moves through days.
+  // Pinch or Ctrl+wheel zooms the time axis. A sideways swipe (or Shift + wheel) scrolls the
+  // days freely and settles on a whole day. Each gesture keeps one direction, so a slightly
+  // diagonal swipe does not wobble between scrolling hours and days.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    let acc = 0;
+    let axis: "x" | "y" | null = null;
+    let last = 0;
+    let idle: number | undefined;
     const onWheel = (e: WheelEvent) => {
       const cols = colsRef.current!.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) {
@@ -90,26 +199,37 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
           const y = e.clientY - cols.top;
           pendingScroll.current = el.scrollTop + y * (next / old) - y;
         }
-      } else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        e.preventDefault();
-        acc += e.deltaX;
-        const step = cols.width / live.current.days.length;
-        const n = Math.trunc(acc / step);
-        if (n !== 0) {
-          acc -= n * step;
-          const ui = useUi.getState();
-          ui.setViewStart(addDays(ui.viewStart, n));
-        }
+        return;
       }
+      const t = performance.now();
+      if (t - last > 160) axis = null;
+      last = t;
+      const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+      const dx = (e.deltaX || (e.shiftKey ? e.deltaY : 0)) * unit;
+      const dy = e.shiftKey ? 0 : e.deltaY * unit;
+      if (axis === null) axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (axis !== "x" || dx === 0) return;
+      e.preventDefault();
+      stopAnim();
+      const dayWidth = viewportRef.current!.getBoundingClientRect().width / live.current.visibleCount;
+      moveBy(dx / dayWidth);
+      window.clearTimeout(idle);
+      idle = window.setTimeout(settle, 140);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      window.clearTimeout(idle);
+    };
   }, []);
 
+  /** The rendered day under x. The pointer is kept inside the visible window. */
   const dayIndexAt = (x: number) => {
-    const r = colsRef.current!.getBoundingClientRect();
+    const vp = viewportRef.current!.getBoundingClientRect();
+    const r = colsRef.current!.getBoundingClientRect(); // includes the current transform
     const n = live.current.days.length;
-    return clamp(Math.floor((x - r.left) / (r.width / n)), 0, n - 1);
+    const cx = clamp(x, vp.left + 1, vp.right - 1);
+    return clamp(Math.floor((cx - r.left) / (r.width / n)), 0, n - 1);
   };
 
   function timeAt(x: number, y: number, snap: boolean, idx = dayIndexAt(x)): Date {
@@ -206,23 +326,31 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
 
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const px = (minutes: number) => (minutes / 60) * hourHeight;
+  // The strip is as wide as all rendered days; each day is as wide as one visible column.
+  const stripStyle = { width: `${(days.length / visibleCount) * 100}%` };
 
   return (
     <div className="grid-scroller" ref={scrollerRef}>
       <div className="grid-header">
         <div className="grid-header-row">
           <div className="gutter" />
-          {days.map((d) => (
-            <div key={d.getTime()} className={`day-head${sameDay(d, now) ? " today" : ""}`}>
-              <span className="weekday">{fmtWeekday(d)}</span>
-              <span className="daynum">{d.getDate()}</span>
+          <div className="h-viewport">
+            <div className="h-strip" ref={headStripRef} style={stripStyle}>
+              {days.map((d) => (
+                <div key={d.getTime()} className={`day-head${sameDay(d, now) ? " today" : ""}`}>
+                  <span className="weekday">{fmtWeekday(d)}</span>
+                  <span className="daynum">{d.getDate()}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
 
         {/* Above the hours: all-day events, and tasks on their deadline and target days. */}
         <div className="grid-header-row allday">
           <div className="gutter"><span className="allday-label">All day</span></div>
+          <div className="h-viewport">
+          <div className="h-strip" ref={alldayStripRef} style={stripStyle}>
           {days.map((d) => (
             <div key={d.getTime()} className="allday-cell">
               {allDay
@@ -260,6 +388,8 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
               })}
             </div>
           ))}
+          </div>
+          </div>
         </div>
       </div>
 
@@ -272,10 +402,11 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
           ))}
         </div>
 
+        <div className="grid-cols" ref={viewportRef} style={{ backgroundSize: `100% ${hourHeight}px` }}>
         <div
-          className="grid-cols"
+          className="h-strip body-strip"
           ref={colsRef}
-          style={{ backgroundSize: `100% ${hourHeight}px` }}
+          style={stripStyle}
           onPointerDown={(e) => {
             if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("day-col")) return;
             select(null);
@@ -332,6 +463,7 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
               })}
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>

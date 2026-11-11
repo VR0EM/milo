@@ -220,7 +220,13 @@ ones marked *(assumption)* are kept easy to change.
 - Drag moves (also across days), the top and bottom edges resize, everything snaps to 15 minutes.
 - Drawing and resizing stay within one day so a sideways slip cannot stretch an event
   across days. An overnight event is made by typing an end time earlier than the start.
-- Pinch or Ctrl+wheel zooms the time axis; a sideways swipe moves through days.
+- Pinch or Ctrl+wheel zooms the time axis.
+- **Smooth sideways scrolling, like Notion Calendar.** The grid renders the visible days plus a
+  week on each side as one strip, moved with a CSS transform only (no re-render per frame). A
+  trackpad swipe or Shift + wheel follows the fingers pixel for pixel, including the system's
+  momentum, and settles softly on a whole day 140 ms after the last movement. Each gesture
+  keeps one direction (hours or days), so diagonal swipes do not wobble. Week buttons, T and
+  arrow keys slide too; with "reduce motion" on in the system everything jumps instead.
 - Keys: `Delete` archives the selection (with Undo), `Esc` deselects, `T` goes to today,
   arrow keys move a week.
 - Times are always shown on a 24-hour clock, independent of system settings.
