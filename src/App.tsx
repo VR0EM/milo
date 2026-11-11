@@ -1,0 +1,53 @@
+import { useEffect } from "react";
+import { CalendarView } from "./features/calendar/CalendarView";
+import { EntityDialog } from "./features/spaces/EntityDialog";
+import { InsightsView } from "./features/insights/InsightsView";
+import { ImportView } from "./features/import/ImportView";
+import { RemindersView } from "./features/reminders/RemindersView";
+import { TodayView } from "./features/today/TodayView";
+import { TasksView } from "./features/tasks/TasksView";
+import { Sidebar } from "./features/spaces/Sidebar";
+import { useUi } from "./lib/store";
+
+export default function App() {
+  const view = useUi((s) => s.view);
+  return (
+    <div className="app">
+      <Sidebar />
+      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "import" ? <ImportView /> : <CalendarView />}
+      <EntityDialog />
+      <Notice />
+    </div>
+  );
+}
+
+/** One quiet line at the bottom: what just happened, and a way to undo it. */
+function Notice() {
+  const notice = useUi((s) => s.notice);
+  const notify = useUi((s) => s.notify);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => notify(null), 8000);
+    return () => clearTimeout(t);
+  }, [notice, notify]);
+
+  if (!notice) return null;
+  return (
+    <div className="notice" role="status">
+      <span>{notice.text}</span>
+      {notice.undo && (
+        <button
+          className="link"
+          onClick={() => {
+            notice.undo?.();
+            notify(null);
+          }}
+        >
+          Undo
+        </button>
+      )}
+      <button className="link" onClick={() => notify(null)}>Dismiss</button>
+    </div>
+  );
+}
