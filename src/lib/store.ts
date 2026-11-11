@@ -15,11 +15,29 @@ export type Dialog =
   | { kind: "activity"; item?: Activity }
   | { kind: "task_type"; item?: TaskType };
 
-export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "import";
+export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "import" | "archive" | "settings";
+export type Theme = "system" | "light" | "dark";
+export type Accent = "blue" | "teal" | "green" | "plum" | "clay";
+export type Font = "system" | "rounded" | "humanist" | "serif";
+export type TextSize = "small" | "default" | "large";
+export const TEXT_SCALE: Record<TextSize, number> = { small: 0.92, default: 1, large: 1.1 };
+
+/** Preferences from the Settings screen. */
+export interface Prefs {
+  theme: Theme;
+  accent: Accent;
+  font: Font;
+  textSize: TextSize;
+  showWeekends: boolean;
+  eventMinutes: number;
+  dayStartHour: number;
+}
+export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", font: "system", textSize: "default", showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
 export type InsightsPeriod = "week" | "month" | "semester";
 
 interface Notice {
   text: string;
+  error?: boolean;
   undo?: () => void;
 }
 
@@ -33,6 +51,11 @@ interface UiState {
   dialog: Dialog | null;
   /** Id of the routine being edited, if the routine editor is open. */
   routineEditId: string | null;
+  shortcutsOpen: boolean;
+  prefs: Prefs;
+  collapsedGroups: string[];
+  setPrefs: (p: Partial<Prefs>) => void;
+  toggleGroup: (id: string) => void;
   insightsPeriod: InsightsPeriod;
   insightsAnchor: Date;
   insightsSemesterId: string | null;
@@ -65,6 +88,14 @@ export const useUi = create<UiState>()(
       focusTitle: false,
       dialog: null,
       routineEditId: null,
+      shortcutsOpen: false,
+      prefs: DEFAULT_PREFS,
+      collapsedGroups: [],
+      setPrefs: (p) => set((s) => ({ prefs: { ...s.prefs, ...p } })),
+      toggleGroup: (id) =>
+        set((s) => ({
+          collapsedGroups: s.collapsedGroups.includes(id) ? s.collapsedGroups.filter((x) => x !== id) : [...s.collapsedGroups, id],
+        })),
       insightsPeriod: "week",
       insightsAnchor: new Date(),
       insightsSemesterId: null,
@@ -92,7 +123,12 @@ export const useUi = create<UiState>()(
     }),
     {
       name: "milo-ui",
-      partialize: (s) => ({ view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
+      // Older saved state has no prefs yet: fill in the defaults.
+      merge: (saved, current) => {
+        const s = (saved ?? {}) as Partial<UiState>;
+        return { ...current, ...s, prefs: { ...DEFAULT_PREFS, ...(s.prefs ?? {}) } };
+      },
+      partialize: (s) => ({ prefs: s.prefs, collapsedGroups: s.collapsedGroups, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
     },
   ),
 );

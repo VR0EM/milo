@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useArchiveWithUndo, useImportSources, useUpdateEvent } from "../../lib/queries";
 import { TimeField } from "../../components/TimeField";
+import { MiniMonth } from "./MiniMonth";
 import { useUi } from "../../lib/store";
 import { addDays, fmtDuration, fmtLongDay, fmtTime, fromInputs, sameDay, toDateInput } from "../../lib/time";
 import { type Activity, type CalEvent, type EventInput, type Space } from "../../lib/types";
@@ -19,11 +20,12 @@ export function EventPanel({ event, spaces, activities }: Props) {
       {event ? (
         <EventForm key={event.id} event={event} spaces={spaces} activities={activities} />
       ) : (
-        <p className="panel-empty">
-          Select an event to see its details.
-          <br />
-          Double-click the calendar to create one.
-        </p>
+        <div className="panel-idle">
+          <MiniMonth />
+          <p className="muted small">
+            Select an event to see its details. Double-click the calendar, or press N, to plan a new one.
+          </p>
+        </div>
       )}
     </aside>
   );

@@ -59,7 +59,9 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
 
   // Open on the morning rather than at midnight.
   useLayoutEffect(() => {
-    if (scrollerRef.current) scrollerRef.current.scrollTop = 7 * useUi.getState().hourHeight;
+    const ui = useUi.getState();
+    // A little above the hour, so its label is not hidden under the day headers.
+    if (scrollerRef.current) scrollerRef.current.scrollTop = Math.max(0, ui.prefs.dayStartHour * ui.hourHeight - 12);
   }, []);
 
   // After a zoom, keep the time under the pointer where it was.
@@ -188,7 +190,7 @@ export function WeekGrid({ days, events, tasks, spaces, defaultSpaceId }: Props)
   function onDoubleClick(e: React.MouseEvent) {
     const t = timeAt(e.clientX, e.clientY, false);
     const start = atMinutes(t, Math.floor(minutesIntoDay(t) / 30) * 30);
-    createNew(start.toISOString(), new Date(start.getTime() + 60 * MINUTE).toISOString());
+    createNew(start.toISOString(), new Date(start.getTime() + useUi.getState().prefs.eventMinutes * MINUTE).toISOString());
   }
 
   const allDay = useMemo(() => events.filter((e) => e.allDay), [events]);

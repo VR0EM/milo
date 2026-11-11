@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { api, autostart } from "../../lib/api";
+import { useState } from "react";
+import { api } from "../../lib/api";
 import { DayToggles } from "../../components/DayToggles";
 import { TimeField } from "../../components/TimeField";
 import { useAction, useArchiveWithUndo, useReminderRules } from "../../lib/queries";
@@ -16,17 +16,18 @@ export function RemindersView() {
   const act = useAction("reminders");
 
   return (
-    <main className="today full">
+    <main className="page full">
       <header className="toolbar">
         <h1>Reminders</h1>
         <div className="toolbar-actions">
           <button className="btn" onClick={() => act.mutate(() => api.sendTestReminder())}>Send a test reminder</button>
         </div>
       </header>
-      <div className="today-scroll">
+      <div className="page-scroll">
         <p className="muted">
           Reminders arrive as silent system notifications. Milo keeps running in the tray after you close the
-          window, so they still arrive; quit from the tray icon to stop them.
+          window, so they still arrive; quit from the tray icon to stop them. To have them without opening Milo
+          first, turn on "Start Milo when the computer starts" in Settings.
         </p>
 
         {rules.map((r) => <RuleCard key={r.id} rule={r} />)}
@@ -51,7 +52,6 @@ export function RemindersView() {
           </button>
         </div>
 
-        <Autostart />
       </div>
     </main>
   );
@@ -72,7 +72,7 @@ function RuleCard({ rule }: { rule: ReminderRule }) {
     const parsed = times.split(/[,;\s]+/).filter(Boolean).map(parseTime);
     if (!parsed.length || parsed.some((t) => !t)) {
       setTimes(rule.times?.replace(/,/g, ", ") ?? "");
-      useUi.getState().notify({ text: "Times must look like 08:00, 20:00" });
+      useUi.getState().notify({ text: "Times must look like 08:00, 20:00", error: true });
       return;
     }
     const value = [...new Set(parsed as string[])].sort().join(",");
@@ -110,8 +110,8 @@ function RuleCard({ rule }: { rule: ReminderRule }) {
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
         )}
-        <label className="switch">
-          <input type="checkbox" checked={rule.enabled} onChange={(e) => save({ enabled: e.target.checked })} />
+        <label className="switch-control">
+          <input type="checkbox" role="switch" aria-label={`${rule.title} reminders`} checked={rule.enabled} onChange={(e) => save({ enabled: e.target.checked })} />
           <span>{rule.enabled ? "On" : "Off"}</span>
         </label>
       </div>
@@ -160,35 +160,6 @@ function RuleCard({ rule }: { rule: ReminderRule }) {
           <button className="btn quiet" onClick={() => archive("reminder_rule", rule.id, rule.title)}>Archive</button>
         </div>
       )}
-    </section>
-  );
-}
-
-function Autostart() {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    autostart.isEnabled().then(setOn, () => {});
-  }, []);
-  if (!autostart.available) return null;
-  return (
-    <section className="reminder-card">
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={async (e) => {
-            const next = e.target.checked;
-            try {
-              await autostart.set(next);
-              setOn(next);
-            } catch (err) {
-              useUi.getState().notify({ text: String(err) });
-            }
-          }}
-        />
-        <span>Start Milo when the computer starts</span>
-      </label>
-      <p className="muted small">Needed for reminders to arrive without opening Milo yourself.</p>
     </section>
   );
 }

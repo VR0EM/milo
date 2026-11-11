@@ -62,7 +62,7 @@ export function InsightsView() {
   };
 
   return (
-    <main className="today full">
+    <main className="page full">
       <header className="toolbar">
         <h1>Insights</h1>
         <div className="toolbar-actions">
@@ -76,7 +76,7 @@ export function InsightsView() {
         </div>
       </header>
 
-      <div className="today-scroll insights-scroll">
+      <div className="page-scroll insights-scroll">
         <div className="inline">
           {kind === "semester" ? (
             semesters.length > 0 && (
@@ -117,7 +117,7 @@ function Report({ period, kind }: { period: Period; kind: InsightsPeriod }) {
 function Block({ title, legend, table, children }: { title: string; legend?: Series[]; table?: React.ReactNode; children: React.ReactNode }) {
   const [asTable, setAsTable] = useState(false);
   return (
-    <section className="today-block">
+    <section className="block">
       <div className="block-head">
         <h2>{title}</h2>
         {legend && !asTable && <Legend series={legend} />}
@@ -262,7 +262,7 @@ function Semesters({ semesters }: { semesters: Semester[] }) {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   return (
-    <section className="today-block">
+    <section className="block">
       <h2>Semesters</h2>
       {semesters.map((s) => (
         <div key={s.id} className="import-row">

@@ -82,3 +82,12 @@ export function fmtClock(ms: number) {
   const sec = total % 60;
   return h ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
+
+/** ISO 8601 week number (weeks start on Monday). */
+export function isoWeek(d: Date) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}

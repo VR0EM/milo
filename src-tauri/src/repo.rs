@@ -776,6 +776,13 @@ pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> R
     if entity == "task_part" {
         sync_task_completion(c, &task_id_of_part(c, id)?)?;
     }
+    // Bringing back an event a sync removed is the user's choice: from now on syncs leave it.
+    if entity == "event" && !archived {
+        c.execute(
+            "UPDATE events SET locally_modified = 1, removed_by_sync = 0 WHERE id = ?1 AND removed_by_sync = 1",
+            [id],
+        )?;
+    }
     Ok(())
 }
 

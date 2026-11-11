@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { mockInvoke } from "./mockBackend";
 import type {
   Activity, ActivityInput, CalEvent, Entity, EventInput, Group, GroupInput, Space, SpaceInput, Task, TaskInput, TaskType,
-  Insights, Semester, SemesterInput,
+  ArchivedItem, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
 } from "./types";
@@ -85,6 +85,11 @@ export const api = {
   listSemesters: () => call<Semester[]>("list_semesters"),
   createSemester: (input: SemesterInput) => call<Semester>("create_semester", { input }),
   updateSemester: (id: string, input: SemesterInput) => call<Semester>("update_semester", { id, input }),
+
+  listArchived: (query: string) => call<{ items: ArchivedItem[]; hiddenEvents: number }>("list_archived", { query }),
+
+  appInfo: () =>
+    call<{ dataDir: string; backupDir: string; backupCount: number; lastBackup: string | null; version: string }>("app_info"),
 
   setArchived: (entity: Entity, id: string, archived: boolean) =>
     call<void>("set_archived", { entity, id, archived }),

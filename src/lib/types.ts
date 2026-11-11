@@ -208,6 +208,16 @@ export interface Semester {
 }
 export type SemesterInput = Omit<Semester, "id">;
 
+export interface ArchivedItem {
+  entity: Entity;
+  id: string;
+  label: string;
+  context: string | null;
+  when: string | null;
+  archivedAt: string;
+  removedBySync: boolean;
+}
+
 export type Entity =
   | "semester"
   | "import_source"

@@ -3,7 +3,7 @@ import { api } from "./api";
 import { useUi } from "./store";
 import { toInput, toTaskInput, type CalEvent, type Entity, type EventInput, type Task, type TaskInput } from "./types";
 
-const report = (e: unknown) => useUi.getState().notify({ text: String(e) });
+const report = (e: unknown) => useUi.getState().notify({ text: String(e), error: true });
 
 export const useGroups = () => useQuery({ queryKey: ["groups"], queryFn: api.listGroups });
 export const useSpaces = () => useQuery({ queryKey: ["spaces"], queryFn: api.listSpaces });
@@ -47,7 +47,10 @@ export function useUpdateEvent() {
       if (!current) throw new Error("Not found");
       return api.updateEvent(id, toInput(current));
     },
-    onMutate: ({ id, patch }) => patchEvents(qc, (list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e))),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: ["events"] });
+      patchEvents(qc, (list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    },
     onError: report,
     onSettled: () => qc.invalidateQueries({ queryKey: ["events"] }),
   });
@@ -82,14 +85,15 @@ export function useTaskAction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (run: () => Promise<Task>) => run(),
+    // An older list that is still loading must not overwrite this change when it arrives.
+    onMutate: () => qc.cancelQueries({ queryKey: ["tasks"] }),
     onSuccess: (task) =>
       qc.setQueryData<Task[]>(["tasks"], (list) =>
         list ? (list.some((t) => t.id === task.id) ? list.map((t) => (t.id === task.id ? task : t)) : [...list, task]) : list,
       ),
-    onError: (e) => {
-      report(e);
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-    },
+    onError: report,
+    // Then read the list again, so the screen always ends on what the database holds.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
 }
 

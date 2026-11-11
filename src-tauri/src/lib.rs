@@ -1,3 +1,4 @@
+mod archive;
 mod backup;
 mod commands;
 mod db;
@@ -186,6 +187,8 @@ pub fn run() {
             commands::list_semesters,
             commands::create_semester,
             commands::update_semester,
+            commands::list_archived,
+            commands::app_info,
             commands::set_archived,
         ])
         .build(tauri::generate_context!())

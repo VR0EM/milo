@@ -171,6 +171,22 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "follow_import": return update("event", a.id, { locallyModified: false });
       case "add_calendar_link": case "sync_calendar_link": case "import_ics_file": case "inspect_csv": case "import_csv": case "export_all":
         throw "Import and export only work in the desktop app";
+      case "list_archived": {
+        const q = String(a.query ?? "").toLowerCase();
+        const label = (r: Row) => r.title ?? r.name ?? r.pattern ?? "";
+        const items = Object.entries(tables)
+          .filter(([k]) => k !== "focus")
+          .flatMap(([entity, rows]) =>
+            rows.filter((r) => r.deletedAt && label(r).toLowerCase().includes(q)).map((r) => ({
+              entity, id: r.id, label: label(r), context: null, when: r.startAt ?? r.deadlineAt ?? null,
+              archivedAt: r.deletedAt, removedBySync: false,
+            })),
+          )
+          .sort((x, y) => y.archivedAt.localeCompare(x.archivedAt));
+        return { items, hiddenEvents: 0 };
+      }
+      case "app_info":
+        return { dataDir: "(browser preview: data lives in memory)", backupDir: "", backupCount: 0, lastBackup: null, version: "dev" };
       case "get_insights": return mockInsights(a.from, a.to);
       case "list_semesters":
         return tables.semester.filter((r) => !r.deletedAt).sort((x, y) => y.startDate.localeCompare(x.startDate)).map((r) => ({ ...r }));

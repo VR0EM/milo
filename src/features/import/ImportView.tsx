@@ -10,6 +10,8 @@ import { daysFromToday, fmtRelativeDays, fmtTime, toDateInput } from "../../lib/
 import type { Activity, CsvPreview, ImportSource, Space, SyncReport, TitleMapping } from "../../lib/types";
 
 const notify = (text: string) => useUi.getState().notify({ text });
+/** Errors stay on screen until dismissed. */
+const fail = (e: unknown) => useUi.getState().notify({ text: String(e), error: true });
 
 function describe(name: string, r: SyncReport) {
   const parts = [
@@ -40,11 +42,11 @@ export function ImportView() {
   const activities = (useActivities().data ?? []).filter((a) => !a.deletedAt);
 
   return (
-    <main className="today full">
+    <main className="page full">
       <header className="toolbar">
         <h1>Import &amp; export</h1>
       </header>
-      <div className="today-scroll">
+      <div className="page-scroll">
         <CalendarLinks spaces={spaces} />
         <FileImport spaces={spaces} />
         <TitleLinks spaces={spaces} activities={activities} />
@@ -77,7 +79,7 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
     try {
       notify(describe(label, await work()));
     } catch (e) {
-      notify(String(e));
+      fail(e);
     } finally {
       setBusy(null);
       refresh();
@@ -93,7 +95,7 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
     });
 
   return (
-    <section className="today-block">
+    <section className="block">
       <h2>Calendar links</h2>
       <p className="muted small">
         A link to an .ics calendar, such as a school timetable or the secret iCal address of a Google calendar.
@@ -113,7 +115,7 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
             spaces={spaces}
             label="Space for titles without a link"
             value={s.spaceId}
-            onChange={(id) => api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: id, enabled: s.enabled }).then(refresh, notify)}
+            onChange={(id) => api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: id, enabled: s.enabled }).then(refresh, fail)}
           />
           <button className="btn" disabled={busy !== null} onClick={() => run(s.id, s.name, () => api.syncCalendarLink(s.id))}>
             {busy === s.id ? "Syncing…" : "Sync now"}
@@ -160,30 +162,30 @@ function FileImport({ spaces }: { spaces: Space[] }) {
     try {
       notify(describe(label, await work));
     } catch (e) {
-      notify(String(e));
+      fail(e);
     } finally {
       refresh();
     }
   };
 
   const pickIcs = async () => {
-    const path = await files.open("Calendar", ["ics", "ical"]).catch((e) => (notify(String(e)), null));
+    const path = await files.open("Calendar", ["ics", "ical"]).catch((e) => (fail(e), null));
     if (path) report(baseName(path), api.importIcsFile(path, space));
   };
 
   const pickCsv = async () => {
-    const path = await files.open("CSV", ["csv"]).catch((e) => (notify(String(e)), null));
+    const path = await files.open("CSV", ["csv"]).catch((e) => (fail(e), null));
     if (!path) return;
     try {
       const preview = await api.inspectCsv(path);
       setCsv({ path, preview, title: preview.titleColumn, date: preview.dateColumn });
     } catch (e) {
-      notify(String(e));
+      fail(e);
     }
   };
 
   return (
-    <section className="today-block">
+    <section className="block">
       <h2>Import a file</h2>
       <p className="muted small">
         An .ics file, for example a Google Calendar export (Settings, Import &amp; export), or a CSV file exported from a
@@ -198,7 +200,7 @@ function FileImport({ spaces }: { spaces: Space[] }) {
       </div>
 
       {csv && (
-        <div className="today-block">
+        <div className="block">
           <div className="block-head">
             <h2>{baseName(csv.path)}</h2>
             <span className="spacer" />
@@ -263,7 +265,7 @@ function TitleLinks({ spaces, activities }: { spaces: Space[]; activities: Activ
   const refresh = useRefresh();
 
   return (
-    <section className="today-block">
+    <section className="block">
       <h2>Title links</h2>
       <p className="muted small">
         Imported events with the same title always go to the same space and activity. Events you changed yourself are
@@ -320,7 +322,7 @@ function NewLink({ title, count, spaces, activities, onDone }: {
         onClick={() =>
           api
             .createTitleMapping({ pattern: title, matchType: "exact", spaceId, activityId: activityId || null })
-            .then(onDone, notify)
+            .then(onDone, fail)
         }
       >
         Link
@@ -336,7 +338,7 @@ function LinkRow({ mapping, spaces, activities }: { mapping: TitleMapping; space
   const space = spaces.find((s) => s.id === mapping.spaceId);
   const save = (patch: Partial<TitleMapping>) => {
     const { id, ...current } = mapping;
-    api.updateTitleMapping(id, { ...current, ...patch }).then(refresh, notify);
+    api.updateTitleMapping(id, { ...current, ...patch }).then(refresh, fail);
   };
   return (
     <div className="import-row mapping-row" style={{ ["--c" as string]: colorVar(space?.color ?? "gray") }}>
@@ -363,20 +365,20 @@ function LinkRow({ mapping, spaces, activities }: { mapping: TitleMapping; space
 function Export() {
   const [busy, setBusy] = useState(false);
   const run = async () => {
-    const path = await files.save(`milo-export-${toDateInput(new Date())}.json`).catch((e) => (notify(String(e)), null));
+    const path = await files.save(`milo-export-${toDateInput(new Date())}.json`).catch((e) => (fail(e), null));
     if (!path) return;
     setBusy(true);
     try {
       const rows = await api.exportAll(path);
       notify(`Exported ${rows} rows to ${baseName(path)}`);
     } catch (e) {
-      notify(String(e));
+      fail(e);
     } finally {
       setBusy(false);
     }
   };
   return (
-    <section className="today-block">
+    <section className="block">
       <h2>Export</h2>
       <p className="muted small">
         One JSON file with everything in Milo, archived items included. Daily backups of the database are made

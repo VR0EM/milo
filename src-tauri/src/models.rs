@@ -374,3 +374,35 @@ pub struct SemesterInput {
     pub start_date: String,
     pub end_date: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchivedItem {
+    pub entity: String,
+    pub id: String,
+    pub label: String,
+    /// Where it belonged: the space, the task, the routine ...
+    pub context: Option<String>,
+    /// For events and tasks: when it was planned or due.
+    pub when: Option<String>,
+    pub archived_at: String,
+    /// An imported event that a sync archived because it left the calendar.
+    pub removed_by_sync: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveList {
+    pub items: Vec<ArchivedItem>,
+    pub hidden_events: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub data_dir: String,
+    pub backup_dir: String,
+    pub backup_count: usize,
+    pub last_backup: Option<String>,
+    pub version: String,
+}

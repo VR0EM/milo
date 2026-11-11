@@ -9,3 +9,8 @@ Tauri + React + TypeScript, all data in one SQLite file on this machine.
     cd src-tauri && cargo test
 
 Design and data decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+
+Data lives in one SQLite file with daily backups next to it:
+macOS `~/Library/Application Support/app.milo.desktop`, Windows `%APPDATA%\app.milo.desktop`.
+
+Press `?` in the app for keyboard shortcuts.

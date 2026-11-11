@@ -4,7 +4,7 @@ use crate::db::Db;
 use crate::error::Result;
 use crate::models::*;
 use crate::repo;
-use crate::{export, importer, insights};
+use crate::{archive, export, importer, insights};
 use tauri::{AppHandle, Manager, State};
 
 /// Runs slow work (network, files) off the main thread, so the window stays responsive.
@@ -254,6 +254,30 @@ pub fn create_semester(db: State<Db>, input: SemesterInput) -> Result<Semester> 
 #[tauri::command]
 pub fn update_semester(db: State<Db>, id: String, input: SemesterInput) -> Result<Semester> {
     insights::update_semester(conn!(db), &id, input)
+}
+
+#[tauri::command]
+pub fn list_archived(db: State<Db>, query: String) -> Result<ArchiveList> {
+    let (items, hidden_events) = archive::list_archived(conn!(db), &query)?;
+    Ok(ArchiveList { items, hidden_events })
+}
+
+/// Where Milo keeps its data, for the Settings screen.
+#[tauri::command]
+pub fn app_info(app: AppHandle) -> Result<AppInfo> {
+    let dir = app.path().app_data_dir().map_err(|e| crate::error::AppError::Invalid(e.to_string()))?;
+    let backups = dir.join("backups");
+    let mut names: Vec<String> = std::fs::read_dir(&backups)
+        .map(|it| it.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.ends_with(".sqlite")).collect())
+        .unwrap_or_default();
+    names.sort();
+    Ok(AppInfo {
+        data_dir: dir.to_string_lossy().to_string(),
+        backup_dir: backups.to_string_lossy().to_string(),
+        backup_count: names.len(),
+        last_backup: names.pop(),
+        version: app.package_info().version.to_string(),
+    })
 }
 
 #[tauri::command]

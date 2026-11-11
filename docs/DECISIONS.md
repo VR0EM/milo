@@ -135,6 +135,43 @@ ones marked *(assumption)* are kept easy to change.
   (`--series-class`, `--series-study`, `--series-sleep`), a legend, hover and keyboard-focus
   tooltips, and a "Show table" view on every chart. No comparisons, streaks or goals.
 
+## Archive and shortcuts
+
+- **Archive screen** lists everything that was ever archived, newest first, searchable by name
+  and filterable by kind, each with "Restore". Archived events are many over time: the newest
+  300 are listed and the rest are found by searching.
+- Restoring an imported event that a sync had removed marks it as the user's own, so the next
+  sync does not remove it again.
+- **Shortcuts** are few and predictable: Cmd/Ctrl+1–7 for the screens (in sidebar order), `?`
+  for the overview, `N` for a new event or task, `Esc` to clear. Single-letter keys never fire
+  while typing in a field or dialog. The overview is also reachable from the sidebar.
+- **App icon**: three muted blocks on a dark square (`src-tauri/app-icon.png`, regenerate the
+  sizes with `npx tauri icon src-tauri/app-icon.png`).
+
+## Look and feel
+
+- **Vivid, in the manner of Notion Calendar.** Saturated space colours; events get a clear tint
+  of their colour with text in a deep shade of the same colour (light mode) or a pale one
+  (dark mode). One accent the user picks (blue, teal, green, violet, coral) marks today, the
+  current selection, primary buttons and checkboxes.
+- **Text is adjustable** in Settings > Text: typeface (Standard, Rounded, Humanist, Serif, all
+  fonts already on the computer, nothing downloaded) and size (Small, Default, Large). Every
+  font size scales with `--text-scale`. No all-caps labels; few weight steps.
+- **Light, dark or match the computer**, set in Settings. Each theme has its own tones, not an
+  automatic inversion; text on accent switches to dark in dark mode for contrast.
+- **Sidebar shows only what is used daily:** the screens (with icons and Cmd/Ctrl+number) and
+  the spaces, with groups that fold away. Activities, task types and groups are edited in
+  Settings > Lists.
+- **One icon set** drawn on a 16px grid with a 1.5px stroke (`components/Icon.tsx`); no emoji.
+- **Motion** is limited to 150 ms colour changes and a chevron turn, and is off when the system
+  asks for reduced motion.
+- **Errors stay** until dismissed; other notices fade after 8 seconds.
+- **Single-key shortcuts ignore key repeat**, so holding N creates one item, not one per repeat.
+- The calendar's empty side panel shows a small month to jump between weeks.
+- Calendar settings: show weekends, default length of new events, and the hour the calendar
+  opens at.
+- Browser preview: `npm run dev` and open `/?demo` for a sample week (never in the app).
+
 ## Backups
 
 - One full copy per calendar day in `backups/` next to the database, written with
@@ -160,4 +197,22 @@ ones marked *(assumption)* are kept easy to change.
 4. Reminders and tray. **Done.**
 5. ICS import with title mappings; full export. **Done.**
 6. Insights and semesters. **Done.**
-7. Archive screen, polish.
+7. Archive screen, shortcuts, polish. **Done.**
+
+## Future AI layer (not built)
+
+The core is ready for it without changes:
+
+1. **Every change is already a named command** (`create_event`, `set_part_done`, ...). An AI never
+   gets its own write path; it can only propose a list of these commands.
+2. A `proposals` table stores each suggestion: the commands with their arguments, a plain-language
+   reason, and a status (`open`, `accepted`, `declined`). Declined proposals are kept, like
+   everything else.
+3. A suggestions panel shows a proposal as a preview of what would change (for example the
+   events it would add, drawn dashed in the calendar). Nothing happens until the user presses
+   Accept; Accept runs the commands through the same repository functions the UI uses, in one
+   transaction.
+4. The AI reads through the same read commands the screens use (`list_events`, `get_insights`,
+   `list_tasks`), so it sees exactly what the user sees.
+5. The layer is off by default, behind a setting, and is the only part of Milo that would ever
+   talk to a model; with it off, no data leaves the machine.

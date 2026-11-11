@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useSpaces, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { daysFromToday, fmtMoment, fmtRelativeDays } from "../../lib/time";
 import { taskProgress, type Task, type TaskType } from "../../lib/types";
+import { ignoreForShortcut } from "../shortcuts/keys";
 import { TaskPanel } from "./TaskPanel";
 
 const VISIBLE_PARTS = 5;
@@ -46,6 +47,18 @@ export function TasksView() {
       { onSuccess: (t) => useUi.getState().selectTask(t.id, true) },
     );
   };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (ignoreForShortcut(e)) return;
+      if (e.key === "n") {
+        e.preventDefault();
+        newTask(defaultSpaceId);
+      } else if (e.key === "Escape") useUi.getState().selectTask(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   return (
     <>
