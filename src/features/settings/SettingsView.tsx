@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, autostart } from "../../lib/api";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, autostart, files } from "../../lib/api";
+import type { BackupFile } from "../../lib/types";
 import { useActivities, useGroups, useTaskTypes } from "../../lib/queries";
 import { useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { MOD_LABEL } from "../shortcuts/keys";
@@ -225,7 +226,26 @@ function Startup() {
 }
 
 function Data() {
+  const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["appInfo"], queryFn: api.appInfo, staleTime: 0 });
+  const backups = useQuery({ queryKey: ["backups"], queryFn: api.backupSettings, staleTime: 0 }).data;
+  const [restoring, setRestoring] = useState(false);
+  const refresh = () => qc.invalidateQueries({ queryKey: ["backups"] });
+  const notify = (text: string, error = false) => useUi.getState().notify({ text, error });
+
+  const chooseMirror = async () => {
+    try {
+      const path = await files.folder();
+      if (!path) return;
+      const copied = await api.setBackupMirror(path);
+      notify(copied ? `Copied ${copied} backup${copied === 1 ? "" : "s"} to the second folder` : "The second folder is up to date");
+    } catch (e) {
+      notify(String(e), true);
+    } finally {
+      refresh();
+    }
+  };
+
   return (
     <section className="block">
       <h2>Your data</h2>
@@ -234,13 +254,92 @@ function Data() {
       </Row>
       <Row title="Daily backups" info="Once a day Milo saves a full copy of the database in a backups folder next to it. Old copies are kept.">
         <span className="muted">
-          {data ? (data.backupCount ? `${data.backupCount} kept · newest ${data.lastBackup?.replace(/^milo-|\.sqlite$/g, "")}` : "None yet") : "…"}
+          {backups ? (backups.backups.length ? `${backups.backups.length} kept · newest ${backups.backups[0].date}` : "None yet") : "…"}
         </span>
       </Row>
+      <Row
+        title="Second backup folder"
+        info="Copies of the daily backups also go to a folder you choose, such as a USB stick or a folder that your own cloud app syncs. If the laptop breaks, the copies are still there."
+      >
+        <div className="inline">
+          {backups?.mirrorDir ? <code className="path" title={backups.mirrorDir}>{backups.mirrorDir}</code> : <span className="muted">Not set</span>}
+          <button className="btn small" disabled={!files.available} onClick={chooseMirror}>{backups?.mirrorDir ? "Change…" : "Choose folder…"}</button>
+          {backups?.mirrorDir && (
+            <button className="link" onClick={() => api.setBackupMirror(null).then(refresh, (e) => notify(String(e), true))}>Stop</button>
+          )}
+        </div>
+      </Row>
+      <Row
+        title="Restore a backup"
+        info="Puts Milo back to how it was on an earlier day. What you have now is saved as a backup first, so nothing is lost."
+      >
+        <button className="btn small" disabled={!files.available || !backups?.backups.length} onClick={() => setRestoring(true)}>Choose a backup…</button>
+      </Row>
       <Row title="Export everything" info="One JSON file with all your data, archived items included, to keep or move elsewhere.">
-        <button className="btn" onClick={() => useUi.getState().setView("import")}>Go to Import &amp; export</button>
+        <button className="btn small" onClick={() => useUi.getState().setView("import")}>Go to Import &amp; export</button>
       </Row>
       {data && <p className="muted small">Milo {data.version}</p>}
+      {restoring && backups && <RestoreDialog backups={backups.backups} onClose={() => { setRestoring(false); refresh(); }} />}
     </section>
+  );
+}
+
+function RestoreDialog({ backups, onClose }: { backups: BackupFile[]; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const qc = useQueryClient();
+  const [pick, setPick] = useState<BackupFile | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  const restore = async () => {
+    if (!pick) return;
+    setBusy(true);
+    try {
+      const safety = await api.restoreBackup(pick.name);
+      await qc.invalidateQueries();
+      useUi.getState().notify({ text: `Restored the backup of ${pick.date}. Your data from just before is kept as ${safety}.` });
+      onClose();
+    } catch (e) {
+      useUi.getState().notify({ text: String(e), error: true });
+      setBusy(false);
+    }
+  };
+
+  return (
+    <dialog ref={ref} className="dialog wide" onClose={onClose}>
+      <h2>Restore a backup</h2>
+      {!pick ? (
+        <>
+          <p className="muted small">Pick the day to go back to.</p>
+          <ul className="rows restore-list">
+            {backups.map((b) => (
+              <li key={b.name} className="row">
+                <span className="row-title">{b.date.startsWith("before-restore") ? `Just before a restore (${b.date.replace("before-restore-", "")})` : b.date}</span>
+                <span className="muted small">{Math.max(1, Math.round(b.bytes / 1024))} KB</span>
+                <button className="btn small" onClick={() => setPick(b)}>Choose</button>
+              </li>
+            ))}
+          </ul>
+          <div className="dialog-foot">
+            <span className="spacer" />
+            <button className="btn" onClick={onClose}>Cancel</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>
+            Milo will look exactly like it did in the backup of <strong>{pick.date}</strong>. Changes made since then
+            are saved as a separate backup first, so you can come back to them.
+          </p>
+          <div className="dialog-foot">
+            <button className="btn" onClick={() => setPick(null)} disabled={busy}>Back</button>
+            <span className="spacer" />
+            <button className="btn primary" onClick={restore} disabled={busy}>{busy ? "Restoring…" : `Restore ${pick.date}`}</button>
+          </div>
+        </>
+      )}
+    </dialog>
   );
 }

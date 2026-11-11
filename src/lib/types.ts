@@ -80,6 +80,8 @@ export interface Task {
   targetAt: string | null;
   completedAt: string | null;
   priority: Priority | null;
+  sourceId: string | null;
+  locallyModified: boolean;
   sortOrder: number;
   createdAt: string;
   parts: TaskPart[];
@@ -135,7 +137,21 @@ export interface FocusSession {
 }
 export type FocusInput = Pick<FocusSession, "spaceId" | "activityId" | "taskId" | "title" | "plannedMinutes">;
 
-export type ReminderKind = "event" | "times" | "interval";
+export type ReminderKind = "event" | "times" | "interval" | "focus";
+
+export interface Confirmation {
+  ruleId: string;
+  title: string;
+  time: string;
+  occurrence: string;
+  confirmedAt: string | null;
+}
+
+export interface BackupFile {
+  name: string;
+  date: string;
+  bytes: number;
+}
 export interface ReminderRule {
   id: string;
   kind: ReminderKind;
@@ -147,6 +163,7 @@ export interface ReminderRule {
   intervalMinutes: number | null; // interval
   startTime: string | null;
   endTime: string | null;
+  askConfirm: boolean;
 }
 export type ReminderRuleInput = Omit<ReminderRule, "id">;
 
@@ -157,10 +174,11 @@ export interface ImportSource {
   location: string;
   spaceId: string;
   enabled: boolean;
+  importAs: "events" | "tasks";
   lastSyncedAt: string | null;
   lastError: string | null;
 }
-export type ImportSourceInput = Pick<ImportSource, "name" | "location" | "spaceId" | "enabled">;
+export type ImportSourceInput = Pick<ImportSource, "name" | "location" | "spaceId" | "enabled" | "importAs">;
 
 export interface SyncReport {
   added: number;

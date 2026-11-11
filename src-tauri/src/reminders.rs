@@ -6,11 +6,22 @@
 
 use crate::db::{new_id, now};
 use crate::error::Result;
+use crate::models::Confirmation;
 use crate::repo;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveTime, SecondsFormat, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 const GRACE_MINUTES: i64 = 5;
+/// A reminder that asks to be confirmed is repeated once, this long after, if still open.
+const CONFIRM_AGAIN_MINUTES: i64 = 30;
+
+fn confirmed(c: &Connection, rule_id: &str, occurrence: &str) -> Result<bool> {
+    Ok(c.query_row(
+        "SELECT COUNT(*) FROM reminder_log WHERE rule_id = ?1 AND occurrence = ?2 AND confirmed_at IS NOT NULL",
+        params![rule_id, occurrence],
+        |r| r.get::<_, i64>(0),
+    )? > 0)
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Due {
@@ -66,8 +77,36 @@ pub fn collect_due(c: &Connection, now: DateTime<Local>) -> Result<Vec<Due>> {
             }
             "times" if rule.weekdays.contains(&weekday) => {
                 for t in rule.times.as_deref().unwrap_or("").split(',') {
-                    if parse_time(t).is_some_and(|nt| just_passed(now, nt)) {
-                        due.push(Due { rule_id: rule.id.clone(), occurrence: format!("{date}T{t}"), title: rule.title.clone(), body: t.to_string() });
+                    let Some(nt) = parse_time(t) else { continue };
+                    let occurrence = format!("{date}T{t}");
+                    if just_passed(now, nt) {
+                        let body = if rule.ask_confirm { format!("{t} · mark it as done on Today in Milo") } else { t.to_string() };
+                        due.push(Due { rule_id: rule.id.clone(), occurrence: occurrence.clone(), title: rule.title.clone(), body });
+                    }
+                    let again = nt + Duration::minutes(CONFIRM_AGAIN_MINUTES);
+                    if rule.ask_confirm && again > nt && just_passed(now, again) && !confirmed(c, &rule.id, &occurrence)? {
+                        due.push(Due {
+                            rule_id: rule.id.clone(),
+                            occurrence: format!("{occurrence}|again"),
+                            title: rule.title.clone(),
+                            body: format!("Still open from {t} · mark it as done on Today in Milo"),
+                        });
+                    }
+                }
+            }
+            "focus" => {
+                if let Some(s) = repo::active_focus(c)? {
+                    let started = DateTime::parse_from_rfc3339(&s.started_at).map(|d| d.with_timezone(&Local));
+                    if let Ok(started) = started {
+                        if now >= started + Duration::minutes(s.planned_minutes) {
+                            let what = if s.title.is_empty() { String::new() } else { format!(" on {}", s.title) };
+                            due.push(Due {
+                                rule_id: rule.id.clone(),
+                                occurrence: format!("focus:{}", s.id),
+                                title: "Focus session done".into(),
+                                body: format!("{} minutes{what}. Stop and save when you are ready.", s.planned_minutes),
+                            });
+                        }
                     }
                 }
             }
@@ -96,6 +135,47 @@ pub fn collect_due(c: &Connection, now: DateTime<Local>) -> Result<Vec<Due>> {
         }
     }
     Ok(due)
+}
+
+/// Today's moments that ask to be confirmed, with whether they were.
+pub fn confirmations(c: &Connection, now: DateTime<Local>) -> Result<Vec<Confirmation>> {
+    let weekday = now.weekday().number_from_monday().to_string();
+    let date = now.format("%Y-%m-%d").to_string();
+    let mut out = Vec::new();
+    for rule in repo::list_reminder_rules(c)? {
+        if !(rule.enabled && rule.ask_confirm && rule.kind == "times" && rule.weekdays.contains(&weekday)) {
+            continue;
+        }
+        for t in rule.times.as_deref().unwrap_or("").split(',').filter(|t| parse_time(t).is_some()) {
+            let occurrence = format!("{date}T{t}");
+            let confirmed_at = c
+                .query_row(
+                    "SELECT confirmed_at FROM reminder_log WHERE rule_id = ?1 AND occurrence = ?2",
+                    params![rule.id, occurrence],
+                    |r| r.get::<_, Option<String>>(0),
+                )
+                .optional()?
+                .flatten();
+            out.push(Confirmation { rule_id: rule.id.clone(), title: rule.title.clone(), time: t.to_string(), occurrence, confirmed_at });
+        }
+    }
+    out.sort_by(|a, b| a.time.cmp(&b.time));
+    Ok(out)
+}
+
+/// Marks a moment as done, or undoes that. Confirming before the moment means no reminder fires.
+pub fn set_confirmed(c: &Connection, rule_id: &str, occurrence: &str, done: bool) -> Result<()> {
+    let ts = now();
+    c.execute(
+        "INSERT OR IGNORE INTO reminder_log (id, rule_id, occurrence, fired_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4, ?4)",
+        params![new_id(), rule_id, occurrence, ts],
+    )?;
+    let value = if done { Some(ts.as_str()) } else { None };
+    c.execute(
+        "UPDATE reminder_log SET confirmed_at = ?3, updated_at = ?4 WHERE rule_id = ?1 AND occurrence = ?2",
+        params![rule_id, occurrence, value, ts],
+    )?;
+    Ok(())
 }
 
 /// Everything that should be shown now. Each occurrence is returned exactly once, ever.
@@ -158,11 +238,50 @@ mod tests {
     }
 
     #[test]
+    fn confirm_and_focus() {
+        let c = open_in_memory().unwrap();
+        enable(&c, "seed-reminder-medication"); // 08:00, asks to confirm
+        let list = confirmations(&c, at(7, 0)).unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0].confirmed_at.is_none());
+
+        let first = tick(&c, at(8, 1)).unwrap();
+        assert_eq!(first.len(), 1);
+        assert!(first[0].body.contains("Today"));
+        // Not confirmed: one gentle repeat 30 minutes later, then nothing.
+        assert_eq!(tick(&c, at(8, 31)).unwrap().len(), 1);
+        assert!(tick(&c, at(9, 2)).unwrap().is_empty());
+
+        set_confirmed(&c, "seed-reminder-medication", &list[0].occurrence, true).unwrap();
+        assert!(confirmations(&c, at(9, 0)).unwrap()[0].confirmed_at.is_some());
+        set_confirmed(&c, "seed-reminder-medication", &list[0].occurrence, false).unwrap();
+        assert!(confirmations(&c, at(9, 0)).unwrap()[0].confirmed_at.is_none());
+
+        // Confirmed before the moment: no reminder, no repeat (the next day, 2026-11-12).
+        let next = Local.with_ymd_and_hms(2026, 11, 12, 7, 30, 0).unwrap();
+        let occ = confirmations(&c, next).unwrap()[0].occurrence.clone();
+        set_confirmed(&c, "seed-reminder-medication", &occ, true).unwrap();
+        assert!(tick(&c, Local.with_ymd_and_hms(2026, 11, 12, 8, 1, 0).unwrap()).unwrap().is_empty());
+        assert!(tick(&c, Local.with_ymd_and_hms(2026, 11, 12, 8, 31, 0).unwrap()).unwrap().is_empty());
+
+        // A focus session that reached its length is announced once.
+        let s = repo::start_focus(&c, crate::models::FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, title: "Essay".into(), planned_minutes: 25 }).unwrap();
+        assert!(tick(&c, Local::now()).unwrap().iter().all(|d| !d.title.starts_with("Focus")), "not yet");
+        c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
+        let done: Vec<_> = tick(&c, Local::now()).unwrap().into_iter().filter(|d| d.title.starts_with("Focus")).collect();
+        assert_eq!(done.len(), 1);
+        assert!(done[0].body.contains("on Essay"));
+        assert!(tick(&c, Local::now()).unwrap().iter().all(|d| !d.title.starts_with("Focus")), "only once");
+    }
+
+    #[test]
     fn fixed_times_and_intervals() {
         let c = open_in_memory().unwrap();
         assert!(tick(&c, at(8, 0)).unwrap().is_empty(), "medication is off by default");
         enable(&c, "seed-reminder-medication");
         enable(&c, "seed-reminder-water");
+        // This test is about plain reminders; the confirm repeat has its own test.
+        c.execute("UPDATE reminder_rules SET ask_confirm = 0", []).unwrap();
 
         let due = tick(&c, at(8, 2)).unwrap();
         assert_eq!(due.iter().map(|d| d.title.as_str()).collect::<Vec<_>>(), vec!["Medication"]);

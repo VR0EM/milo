@@ -37,12 +37,14 @@ const tables: Record<string, Row[]> = {
   title_mapping: [],
   semester: [],
   reminder_rule: [
-    { ...base("seed-reminder-events", 0), kind: "event", title: "Events", enabled: true, minutesBefore: 10, times: null, weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null },
-    { ...base("seed-reminder-medication", 1), kind: "times", title: "Medication", enabled: false, minutesBefore: null, times: "08:00", weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null },
-    { ...base("seed-reminder-water", 2), kind: "interval", title: "Water", enabled: false, minutesBefore: null, times: null, weekdays: "1234567", intervalMinutes: 90, startTime: "09:00", endTime: "21:00" },
+    { ...base("seed-reminder-events", 0), kind: "event", title: "Events", enabled: true, minutesBefore: 10, times: null, weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null, askConfirm: false },
+    { ...base("seed-reminder-medication", 1), kind: "times", title: "Medication", enabled: false, minutesBefore: null, times: "08:00", weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null, askConfirm: true },
+    { ...base("seed-reminder-water", 2), kind: "interval", title: "Water", enabled: false, minutesBefore: null, times: null, weekdays: "1234567", intervalMinutes: 90, startTime: "09:00", endTime: "21:00", askConfirm: false },
+    { ...base("seed-reminder-focus", 3), kind: "focus", title: "Focus sessions", enabled: true, minutesBefore: null, times: null, weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null, askConfirm: false },
   ],
 };
 const checks = new Set<string>();
+const confirmed = new Map<string, string>();
 
 const routineView = (id: string): Row => {
   const r = tables.routine.find((x) => x.id === id);
@@ -107,7 +109,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "create_task_type": return create("task_type", a.input);
       case "update_task_type": return update("task_type", a.id, a.input);
       case "list_tasks": return tables.task.filter((t) => !t.deletedAt).map((t) => taskView(t.id));
-      case "create_task": return taskView(create("task", a.input, { completedAt: null }).id);
+      case "create_task": return taskView(create("task", a.input, { completedAt: null, sourceId: null, locallyModified: false }).id);
       case "update_task": return taskView(update("task", a.id, a.input).id);
       case "set_task_completed":
         if (taskView(a.id).parts.length) throw "This task is completed by finishing its parts";
@@ -166,7 +168,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "list_import_sources": return (tables.import_source ?? []).filter((r) => !r.deletedAt).map((r) => ({ ...r }));
       case "demo_seed_import": {
         // Browser demo only: a calendar link with a few imported deadlines.
-        tables.import_source = [{ ...base("demo-source", 0), kind: "ics_url", name: "Deadlines", location: "https://learning.example.edu/calendar/export.php?userid=1&authtoken=secret", spaceId: "seed-space-personal", enabled: true, lastSyncedAt: ts(), lastError: null }];
+        tables.import_source = [{ ...base("demo-source", 0), kind: "ics_url", name: "Deadlines", location: "https://learning.example.edu/calendar/export.php?userid=1&authtoken=secret", spaceId: "seed-space-personal", enabled: true, lastSyncedAt: ts(), lastError: null, importAs: "events" }];
         const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(23, 59, 0, 0); return d; };
         ["01 M365 intro labo moet worden ingeleverd", "02 Entra ID labo moet worden ingeleverd", "03 Intune labo moet worden ingeleverd", "Bedrijfsbezoek Umicore"].forEach((title, i) => {
           const start = day(i * 3 + 1);
@@ -201,6 +203,21 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           .sort((x, y) => y.archivedAt.localeCompare(x.archivedAt));
         return { items, hiddenEvents: 0 };
       }
+      case "list_confirmations": {
+        const d = new Date();
+        const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        return tables.reminder_rule
+          .filter((r) => !r.deletedAt && r.enabled && r.askConfirm && r.kind === "times")
+          .flatMap((r) => String(r.times).split(",").map((time) => ({
+            ruleId: r.id, title: r.title, time, occurrence: `${day}T${time}`, confirmedAt: confirmed.get(`${r.id}|${day}T${time}`) ?? null,
+          })));
+      }
+      case "set_confirmed":
+        if (a.done) confirmed.set(`${a.ruleId}|${a.occurrence}`, ts()); else confirmed.delete(`${a.ruleId}|${a.occurrence}`);
+        return null;
+      case "backup_settings": return { mirrorDir: null, backups: [] };
+      case "set_backup_mirror": case "restore_backup": throw "Backups can only be managed in the desktop app";
+      case "update_import_source": return update("import_source", a.id, a.input);
       case "app_info":
         return { dataDir: "(browser preview: data lives in memory)", backupDir: "", backupCount: 0, lastBackup: null, version: "dev" };
       case "get_insights": return mockInsights(a.from, a.to);

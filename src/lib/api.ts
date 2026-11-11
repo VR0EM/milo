@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { mockInvoke } from "./mockBackend";
 import type {
   Activity, ActivityInput, CalEvent, Entity, EventInput, Group, GroupInput, Space, SpaceInput, Task, TaskInput, TaskType,
-  ArchivedItem, Insights, Semester, SemesterInput,
+  ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
 } from "./types";
@@ -91,6 +91,12 @@ export const api = {
   appInfo: () =>
     call<{ dataDir: string; backupDir: string; backupCount: number; lastBackup: string | null; version: string }>("app_info"),
 
+  listConfirmations: () => call<Confirmation[]>("list_confirmations"),
+  setConfirmed: (ruleId: string, occurrence: string, done: boolean) => call<void>("set_confirmed", { ruleId, occurrence, done }),
+  backupSettings: () => call<{ mirrorDir: string | null; backups: BackupFile[] }>("backup_settings"),
+  setBackupMirror: (path: string | null) => call<number>("set_backup_mirror", { path }),
+  restoreBackup: (name: string) => call<string>("restore_backup", { name }),
+
   setArchived: (entity: Entity, id: string, archived: boolean) =>
     call<void>("set_archived", { entity, id, archived }),
 };
@@ -115,6 +121,12 @@ export const files = {
     if (!inTauri) throw "Files can only be opened in the desktop app";
     const { open } = await import("@tauri-apps/plugin-dialog");
     const picked = await open({ multiple: false, directory: false, filters: [{ name, extensions }] });
+    return typeof picked === "string" ? picked : null;
+  },
+  async folder(): Promise<string | null> {
+    if (!inTauri) throw "Folders can only be chosen in the desktop app";
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({ directory: true, multiple: false });
     return typeof picked === "string" ? picked : null;
   },
   async save(defaultPath: string): Promise<string | null> {

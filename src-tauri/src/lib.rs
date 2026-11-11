@@ -103,6 +103,14 @@ pub fn run() {
                     if let Err(e) = backup::run_if_due(&conn, &backups) {
                         eprintln!("backup failed: {e}");
                     }
+                    // The optional second folder (Settings > Your data) gets a copy as well.
+                    if let Ok(Some(to)) = repo::get_setting(&conn, "backup_mirror_dir") {
+                        if !to.is_empty() {
+                            if let Err(e) = backup::mirror(&backups, std::path::Path::new(&to)) {
+                                eprintln!("copying backups to {to} failed: {e}");
+                            }
+                        }
+                    }
                 }
                 std::thread::sleep(Duration::from_secs(3600));
             });
@@ -202,6 +210,11 @@ pub fn run() {
             commands::update_semester,
             commands::list_archived,
             commands::app_info,
+            commands::list_confirmations,
+            commands::set_confirmed,
+            commands::backup_settings,
+            commands::set_backup_mirror,
+            commands::restore_backup,
             commands::set_archived,
         ])
         .build(tauri::generate_context!())

@@ -8,7 +8,7 @@ import { parseTime } from "../../lib/time";
 import type { ReminderRule, ReminderRuleInput } from "../../lib/types";
 
 const blank: Omit<ReminderRuleInput, "kind" | "title"> = {
-  enabled: true, minutesBefore: null, times: null, weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null,
+  enabled: true, minutesBefore: null, times: null, weekdays: "1234567", intervalMinutes: null, startTime: null, endTime: null, askConfirm: false,
 };
 
 export function RemindersView() {
@@ -98,8 +98,8 @@ function RuleCard({ rule }: { rule: ReminderRule }) {
   return (
     <section className={`reminder-card${rule.enabled ? "" : " off"}`}>
       <div className="reminder-head">
-        {rule.kind === "event" ? (
-          <h3>Events</h3>
+        {rule.kind === "event" || rule.kind === "focus" ? (
+          <h3>{rule.kind === "event" ? "Events" : "Focus sessions"}</h3>
         ) : (
           <input
             className="title-input"
@@ -123,6 +123,10 @@ function RuleCard({ rule }: { rule: ReminderRule }) {
             {number(rule.minutesBefore, "minutesBefore", 0, 240)}
             <span>minutes before an event starts.</span>
           </div>
+        )}
+
+        {rule.kind === "focus" && (
+          <p>A notification when a focus session reaches its planned length.</p>
         )}
 
         {rule.kind === "times" && (
@@ -152,10 +156,17 @@ function RuleCard({ rule }: { rule: ReminderRule }) {
           </div>
         )}
 
-        {rule.kind !== "event" && <DayToggles value={rule.weekdays} onChange={(weekdays) => save({ weekdays })} />}
+        {rule.kind !== "event" && rule.kind !== "focus" && <DayToggles value={rule.weekdays} onChange={(weekdays) => save({ weekdays })} />}
+
+        {rule.kind === "times" && (
+          <label className="check">
+            <input type="checkbox" checked={rule.askConfirm} onChange={(e) => save({ askConfirm: e.target.checked })} />
+            <span>Ask me to check it off on Today, and remind me once more after 30 minutes if I have not</span>
+          </label>
+        )}
       </div>
 
-      {rule.kind !== "event" && (
+      {rule.kind !== "event" && rule.kind !== "focus" && (
         <div className="panel-foot">
           <button className="btn quiet" onClick={() => archive("reminder_rule", rule.id, rule.title)}>Archive</button>
         </div>

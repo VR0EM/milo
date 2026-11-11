@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
 import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
-import { useArchiveWithUndo, useTaskAction, useUpdateTask } from "../../lib/queries";
+import { useArchiveWithUndo, useImportSources, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { fmtTime, fromInputs, toDateInput } from "../../lib/time";
 import { type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
@@ -130,6 +130,8 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
         </div>
       </fieldset>
 
+      {task.sourceId && <ImportedTaskNote task={task} />}
+
       <label className="field grow">
         <span>Notes</span>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== task.notes && save({ notes })} />
@@ -203,6 +205,21 @@ function MomentField({ label, value, onChange }: { label: string; value: string 
         {d ? <TimeField value={fmtTime(d)} onCommit={(t) => set(toDateInput(d), t)} /> : <input disabled placeholder="hh:mm" />}
       </label>
       {d && <button type="button" className="link clear" onClick={() => onChange(null)}>Clear</button>}
+    </div>
+  );
+}
+
+function ImportedTaskNote({ task }: { task: Task }) {
+  const sources = useImportSources().data ?? [];
+  const name = sources.find((s) => s.id === task.sourceId)?.name ?? "a calendar";
+  return (
+    <div className="imported-note">
+      <span>Imported from {name}.</span>
+      <span>
+        {task.locallyModified
+          ? "You changed this task, so syncing leaves it as it is."
+          : "If you change it, your version is kept when the calendar syncs. Ticking it off is always yours."}
+      </span>
     </div>
   );
 }

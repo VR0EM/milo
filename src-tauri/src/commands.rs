@@ -4,7 +4,8 @@ use crate::db::Db;
 use crate::error::Result;
 use crate::models::*;
 use crate::repo;
-use crate::{archive, export, importer, insights};
+use crate::{archive, backup, export, importer, insights, reminders};
+use tauri::Emitter;
 use tauri::{AppHandle, Manager, State};
 
 /// Runs slow work (network, files) off the main thread, so the window stays responsive.
@@ -260,6 +261,48 @@ pub fn update_semester(db: State<Db>, id: String, input: SemesterInput) -> Resul
 pub fn list_archived(db: State<Db>, query: String) -> Result<ArchiveList> {
     let (items, hidden_events) = archive::list_archived(conn!(db), &query)?;
     Ok(ArchiveList { items, hidden_events })
+}
+
+#[tauri::command]
+pub fn list_confirmations(db: State<Db>) -> Result<Vec<Confirmation>> {
+    reminders::confirmations(conn!(db), chrono::Local::now())
+}
+#[tauri::command]
+pub fn set_confirmed(db: State<Db>, rule_id: String, occurrence: String, done: bool) -> Result<()> {
+    reminders::set_confirmed(conn!(db), &rule_id, &occurrence, done)
+}
+
+fn backup_dir(app: &AppHandle) -> Result<std::path::PathBuf> {
+    Ok(app.path().app_data_dir().map_err(|e| crate::error::AppError::Invalid(e.to_string()))?.join("backups"))
+}
+
+#[tauri::command]
+pub fn backup_settings(app: AppHandle, db: State<Db>) -> Result<BackupSettings> {
+    let mirror_dir = repo::get_setting(conn!(db), "backup_mirror_dir")?.filter(|v| !v.is_empty());
+    Ok(BackupSettings { mirror_dir, backups: backup::list(&backup_dir(&app)?) })
+}
+
+/// Sets (or with `None` stops) the second backup folder, and copies the backups there now.
+#[tauri::command]
+pub async fn set_backup_mirror(app: AppHandle, path: Option<String>) -> Result<usize> {
+    off_main(app.clone(), move |db| {
+        repo::set_setting(&db.lock(), "backup_mirror_dir", path.as_deref())?;
+        match path {
+            Some(p) => backup::mirror(&backup_dir(&app)?, std::path::Path::new(&p)),
+            None => Ok(0),
+        }
+    })
+    .await
+}
+
+/// Puts a backup back. Returns the name of the copy made of the data as it was just before.
+#[tauri::command]
+pub async fn restore_backup(app: AppHandle, name: String) -> Result<String> {
+    let dir = backup_dir(&app)?;
+    let handle = app.clone();
+    let safety = off_main(app, move |db| backup::restore(&mut db.lock(), &dir, &name)).await?;
+    let _ = handle.emit("data-changed", ());
+    Ok(safety.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
 }
 
 /// Where Milo keeps its data, for the Settings screen.

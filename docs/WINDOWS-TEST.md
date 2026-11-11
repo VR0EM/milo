@@ -21,6 +21,10 @@ Probeer gewoon een paar dagen te gebruiken zoals je wil. Let vooral op:
 - **Rooster**: Import & export, Add link, je schoollink plakken. Komen de lessen goed binnen, op het juiste uur?
 - **Herinneringen**: Reminders, "Send a test reminder". Zie je een melding rechtsonder?
   Zo niet: Windows Instellingen, Systeem, Meldingen, en zet Milo aan.
+- **Afvinken op Today**: zet bij Reminders de medicatie aan. Verschijnt "Check off today" op Today?
+- **Focus**: start een focus-sessie. Krijg je een melding als de tijd om is?
+- **Rooster als taken**: zet bij Import & export je deadlines-link op "As tasks". Staan ze in Tasks met de juiste deadline?
+- **Tweede backupmap**: Settings, Your data, kies bv. een USB-stick. Staat er een kopie in?
 - **Venster sluiten**: Milo hoort rechtsonder in het systeemvak (bij de klok) te blijven. Klik op het icoon om terug te openen.
 - **Opstarten met Windows**: Settings, Startup. Werkt het na een herstart?
 - **Lettertypes en grootte**: Settings, Text. Leesbaar op jouw scherm?

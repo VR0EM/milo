@@ -321,6 +321,8 @@ fn task_from(r: &Row) -> rusqlite::Result<Task> {
         target_at: r.get("target_at")?,
         completed_at: r.get("completed_at")?,
         priority: r.get("priority")?,
+        source_id: r.get("source_id")?,
+        locally_modified: r.get("locally_modified")?,
         sort_order: r.get("sort_order")?,
         created_at: r.get("created_at")?,
         parts: Vec::new(),
@@ -384,7 +386,8 @@ pub fn update_task(c: &Connection, id: &str, input: TaskInput) -> Result<Task> {
     check_priority(&input.priority)?;
     changed(c.execute(
         "UPDATE tasks SET space_id = ?2, type_id = ?3, title = ?4, notes = ?5, deadline_at = ?6, target_at = ?7,
-         priority = ?8, updated_at = ?9 WHERE id = ?1",
+         priority = ?8, updated_at = ?9,
+         locally_modified = (source_id IS NOT NULL) OR locally_modified WHERE id = ?1",
         params![id, input.space_id, input.type_id, input.title.trim(), input.notes, input.deadline_at, input.target_at, input.priority, now()],
     )?)?;
     get_task(c, id)
@@ -683,6 +686,7 @@ fn reminder_from(r: &Row) -> rusqlite::Result<ReminderRule> {
         interval_minutes: r.get("interval_minutes")?,
         start_time: r.get("start_time")?,
         end_time: r.get("end_time")?,
+        ask_confirm: r.get("ask_confirm")?,
     })
 }
 
@@ -708,6 +712,7 @@ fn check_reminder(input: &ReminderRuleInput) -> Result<()> {
                 _ => bad("The start time must be before the end time"),
             }
         }
+        "focus" => Ok(()),
         other => bad(&format!("Unknown reminder kind: {other}")),
     }
 }
@@ -726,11 +731,11 @@ pub fn create_reminder_rule(c: &Connection, input: ReminderRuleInput) -> Result<
     check_reminder(&input)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO reminder_rules (id, kind, title, enabled, minutes_before, times, weekdays, interval_minutes, start_time, end_time, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
+        "INSERT INTO reminder_rules (id, kind, title, enabled, minutes_before, times, weekdays, interval_minutes, start_time, end_time, ask_confirm, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
         params![
             id, input.kind, non_empty(&input.title, "Title")?, input.enabled, input.minutes_before, input.times,
-            input.weekdays, input.interval_minutes, input.start_time, input.end_time, next_sort(c, "reminder_rules")?, ts
+            input.weekdays, input.interval_minutes, input.start_time, input.end_time, input.ask_confirm, next_sort(c, "reminder_rules")?, ts
         ],
     )?;
     get_reminder_rule(c, &id)
@@ -740,10 +745,10 @@ pub fn update_reminder_rule(c: &Connection, id: &str, input: ReminderRuleInput) 
     check_reminder(&input)?;
     changed(c.execute(
         "UPDATE reminder_rules SET title = ?2, enabled = ?3, minutes_before = ?4, times = ?5, weekdays = ?6,
-         interval_minutes = ?7, start_time = ?8, end_time = ?9, updated_at = ?10 WHERE id = ?1",
+         interval_minutes = ?7, start_time = ?8, end_time = ?9, ask_confirm = ?10, updated_at = ?11 WHERE id = ?1",
         params![
             id, non_empty(&input.title, "Title")?, input.enabled, input.minutes_before, input.times, input.weekdays,
-            input.interval_minutes, input.start_time, input.end_time, now()
+            input.interval_minutes, input.start_time, input.end_time, input.ask_confirm, now()
         ],
     )?)?;
     get_reminder_rule(c, id)
@@ -756,6 +761,22 @@ pub fn follow_import(c: &Connection, id: &str) -> Result<Event> {
         params![id, now()],
     )?)?;
     get_event(c, id)
+}
+
+// ---------- settings (key/value) ----------
+
+pub fn get_setting(c: &Connection, key: &str) -> Result<Option<String>> {
+    Ok(c.query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0)).optional()?)
+}
+
+/// `None` clears the setting (the row keeps an empty value; nothing is removed).
+pub fn set_setting(c: &Connection, key: &str, value: Option<&str>) -> Result<()> {
+    c.execute(
+        "INSERT INTO settings (key, value, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT (key) DO UPDATE SET value = ?2, updated_at = ?3",
+        params![key, value.unwrap_or(""), now()],
+    )?;
+    Ok(())
 }
 
 // ---------- archive (soft delete) ----------
@@ -788,9 +809,9 @@ pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> R
         sync_task_completion(c, &task_id_of_part(c, id)?)?;
     }
     // Bringing back an event a sync removed is the user's choice: from now on syncs leave it.
-    if entity == "event" && !archived {
+    if (entity == "event" || entity == "task") && !archived {
         c.execute(
-            "UPDATE events SET locally_modified = 1, removed_by_sync = 0 WHERE id = ?1 AND removed_by_sync = 1",
+            &format!("UPDATE {table} SET locally_modified = 1, removed_by_sync = 0 WHERE id = ?1 AND removed_by_sync = 1"),
             [id],
         )?;
     }

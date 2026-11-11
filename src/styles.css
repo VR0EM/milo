@@ -626,3 +626,9 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
 .prio-picker .prio { gap: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .t-parts .mini-progress { width: 46px; }
+
+.confirm-time { color: var(--muted); min-width: 40px; }
+.routine-item { display: flex; align-items: center; gap: 10px; }
+.restore-list { max-height: 320px; overflow-y: auto; margin: 4px 0 8px; }
+.dialog > h2 { margin-bottom: 8px; }
+.dialog > p { margin-bottom: 12px; line-height: 1.5; }

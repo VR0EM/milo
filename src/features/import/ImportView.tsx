@@ -83,6 +83,7 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [spaceId, setSpaceId] = useState("");
+  const [importAs, setImportAs] = useState<"events" | "tasks">("events");
   const [busy, setBusy] = useState<string | null>(null);
   const space = spaceId || spaces[0]?.id || "";
 
@@ -102,7 +103,7 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
 
   const add = async () => {
     const ok = await run("new", name.trim() || "Calendar", () =>
-      api.addCalendarLink({ name: name.trim() || "Calendar", location: url.trim(), spaceId: space, enabled: true }),
+      api.addCalendarLink({ name: name.trim() || "Calendar", location: url.trim(), spaceId: space, enabled: true, importAs }),
     );
     if (ok) {
       setName("");
@@ -118,8 +119,9 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
           Calendar links
           <HelpTip>
             A link to an online calendar (.ics), such as a school timetable or the secret iCal address of a Google calendar.
-            Milo checks each link when it starts and every 6 hours, or when you press Sync. If you change an imported event
-            yourself, your version is kept.
+            Milo checks each link when it starts and every 6 hours, or when you press Sync. Choose "As tasks" for a
+            list of deadlines (like hand-ins): each item becomes a task with that deadline, which you can tick off.
+            If you change an imported item yourself, your version is kept.
           </HelpTip>
         </h2>
         <span className="spacer" />
@@ -141,8 +143,24 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
                 spaces={spaces}
                 label={`Space for ${s.name}`}
                 value={s.spaceId}
-                onChange={(id) => api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: id, enabled: s.enabled }).then(refresh, fail)}
+                onChange={(id) => api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: id, enabled: s.enabled, importAs: s.importAs }).then(refresh, fail)}
               />
+              <select
+                aria-label={`Bring ${s.name} in as`}
+                title="Events go in the calendar; tasks get a deadline in Tasks"
+                value={s.importAs}
+                disabled={busy !== null}
+                onChange={(e) => {
+                  const next = e.target.value as "events" | "tasks";
+                  run(s.id, s.name, async () => {
+                    await api.updateImportSource(s.id, { name: s.name, location: s.location, spaceId: s.spaceId, enabled: s.enabled, importAs: next });
+                    return api.syncCalendarLink(s.id);
+                  });
+                }}
+              >
+                <option value="events">As events</option>
+                <option value="tasks">As tasks</option>
+              </select>
               <button className="btn small" disabled={busy !== null} onClick={() => run(s.id, s.name, () => api.syncCalendarLink(s.id))}>
                 {busy === s.id ? "Syncing…" : "Sync"}
               </button>
@@ -162,7 +180,11 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
         >
           <input autoFocus placeholder="Name, e.g. Timetable" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
           <input placeholder="https://… or webcal://…" aria-label="Link" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <SpaceSelect spaces={spaces} value={space} onChange={setSpaceId} label="Space for new events" />
+          <SpaceSelect spaces={spaces} value={space} onChange={setSpaceId} label="Space for new items" />
+          <select aria-label="Bring it in as" value={importAs} onChange={(e) => setImportAs(e.target.value as "events" | "tasks")}>
+            <option value="events">As events</option>
+            <option value="tasks">As tasks</option>
+          </select>
           <button className="btn primary small" type="submit" disabled={!url.trim() || !space || busy !== null}>{busy === "new" ? "Adding…" : "Add"}</button>
           <button className="link" type="button" onClick={() => setAdding(false)}>Cancel</button>
         </form>

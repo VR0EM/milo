@@ -143,6 +143,8 @@ pub struct Task {
     pub target_at: Option<String>,
     pub completed_at: Option<String>,
     pub priority: Option<String>,
+    pub source_id: Option<String>,
+    pub locally_modified: bool,
     pub sort_order: i64,
     pub created_at: String,
     pub parts: Vec<TaskPart>,
@@ -230,6 +232,7 @@ pub struct ReminderRule {
     pub interval_minutes: Option<i64>,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
+    pub ask_confirm: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -244,6 +247,8 @@ pub struct ReminderRuleInput {
     pub interval_minutes: Option<i64>,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
+    #[serde(default)]
+    pub ask_confirm: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -255,6 +260,7 @@ pub struct ImportSource {
     pub location: String,
     pub space_id: String,
     pub enabled: bool,
+    pub import_as: String,
     pub last_synced_at: Option<String>,
     pub last_error: Option<String>,
 }
@@ -266,6 +272,12 @@ pub struct ImportSourceInput {
     pub location: String,
     pub space_id: String,
     pub enabled: bool,
+    #[serde(default = "default_import_as")]
+    pub import_as: String,
+}
+
+fn default_import_as() -> String {
+    "events".into()
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -413,4 +425,30 @@ pub struct AppInfo {
     pub backup_count: usize,
     pub last_backup: Option<String>,
     pub version: String,
+}
+
+/// One moment today that asks to be confirmed (e.g. medication at 08:00).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Confirmation {
+    pub rule_id: String,
+    pub title: String,
+    pub time: String,
+    pub occurrence: String,
+    pub confirmed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupFile {
+    pub name: String,
+    pub date: String,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupSettings {
+    pub mirror_dir: Option<String>,
+    pub backups: Vec<BackupFile>,
 }

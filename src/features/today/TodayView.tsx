@@ -1,10 +1,11 @@
 import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useAction, useEvents, useRoutineChecks, useRoutines, useSpaces, useTasks } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { addDays, daysFromToday, fmtDuration, fmtLongDay, fmtRange, fmtTime, startOfDay, toDateInput } from "../../lib/time";
-import { taskProgress, type CalEvent, type Space } from "../../lib/types";
+import { taskProgress, type CalEvent, type Confirmation, type Space } from "../../lib/types";
 import { useNow } from "../../lib/useNow";
 import { deadlineLine } from "../tasks/TasksView";
 import { FocusPanel } from "./FocusPanel";
@@ -50,6 +51,8 @@ export function TodayView() {
             {next ? <EventLine event={next} space={spaceById.get(next.spaceId)} now={now} kind="next" />
               : <p className="muted">Nothing else planned today or tomorrow.</p>}
           </section>
+
+          <ConfirmBlock now={now} />
 
           <RoutineBlock now={now} />
 
@@ -192,6 +195,44 @@ function RoutineBlock({ now }: { now: Date }) {
           New routine
         </button>
       </div>
+    </section>
+  );
+}
+
+/** Reminders that ask to be checked off today, such as medication. Hidden when there are none. */
+function ConfirmBlock({ now }: { now: Date }) {
+  const qc = useQueryClient();
+  const { data = [] } = useQuery({ queryKey: ["confirmations"], queryFn: api.listConfirmations, staleTime: 0, refetchInterval: 60_000 });
+  if (!data.length) return null;
+  const set = async (c: Confirmation, done: boolean) => {
+    try {
+      await api.setConfirmed(c.ruleId, c.occurrence, done);
+    } finally {
+      qc.invalidateQueries({ queryKey: ["confirmations"] });
+    }
+  };
+  const nowHm = fmtTime(now);
+  return (
+    <section className="block">
+      <div className="block-head">
+        <h2>Check off today</h2>
+        <span className="muted">{data.filter((c) => c.confirmedAt).length} of {data.length}</span>
+      </div>
+      <ul className="routine-list">
+        {data.map((c) => (
+          <li key={c.ruleId + c.occurrence}>
+            <label className={`check routine-item${c.confirmedAt ? " on" : ""}`}>
+              <input type="checkbox" checked={!!c.confirmedAt} onChange={(e) => set(c, e.target.checked)} />
+              <span className="tabular confirm-time">{c.time}</span>
+              <span>{c.title}</span>
+              <span className="spacer" />
+              <span className="muted small">
+                {c.confirmedAt ? `done at ${fmtTime(new Date(c.confirmedAt))}` : c.time > nowHm ? "later today" : ""}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

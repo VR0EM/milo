@@ -40,6 +40,7 @@ fn source_from(r: &Row) -> rusqlite::Result<ImportSource> {
         location: r.get("location")?,
         space_id: r.get("space_id")?,
         enabled: r.get("enabled")?,
+        import_as: r.get("import_as")?,
         last_synced_at: r.get("last_synced_at")?,
         last_error: r.get("last_error")?,
     })
@@ -63,8 +64,17 @@ fn check_link(kind: &str, location: &str) -> Result<()> {
     Ok(())
 }
 
+fn check_import_as(v: &str) -> Result<()> {
+    if v == "events" || v == "tasks" {
+        Ok(())
+    } else {
+        Err(AppError::Invalid(format!("Import as events or tasks, not {v}")))
+    }
+}
+
 pub fn create_source(c: &Connection, kind: &str, input: ImportSourceInput) -> Result<ImportSource> {
     check_link(kind, &input.location)?;
+    check_import_as(&input.import_as)?;
     let name = input.name.trim();
     if name.is_empty() {
         return Err(AppError::Invalid("Name cannot be empty".into()));
@@ -72,9 +82,9 @@ pub fn create_source(c: &Connection, kind: &str, input: ImportSourceInput) -> Re
     let (id, ts) = (new_id(), now());
     let sort: i64 = c.query_row("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM import_sources", [], |r| r.get(0))?;
     c.execute(
-        "INSERT INTO import_sources (id, kind, name, location, space_id, enabled, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
-        params![id, kind, name, input.location.trim(), input.space_id, input.enabled, sort, ts],
+        "INSERT INTO import_sources (id, kind, name, location, space_id, enabled, import_as, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+        params![id, kind, name, input.location.trim(), input.space_id, input.enabled, input.import_as, sort, ts],
     )?;
     get_source(c, &id)
 }
@@ -82,13 +92,26 @@ pub fn create_source(c: &Connection, kind: &str, input: ImportSourceInput) -> Re
 pub fn update_source(c: &Connection, id: &str, input: ImportSourceInput) -> Result<ImportSource> {
     let current = get_source(c, id)?;
     check_link(&current.kind, &input.location)?;
+    check_import_as(&input.import_as)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Invalid("Name cannot be empty".into()));
     }
+    let ts = now();
     c.execute(
-        "UPDATE import_sources SET name = ?2, location = ?3, space_id = ?4, enabled = ?5, updated_at = ?6 WHERE id = ?1",
-        params![id, input.name.trim(), input.location.trim(), input.space_id, input.enabled, now()],
+        "UPDATE import_sources SET name = ?2, location = ?3, space_id = ?4, enabled = ?5, import_as = ?6, updated_at = ?7 WHERE id = ?1",
+        params![id, input.name.trim(), input.location.trim(), input.space_id, input.enabled, input.import_as, ts],
     )?;
+    // Switching between events and tasks: the items of the old kind are archived (and come back
+    // if switched back), and the next sync brings everything in as the new kind.
+    if current.import_as != input.import_as {
+        let old = if current.import_as == "tasks" { "tasks" } else { "events" };
+        c.execute(
+            &format!("UPDATE {old} SET deleted_at = ?2, removed_by_sync = 1, updated_at = ?2
+                      WHERE source_id = ?1 AND deleted_at IS NULL AND locally_modified = 0"),
+            params![id, ts],
+        )?;
+        c.execute("UPDATE import_sources SET last_synced_at = NULL WHERE id = ?1", [id])?;
+    }
     get_source(c, id)
 }
 
@@ -169,7 +192,24 @@ pub fn reapply_mappings(c: &Connection) -> Result<usize> {
     let rows = s
         .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?)))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    let tasks = {
+        let mut s = c.prepare(
+            "SELECT id, title, space_id FROM tasks WHERE source_id IS NOT NULL AND locally_modified = 0 AND deleted_at IS NULL",
+        )?;
+        let rows = s
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows
+    };
     let mut n = 0;
+    for (id, title, space) in tasks {
+        if let Some(m) = resolve(&mappings, &title) {
+            if m.space_id != space {
+                c.execute("UPDATE tasks SET space_id = ?2 WHERE id = ?1", params![id, m.space_id])?;
+                n += 1;
+            }
+        }
+    }
     for (id, title, space, activity) in rows {
         if let Some(m) = resolve(&mappings, &title) {
             if m.space_id != space || m.activity_id != activity {
@@ -185,9 +225,11 @@ pub fn reapply_mappings(c: &Connection) -> Result<usize> {
 pub fn unmapped_titles(c: &Connection) -> Result<Vec<UnmappedTitle>> {
     let mappings = list_mappings(c)?;
     let mut s = c.prepare(
-        "SELECT title, COUNT(*) AS n FROM events
-         WHERE source = 'import' AND locally_modified = 0 AND deleted_at IS NULL AND title != ''
-         GROUP BY title ORDER BY n DESC, title",
+        "SELECT title, COUNT(*) AS n FROM (
+           SELECT title FROM events WHERE source = 'import' AND locally_modified = 0 AND deleted_at IS NULL
+           UNION ALL
+           SELECT title FROM tasks WHERE source_id IS NOT NULL AND locally_modified = 0 AND deleted_at IS NULL
+         ) WHERE title != '' GROUP BY title ORDER BY n DESC, title",
     )?;
     let rows = s
         .query_map([], |r| Ok(UnmappedTitle { title: r.get(0)?, count: r.get(1)? }))?
@@ -200,6 +242,9 @@ pub fn unmapped_titles(c: &Connection) -> Result<Vec<UnmappedTitle>> {
 /// Writes the occurrences of one source. `full_feed`: the occurrences are the whole
 /// calendar, so future events that are missing have left it.
 pub fn apply(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], full_feed: bool) -> Result<SyncReport> {
+    if source.import_as == "tasks" {
+        return apply_as_tasks(c, source, occurrences, full_feed);
+    }
     let tx = c.unchecked_transaction()?;
     let mappings = list_mappings(&tx)?;
     let mut report = SyncReport::default();
@@ -300,6 +345,113 @@ pub fn apply(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], 
     Ok(report)
 }
 
+/// The moment a deadline item is due: its start, or the end of the day for an all-day item.
+fn due_of(o: &Occurrence) -> DateTime<Utc> {
+    if o.all_day {
+        o.end - Duration::minutes(1)
+    } else {
+        o.start
+    }
+}
+
+/// Like `apply`, but every occurrence becomes a task whose deadline is the occurrence.
+/// Completing a task is the user's own business: a sync never touches `completed_at`.
+fn apply_as_tasks(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], full_feed: bool) -> Result<SyncReport> {
+    let tx = c.unchecked_transaction()?;
+    let mappings = list_mappings(&tx)?;
+    let mut report = SyncReport::default();
+    let mut seen = HashSet::new();
+    let ts = now();
+
+    for o in occurrences {
+        seen.insert(o.key.as_str());
+        let due = iso(due_of(o));
+        let space = resolve(&mappings, &o.title).map(|m| m.space_id.clone());
+        let existing = tx
+            .query_row(
+                "SELECT id, locally_modified, deleted_at, removed_by_sync, title, notes, deadline_at
+                 FROM tasks WHERE source_id = ?1 AND external_uid = ?2",
+                params![source.id, o.key],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, bool>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, bool>(3)?,
+                        (r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, Option<String>>(6)?),
+                    ))
+                },
+            )
+            .optional()?;
+
+        match existing {
+            None => {
+                if o.cancelled {
+                    continue;
+                }
+                let sort: i64 = tx.query_row("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM tasks", [], |r| r.get(0))?;
+                tx.execute(
+                    "INSERT INTO tasks (id, space_id, title, notes, deadline_at, source_id, external_uid, sort_order, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                    params![new_id(), space.unwrap_or_else(|| source.space_id.clone()), o.title, o.notes, due, source.id, o.key, sort, ts],
+                )?;
+                report.added += 1;
+            }
+            Some((id, local, deleted, by_sync, current)) => {
+                if local || (deleted.is_some() && !by_sync) {
+                    report.kept += 1;
+                    continue;
+                }
+                if o.cancelled {
+                    if deleted.is_none() {
+                        tx.execute("UPDATE tasks SET deleted_at = ?2, removed_by_sync = 1, updated_at = ?2 WHERE id = ?1", params![id, ts])?;
+                        report.removed += 1;
+                    }
+                    continue;
+                }
+                let fresh = (o.title.clone(), o.notes.clone(), Some(due));
+                if deleted.is_none() && current == fresh {
+                    report.unchanged += 1;
+                    continue;
+                }
+                tx.execute(
+                    "UPDATE tasks SET title = ?2, notes = ?3, deadline_at = ?4, deleted_at = NULL, removed_by_sync = 0, updated_at = ?5 WHERE id = ?1",
+                    params![id, fresh.0, fresh.1, fresh.2, ts],
+                )?;
+                if let Some(space) = space {
+                    tx.execute("UPDATE tasks SET space_id = ?2 WHERE id = ?1", params![id, space])?;
+                }
+                report.updated += 1;
+            }
+        }
+    }
+
+    // Open, upcoming deadlines that left the feed are archived; done tasks are left alone.
+    if full_feed && !occurrences.is_empty() {
+        let gone: Vec<String> = {
+            let mut s = tx.prepare(
+                "SELECT id, external_uid FROM tasks WHERE source_id = ?1 AND deleted_at IS NULL AND locally_modified = 0
+                 AND completed_at IS NULL AND deadline_at >= ?2",
+            )?;
+            let rows = s
+                .query_map(params![source.id, ts], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows.into_iter().filter(|(_, key)| !seen.contains(key.as_str())).map(|(id, _)| id).collect()
+        };
+        for id in gone {
+            tx.execute("UPDATE tasks SET deleted_at = ?2, removed_by_sync = 1, updated_at = ?2 WHERE id = ?1", params![id, ts])?;
+            report.removed += 1;
+        }
+    }
+
+    tx.execute(
+        "UPDATE import_sources SET last_synced_at = ?2, last_error = NULL, updated_at = ?2 WHERE id = ?1",
+        params![source.id, ts],
+    )?;
+    tx.commit()?;
+    Ok(report)
+}
+
 fn fetch(url: &str) -> Result<String> {
     let url = url.trim();
     let url = match url.strip_prefix("webcal://") {
@@ -363,7 +515,7 @@ fn file_source(c: &Connection, kind: &str, path: &str, space_id: &str) -> Result
         None => create_source(
             c,
             kind,
-            ImportSourceInput { name: file_name(path), location: path.into(), space_id: space_id.into(), enabled: true },
+            ImportSourceInput { name: file_name(path), location: path.into(), space_id: space_id.into(), enabled: true, import_as: "events".into() },
         ),
     }
 }
@@ -522,7 +674,7 @@ END:VCALENDAR";
         create_source(
             c,
             "ics_url",
-            ImportSourceInput { name: "School".into(), location: "https://example.com/a.ics".into(), space_id: "seed-space-personal".into(), enabled: true },
+            ImportSourceInput { name: "School".into(), location: "https://example.com/a.ics".into(), space_id: "seed-space-personal".into(), enabled: true, import_as: "events".into() },
         )
         .unwrap()
     }
@@ -535,7 +687,7 @@ END:VCALENDAR";
     fn sync_updates_keeps_local_edits_and_archives_removed() {
         let c = open_in_memory().unwrap();
         let s = source(&c);
-        assert!(create_source(&c, "ics_url", ImportSourceInput { name: "X".into(), location: "file:///x".into(), space_id: "seed-space-personal".into(), enabled: true }).is_err());
+        assert!(create_source(&c, "ics_url", ImportSourceInput { name: "X".into(), location: "file:///x".into(), space_id: "seed-space-personal".into(), enabled: true, import_as: "events".into() }).is_err());
 
         let r = apply(&c, &s, &occ(FEED), true).unwrap();
         assert_eq!((r.added, r.updated), (2, 0));
@@ -590,6 +742,44 @@ END:VCALENDAR";
         let more = FEED.replace("UID:b", "UID:c").replace("Physics lab", "Analysis 2 - WPO");
         apply(&c, &s, &occ(&more), true).unwrap();
         assert!(events(&c).iter().any(|e| e.title == "Analysis 2 - WPO" && e.space_id == analysis.id));
+    }
+
+    #[test]
+    fn a_link_can_import_deadlines_as_tasks() {
+        let c = open_in_memory().unwrap();
+        let s = source(&c);
+        apply(&c, &s, &occ(FEED), true).unwrap();
+        assert_eq!(events(&c).len(), 2);
+
+        // Switch to tasks: the events are archived, the next sync makes tasks with deadlines.
+        let input = |as_: &str| ImportSourceInput {
+            name: s.name.clone(), location: s.location.clone(), space_id: s.space_id.clone(), enabled: true, import_as: as_.into(),
+        };
+        let s = update_source(&c, &s.id, input("tasks")).unwrap();
+        assert!(s.last_synced_at.is_none(), "a switch asks for a fresh sync");
+        assert!(events(&c).is_empty());
+        let r = apply(&c, &s, &occ(FEED), true).unwrap();
+        assert_eq!(r.added, 2);
+        let tasks = repo::list_tasks(&c).unwrap();
+        let lab = tasks.iter().find(|t| t.title == "Physics lab").unwrap();
+        assert_eq!(lab.deadline_at.as_deref(), Some("2030-01-08T08:00:00.000Z"));
+        assert_eq!(lab.source_id.as_deref(), Some(s.id.as_str()));
+
+        // Ticking it off survives a sync; renaming it makes it the user's own.
+        repo::set_task_completed(&c, &lab.id, true).unwrap();
+        assert_eq!(apply(&c, &s, &occ(FEED), true).unwrap().unchanged, 2);
+        assert!(repo::get_task(&c, &lab.id).unwrap().completed_at.is_some());
+        let edit = TaskInput { space_id: lab.space_id.clone(), type_id: None, title: "My lab".into(), notes: String::new(), deadline_at: lab.deadline_at.clone(), target_at: None, priority: None };
+        repo::update_task(&c, &lab.id, edit.clone()).unwrap();
+        assert_eq!(apply(&c, &s, &occ(&FEED.replace("Physics lab", "Physics lab v2")), true).unwrap().kept, 1);
+
+        // A title link moves imported tasks too; an open deadline that leaves the feed is archived.
+        let analysis = repo::create_space(&c, SpaceInput { group_id: None, name: "Analysis".into(), color: "green".into(), role: "normal".into() }).unwrap();
+        create_mapping(&c, TitleMappingInput { pattern: "analysis".into(), match_type: "contains".into(), space_id: analysis.id.clone(), activity_id: None }).unwrap();
+        assert!(repo::list_tasks(&c).unwrap().iter().any(|t| t.title.starts_with("Analysis") && t.space_id == analysis.id));
+        let only_lab = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:b\nSUMMARY:Physics lab\nDTSTART:20300108T080000Z\nDTEND:20300108T100000Z\nEND:VEVENT\nEND:VCALENDAR";
+        assert_eq!(apply(&c, &s, &occ(only_lab), true).unwrap().removed, 1);
+        assert!(!repo::list_tasks(&c).unwrap().iter().any(|t| t.title.starts_with("Analysis")));
     }
 
     #[test]

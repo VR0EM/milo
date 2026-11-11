@@ -23,6 +23,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/005_import.sql"),
     include_str!("migrations/006_semesters.sql"),
     include_str!("migrations/007_priority.sql"),
+    include_str!("migrations/008_tasks_import_confirm.sql"),
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -42,7 +43,8 @@ fn init(mut conn: Connection) -> Result<Connection> {
     Ok(conn)
 }
 
-fn migrate(conn: &mut Connection) -> Result<()> {
+/// Brings any database (also a restored older backup) up to the current schema.
+pub fn migrate(conn: &mut Connection) -> Result<()> {
     let current: usize = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     for (i, sql) in MIGRATIONS.iter().enumerate().skip(current) {
         let tx = conn.transaction()?;

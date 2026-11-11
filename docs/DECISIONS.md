@@ -166,6 +166,25 @@ ones marked *(assumption)* are kept easy to change.
 - **App icon**: three muted blocks on a dark square (`src-tauri/app-icon.png`, regenerate the
   sizes with `npx tauri icon src-tauri/app-icon.png`).
 
+## Deadlines as tasks, confirmations, focus end, backups (2026-11-11)
+
+- **A calendar link can come in "As tasks"** (Import & export, per link). Each item becomes a
+  task whose deadline is the item's start (all-day items: 23:59 that day). Same rules as for
+  events: matched by key, your edits win, an open upcoming deadline that leaves the feed is
+  archived, title links pick the space. Ticking a task off is never undone by a sync.
+  Switching a link between events and tasks archives the items of the old kind (they come
+  back if you switch back) and syncs again.
+- **Reminders can ask to be checked off** ("Ask me to check it off on Today"). Medication does
+  so by default. Today shows "Check off today" with the moments of the day. If not checked off,
+  one more reminder comes 30 minutes later, then nothing. Checking off before the moment means
+  no reminder at all. Confirmations live in `reminder_log.confirmed_at`.
+- **Focus sessions** get one notification when they reach their planned length (Reminders >
+  Focus sessions, on by default), also when the window is closed.
+- **Backups** can also be copied to a second folder of the user's choice (a USB stick or a
+  folder their own sync app handles); missing copies are added daily. **Restoring** a backup
+  (Settings > Your data) first saves the current state as `milo-before-restore-…`, then puts the
+  backup in place and brings it up to the current schema.
+
 ## Look and feel
 
 - **Vivid, in the manner of Notion Calendar.** Saturated space colours; events get a clear tint
@@ -212,7 +231,7 @@ ones marked *(assumption)* are kept easy to change.
 1. Calendar, events, detail panel, spaces, groups, activities. **Done.**
 2. Tasks with parts and progress cards. **Done.**
 3. Today screen, routines, focus timer. **Done.**
-4. Reminders and tray. **Done.**
+4. Reminders and tray. **Done.** Later: confirmations and focus-end notifications.
 5. ICS import with title mappings; full export. **Done.**
 6. Insights and semesters. **Done.**
 7. Archive screen, shortcuts, polish. **Done.**
