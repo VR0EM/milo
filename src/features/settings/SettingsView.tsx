@@ -8,6 +8,8 @@ import { useUi, type Accent, type Font, type TextSize, type Theme } from "../../
 import { MOD_LABEL } from "../shortcuts/keys";
 import { Icon } from "../../components/Icon";
 import { HelpTip } from "../../components/HelpTip";
+import { ImportSettings } from "../import/ImportView";
+import { ArchiveSettings } from "../archive/ArchiveView";
 
 const ACCENTS: [Accent, string][] = [["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["plum", "Violet"], ["clay", "Coral"]];
 const FONTS: [Font, string, string][] = [
@@ -33,18 +35,52 @@ function Row({ title, info, children }: { title: string; info?: React.ReactNode;
   );
 }
 
+const SECTIONS = ["appearance", "calendar", "import", "archive", "data"];
+
+/** A settings block that folds open and shut. Which ones are open is remembered. */
+function Section({ id, title, info, children }: { id: string; title: string; info?: React.ReactNode; children: React.ReactNode }) {
+  const open = useUi((s) => s.settingsOpen.includes(id));
+  const focus = useUi((s) => s.settingsFocus);
+  const ref = useRef<HTMLElement>(null);
+  const toggle = () => useUi.getState().toggleSettingsSection(id);
+  useEffect(() => {
+    if (focus !== id) return;
+    ref.current?.scrollIntoView({ block: "start" });
+    useUi.setState({ settingsFocus: null });
+  }, [focus, id]);
+  return (
+    <section ref={ref} className={`block fold${open ? " open" : ""}`} id={`settings-${id}`}>
+      {/* The whole row is clickable; the button inside is what keyboards and screen readers use. */}
+      <div className="fold-head" onClick={(e) => { if (!(e.target as HTMLElement).closest("button, .help")) toggle(); }}>
+        <h2>
+          <button className="fold-toggle" aria-expanded={open} aria-controls={`settings-${id}-body`} onClick={toggle}>
+            <Icon name="chevron" size={14} />
+            {title}
+          </button>
+        </h2>
+        {info && <HelpTip label={`About ${title.toLowerCase()}`}>{info}</HelpTip>}
+      </div>
+      {open && <div className="fold-body" id={`settings-${id}-body`}>{children}</div>}
+    </section>
+  );
+}
+
 export function SettingsView() {
   const prefs = useUi((s) => s.prefs);
   const setPrefs = useUi((s) => s.setPrefs);
+  const allOpen = useUi((s) => SECTIONS.every((id) => s.settingsOpen.includes(id)));
 
   return (
     <main className="page full">
       <header className="toolbar">
         <h1>Settings</h1>
+        <span className="spacer" />
+        <button className="btn small" onClick={() => useUi.setState({ settingsOpen: allOpen ? [] : SECTIONS })}>
+          {allOpen ? "Close all" : "Open all"}
+        </button>
       </header>
       <div className="page-scroll settings">
-        <section className="block">
-          <h2>Appearance</h2>
+        <Section id="appearance" title="Appearance">
           <Row title="Theme" info="Match the computer follows the light or dark setting of Windows or macOS.">
             <div className="segmented" role="radiogroup" aria-label="Theme">
               {THEMES.map(([t, label]) => (
@@ -79,10 +115,6 @@ export function SettingsView() {
               </label>
             </div>
           </Row>
-        </section>
-
-        <section className="block">
-          <h2>Text</h2>
           <Row title="Typeface" info="Only typefaces already on the computer are used. Rounded is rounded on a Mac and looks like Standard on Windows.">
             <div className="font-picker" role="radiogroup" aria-label="Typeface">
               {FONTS.map(([f, label, hint]) => (
@@ -110,10 +142,9 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
-        </section>
+        </Section>
 
-        <section className="block">
-          <h2>Calendar</h2>
+        <Section id="calendar" title="Calendar &amp; lists">
           <Row title="Show weekends" info="Off hides Saturday and Sunday in the calendar. Events on those days are kept.">
             <label className="switch-control">
               <input type="checkbox" role="switch" checked={prefs.showWeekends} onChange={(e) => setPrefs({ showWeekends: e.target.checked })} />
@@ -130,19 +161,24 @@ export function SettingsView() {
               {Array.from({ length: 13 }, (_, h) => h).map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
             </select>
           </Row>
-        </section>
+          <Lists />
+        </Section>
 
-        <Updates />
-        <Lists />
-        <Startup />
-        <Data />
-
-        <section className="block">
-          <h2>Keyboard</h2>
+        <Section id="import" title="Import &amp; export">
+          <ImportSettings />
+        </Section>
+        <Section id="archive" title="Archive" info="Nothing in Milo is ever deleted. Everything you archive stays here, and can be brought back.">
+          <ArchiveSettings />
+        </Section>
+        <Section id="data" title="Data &amp; app">
+          <Data />
+          <h3 className="fold-sub">App</h3>
+          <Updates />
+          <Startup />
           <Row title="Keyboard shortcuts" info={`Press ? anywhere for the list. ${MOD_LABEL}, opens Settings.`}>
             <button className="btn" onClick={() => useUi.setState({ shortcutsOpen: true })}>Show shortcuts</button>
           </Row>
-        </section>
+        </Section>
       </div>
     </main>
   );
@@ -177,8 +213,8 @@ function Lists() {
   const open = useUi((s) => s.openDialog);
 
   return (
-    <section className="block">
-      <h2>Lists</h2>
+    <>
+      <h3 className="fold-sub">Lists</h3>
       <ListBox title="Activities" info="What kind of time an event was: class, self-study, lab, exam and so on. Each one counts as class, self-study or not productive, which is what Insights adds up." add={() => open({ kind: "activity" })}>
         {activities.map((a) => <ListItem key={a.id} name={a.name} meta={CATEGORY[a.category]} onEdit={() => open({ kind: "activity", item: a })} />)}
       </ListBox>
@@ -188,7 +224,7 @@ function Lists() {
       <ListBox title="Groups of spaces" info="Groups bundle spaces in the sidebar, for example School with one space per course. A group can be folded away." add={() => open({ kind: "group" })}>
         {groups.map((g) => <ListItem key={g.id} name={g.name} onEdit={() => open({ kind: "group", item: g })} />)}
       </ListBox>
-    </section>
+    </>
   );
 }
 
@@ -205,8 +241,7 @@ function Updates() {
     : status === "error" ? `Could not check: ${error}`
     : "";
   return (
-    <section className="block">
-      <h2>Updates</h2>
+    <>
       <Row title="Version" info="New versions are published on GitHub. Milo shows when one is ready; it is only installed when you click Install.">
         <span className="muted">{data ? `Milo ${data.version}` : "…"}</span>
       </Row>
@@ -229,7 +264,7 @@ function Updates() {
           <span>{auto ? "On" : "Off"}</span>
         </label>
       </Row>
-    </section>
+    </>
   );
 }
 
@@ -239,8 +274,7 @@ function Startup() {
     autostart.isEnabled().then(setOn, () => {});
   }, []);
   return (
-    <section className="block">
-      <h2>Startup</h2>
+    <>
       <Row
         title="Start Milo when the computer starts"
         info="Milo then waits quietly in the tray, so reminders arrive without opening it yourself. Only in the desktop app."
@@ -264,7 +298,7 @@ function Startup() {
           <span>{on ? "On" : "Off"}</span>
         </label>
       </Row>
-    </section>
+    </>
   );
 }
 
@@ -290,8 +324,7 @@ function Data() {
   };
 
   return (
-    <section className="block">
-      <h2>Your data</h2>
+    <>
       <Row title="Stored on this computer" info="Everything is in one database file in this folder. No account, nothing in the cloud.">
         <code className="path" title={data?.dataDir}>{data?.dataDir ?? "…"}</code>
       </Row>
@@ -319,11 +352,10 @@ function Data() {
         <button className="btn small" disabled={!files.available || !backups?.backups.length} onClick={() => setRestoring(true)}>Choose a backup…</button>
       </Row>
       <Row title="Export everything" info="One JSON file with all your data, archived items included, to keep or move elsewhere.">
-        <button className="btn small" onClick={() => useUi.getState().setView("import")}>Go to Import &amp; export</button>
+        <button className="btn small" onClick={() => useUi.getState().openSettings("import")}>Go to Import &amp; export</button>
       </Row>
-      {data && <p className="muted small">Milo {data.version}</p>}
       {restoring && backups && <RestoreDialog backups={backups.backups} onClose={() => { setRestoring(false); refresh(); }} />}
-    </section>
+    </>
   );
 }
 

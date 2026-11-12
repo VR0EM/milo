@@ -182,12 +182,12 @@ ones marked *(assumption)* are kept easy to change.
 
 ## Archive and shortcuts
 
-- **Archive screen** lists everything that was ever archived, newest first, searchable by name
+- **Archive** (in Settings) lists everything that was ever archived, newest first, searchable by name
   and filterable by kind, each with "Restore". Archived events are many over time: the newest
   300 are listed and the rest are found by searching.
 - Restoring an imported event that a sync had removed marks it as the user's own, so the next
   sync does not remove it again.
-- **Shortcuts** are few and predictable: Cmd/Ctrl+1–7 for the screens (in sidebar order), `?`
+- **Shortcuts** are few and predictable: Cmd/Ctrl+1–5 for the screens (in sidebar order), Cmd/Ctrl+, for Settings, `?`
   for the overview, `N` for a new event or task, `Esc` to clear. Single-letter keys never fire
   while typing in a field or dialog. The overview is also reachable from the sidebar.
 - **App icon**: three muted blocks on a dark square (`src-tauri/app-icon.png`, regenerate the
@@ -225,7 +225,11 @@ ones marked *(assumption)* are kept easy to change.
   automatic inversion; text on accent switches to dark in dark mode for contrast.
 - **Sidebar shows only what is used daily:** the screens (with icons and Cmd/Ctrl+number) and
   the spaces, with groups that fold away. Activities, task types and groups are edited in
-  Settings > Lists.
+  Settings > Lists. Import & export and Archive are rarely used, so they live in Settings too.
+- **Settings has five blocks** (Appearance, Calendar & lists, Import & export, Archive,
+  Data & app) that fold open and shut (click the row). Which ones are open is remembered;
+  "Open all / Close all" sits at the top. "Go to Import & export" opens that block and scrolls
+  to it.
 - **One icon set** drawn on a 16px grid with a 1.5px stroke (`components/Icon.tsx`); no emoji.
 - **Motion** is limited to 150 ms colour changes and a chevron turn, and is off when the system
   asks for reduced motion.

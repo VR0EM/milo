@@ -15,8 +15,6 @@ export const NAV: [View, string, IconName][] = [
   ["tasks", "Tasks", "tasks"],
   ["insights", "Insights", "insights"],
   ["reminders", "Reminders", "reminders"],
-  ["import", "Import & export", "import"],
-  ["archive", "Archive", "archive"],
 ];
 
 /** A quiet reminder that a focus session is running, visible from every screen. */

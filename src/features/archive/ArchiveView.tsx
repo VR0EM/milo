@@ -34,7 +34,8 @@ function archivedWhen(iso: string) {
   return `archived ${fmtRelativeDays(n)}`;
 }
 
-export function ArchiveView() {
+/** The archive, shown as a part of Settings. */
+export function ArchiveSettings() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Entity | "">("");
@@ -68,14 +69,7 @@ export function ArchiveView() {
   };
 
   return (
-    <main className="page full">
-      <header className="toolbar">
-        <h1>Archive</h1>
-      </header>
-      <div className="page-scroll">
-        <p className="muted">
-          Nothing in Milo is ever deleted. Everything you archive stays here, and can be brought back.
-        </p>
+    <div className="sub-blocks">
         <div className="inline">
           <input className="search" type="search" placeholder="Search by name" aria-label="Search the archive" value={text} onChange={(e) => setText(e.target.value)} />
           <select aria-label="Show" value={kind} onChange={(e) => setKind(e.target.value as Entity | "")}>
@@ -85,7 +79,7 @@ export function ArchiveView() {
           <span className="muted small">{shown.length} {shown.length === 1 ? "item" : "items"}</span>
         </div>
 
-        <section className="block">
+        <div className="archive-list">
           {shown.length === 0 && <p className="muted">{query ? "Nothing archived matches that name." : "Nothing is archived."}</p>}
           {shown.map((item) => (
             <div key={`${item.entity}-${item.id}`} className="archive-row">
@@ -110,8 +104,7 @@ export function ArchiveView() {
               {data.hiddenEvents} older archived events are not listed. Search by name to find them.
             </p>
           )}
-        </section>
-      </div>
-    </main>
+        </div>
+    </div>
   );
 }

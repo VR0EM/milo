@@ -2,10 +2,8 @@ import { useEffect } from "react";
 import { CalendarView } from "./features/calendar/CalendarView";
 import { EntityDialog } from "./features/spaces/EntityDialog";
 import { SettingsView } from "./features/settings/SettingsView";
-import { ArchiveView } from "./features/archive/ArchiveView";
 import { ShortcutsDialog, useGlobalShortcuts } from "./features/shortcuts/Shortcuts";
 import { InsightsView } from "./features/insights/InsightsView";
-import { ImportView } from "./features/import/ImportView";
 import { RemindersView } from "./features/reminders/RemindersView";
 import { TodayView } from "./features/today/TodayView";
 import { TasksView } from "./features/tasks/TasksView";
@@ -25,7 +23,7 @@ export default function App() {
   return (
     <div className="app">
       <Sidebar />
-      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "import" ? <ImportView /> : view === "archive" ? <ArchiveView /> : view === "settings" ? <SettingsView /> : <CalendarView />}
+      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : <CalendarView />}
       <EntityDialog />
       <ShortcutsDialog />
       <Notice />

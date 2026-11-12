@@ -15,7 +15,7 @@ export type Dialog =
   | { kind: "activity"; item?: Activity }
   | { kind: "task_type"; item?: TaskType };
 
-export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "import" | "archive" | "settings";
+export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings";
 export type Theme = "system" | "light" | "dark";
 export type Accent = "blue" | "teal" | "green" | "plum" | "clay" | "custom";
 export type Font = "system" | "rounded" | "humanist" | "serif";
@@ -60,6 +60,13 @@ interface UiState {
   shortcutsOpen: boolean;
   prefs: Prefs;
   collapsedGroups: string[];
+  /** Settings sections that are unfolded. */
+  settingsOpen: string[];
+  /** A section to scroll to once Settings has rendered. */
+  settingsFocus: string | null;
+  /** Open Settings with this section unfolded and in view. */
+  openSettings: (section?: string) => void;
+  toggleSettingsSection: (id: string) => void;
   setPrefs: (p: Partial<Prefs>) => void;
   toggleGroup: (id: string) => void;
   insightsPeriod: InsightsPeriod;
@@ -97,6 +104,18 @@ export const useUi = create<UiState>()(
       shortcutsOpen: false,
       prefs: DEFAULT_PREFS,
       collapsedGroups: [],
+      settingsOpen: ["appearance"],
+      settingsFocus: null,
+      openSettings: (section) =>
+        set((s) => ({
+          view: "settings",
+          settingsOpen: section && !s.settingsOpen.includes(section) ? [...s.settingsOpen, section] : s.settingsOpen,
+          settingsFocus: section ?? null,
+        })),
+      toggleSettingsSection: (id) =>
+        set((s) => ({
+          settingsOpen: s.settingsOpen.includes(id) ? s.settingsOpen.filter((x) => x !== id) : [...s.settingsOpen, id],
+        })),
       setPrefs: (p) => set((s) => ({ prefs: { ...s.prefs, ...p } })),
       toggleGroup: (id) =>
         set((s) => ({
@@ -132,9 +151,16 @@ export const useUi = create<UiState>()(
       // Older saved state has no prefs yet: fill in the defaults.
       merge: (saved, current) => {
         const s = (saved ?? {}) as Partial<UiState>;
-        return { ...current, ...s, prefs: { ...DEFAULT_PREFS, ...(s.prefs ?? {}) } };
+        const merged = { ...current, ...s, prefs: { ...DEFAULT_PREFS, ...(s.prefs ?? {}) } };
+        // Import & export and Archive used to be pages of their own; they now live in Settings.
+        const old = s.view as string | undefined;
+        if (old === "import" || old === "archive") {
+          merged.view = "settings";
+          merged.settingsOpen = [...new Set([...(merged.settingsOpen ?? []), old])];
+        }
+        return merged;
       },
-      partialize: (s) => ({ prefs: s.prefs, collapsedGroups: s.collapsedGroups, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
+      partialize: (s) => ({ prefs: s.prefs, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
     },
   ),
 );

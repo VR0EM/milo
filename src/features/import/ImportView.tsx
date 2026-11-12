@@ -39,22 +39,17 @@ function lastSynced(s: ImportSource) {
   return `synced ${n === 0 ? `today at ${fmtTime(d)}` : fmtRelativeDays(n)}`;
 }
 
-export function ImportView() {
+/** Import & export, shown as a part of Settings. */
+export function ImportSettings() {
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const activities = (useActivities().data ?? []).filter((a) => !a.deletedAt);
-
   return (
-    <main className="page full">
-      <header className="toolbar">
-        <h1>Import &amp; export</h1>
-      </header>
-      <div className="page-scroll">
-        <CalendarLinks spaces={spaces} />
-        <FileImport spaces={spaces} />
-        <TitleLinks spaces={spaces} activities={activities} />
-        <Export />
-      </div>
-    </main>
+    <div className="sub-blocks">
+      <CalendarLinks spaces={spaces} />
+      <FileImport spaces={spaces} />
+      <TitleLinks spaces={spaces} activities={activities} />
+      <Export />
+    </div>
   );
 }
 
