@@ -32,11 +32,13 @@ export interface Prefs {
   textSize: TextSize;
   /** Open the small always-on-top timer when a focus session starts. */
   focusMini: boolean;
+  /** Ask GitHub for a newer version when Milo starts (at most once a day). */
+  autoUpdates: boolean;
   showWeekends: boolean;
   eventMinutes: number;
   dayStartHour: number;
 }
-export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
+export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true, autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
 export type InsightsPeriod = "week" | "month" | "semester";
 
 interface Notice {

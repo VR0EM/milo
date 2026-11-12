@@ -37,5 +37,16 @@
     "shortDescription": "A calm personal cockpit: calendar, tasks, focus and insights.",
     "publisher": "Milo",
     "category": "Productivity"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFGNDA0QTVCQTQ3MTA0MTcKUldRWEJIR2tXMHBBSCtnS3NYci9mUHI3ZmNoSzVIUmdobGVmYmJYb0xMMFlwaUU2SXIxSjQ1bHYK",
+      "endpoints": [
+        "https://github.com/VR0EM/milo/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

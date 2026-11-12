@@ -12,11 +12,16 @@ import { TasksView } from "./features/tasks/TasksView";
 import { Sidebar } from "./features/spaces/Sidebar";
 import { useUi } from "./lib/store";
 import { useAppearance } from "./lib/useAppearance";
+import { checkAutomatically } from "./lib/updates";
 
 export default function App() {
   const view = useUi((s) => s.view);
   useGlobalShortcuts();
   useAppearance();
+  const autoUpdates = useUi((s) => s.prefs.autoUpdates);
+  useEffect(() => {
+    if (autoUpdates) checkAutomatically();
+  }, [autoUpdates]);
   return (
     <div className="app">
       <Sidebar />

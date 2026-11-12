@@ -165,6 +165,21 @@ ones marked *(assumption)* are kept easy to change.
   key), hides the add form until "Add link", and keeps titles without a link behind "Review".
   "Title contains" links map many imported titles at once (e.g. all hand-in deadlines).
 
+## Updates
+
+- **Tauri updater from GitHub Releases** (repository is public). A version tag (`npm run
+  release -- x.y.z`, then push the tag) runs `.github/workflows/release.yml`, which publishes
+  the installers and `latest.json`. Update bundles are signed; the public key is in
+  `tauri.conf.json`, the private key in `~/.tauri/milo.key` and the repo secret
+  `TAURI_SIGNING_PRIVATE_KEY`. Signed bundles are only made for releases
+  (`tauri.release.conf.json`), so ordinary builds need no key.
+- **Network:** at most once a day at startup Milo asks GitHub for `latest.json` (Settings >
+  Updates > "Check when Milo starts", on by default; off means only "Check now"). Nothing about
+  the user is sent.
+- **Nothing installs by itself.** A waiting update shows as one line above Settings and in
+  Settings > Updates; "Install and restart" downloads, installs (Windows: passive installer)
+  and restarts. See docs/RELEASING.md.
+
 ## Archive and shortcuts
 
 - **Archive screen** lists everything that was ever archived, newest first, searchable by name

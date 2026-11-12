@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, autostart, files } from "../../lib/api";
 import type { BackupFile } from "../../lib/types";
+import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
 import { useActivities, useGroups, useTaskTypes } from "../../lib/queries";
 import { useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { MOD_LABEL } from "../shortcuts/keys";
@@ -131,6 +132,7 @@ export function SettingsView() {
           </Row>
         </section>
 
+        <Updates />
         <Lists />
         <Startup />
         <Data />
@@ -186,6 +188,47 @@ function Lists() {
       <ListBox title="Groups of spaces" info="Groups bundle spaces in the sidebar, for example School with one space per course. A group can be folded away." add={() => open({ kind: "group" })}>
         {groups.map((g) => <ListItem key={g.id} name={g.name} onEdit={() => open({ kind: "group", item: g })} />)}
       </ListBox>
+    </section>
+  );
+}
+
+function Updates() {
+  const { available, status, progress, error } = useUpdates();
+  const auto = useUi((s) => s.prefs.autoUpdates);
+  const { data } = useQuery({ queryKey: ["appInfo"], queryFn: api.appInfo, staleTime: 0 });
+  const busy = status === "checking" || status === "installing";
+  const line =
+    status === "checking" ? "Checking…"
+    : status === "installing" ? (progress === null ? "Installing…" : `Downloading ${Math.round(progress * 100)}%`)
+    : available ? `Milo ${available.version} is ready to install`
+    : status === "up-to-date" ? "Milo is up to date"
+    : status === "error" ? `Could not check: ${error}`
+    : "";
+  return (
+    <section className="block">
+      <h2>Updates</h2>
+      <Row title="Version" info="New versions are published on GitHub. Milo shows when one is ready; it is only installed when you click Install.">
+        <span className="muted">{data ? `Milo ${data.version}` : "…"}</span>
+      </Row>
+      <Row title="New version">
+        <div className="inline">
+          {line && <span className={`small ${status === "error" ? "late" : "muted"}`}>{line}</span>}
+          {available && status !== "installing" ? (
+            <button className="btn primary small" onClick={() => installUpdate()}>Install and restart</button>
+          ) : (
+            <button className="btn small" disabled={!files.available || busy} onClick={() => checkForUpdate()}>Check now</button>
+          )}
+        </div>
+      </Row>
+      <Row
+        title="Check when Milo starts"
+        info="At most once a day, Milo asks GitHub which version is the newest. Nothing about you or your data is sent. Off means Milo only checks when you press Check now."
+      >
+        <label className="switch-control">
+          <input type="checkbox" role="switch" checked={auto} onChange={(e) => useUi.getState().setPrefs({ autoUpdates: e.target.checked })} />
+          <span>{auto ? "On" : "Off"}</span>
+        </label>
+      </Row>
     </section>
   );
 }

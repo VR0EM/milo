@@ -6,6 +6,7 @@ import { useUi, type View } from "../../lib/store";
 import { fmtClock } from "../../lib/time";
 import type { Space } from "../../lib/types";
 import { useNow } from "../../lib/useNow";
+import { installUpdate, useUpdates } from "../../lib/updates";
 import { MOD_ARIA, MOD_LABEL } from "../shortcuts/keys";
 
 export const NAV: [View, string, IconName][] = [
@@ -94,6 +95,22 @@ function AddMenu() {
   );
 }
 
+/** A quiet line above Settings when a new version is ready; nothing installs without a click. */
+function UpdateNotice() {
+  const { available, status, progress } = useUpdates();
+  if (!available) return null;
+  return (
+    <div className="update-notice" role="status">
+      <span>Milo {available.version} is ready</span>
+      {status === "installing" ? (
+        <span className="muted small">{progress === null ? "Installing…" : `Downloading ${Math.round(progress * 100)}%`}</span>
+      ) : (
+        <button className="link" onClick={() => installUpdate()}>Install and restart</button>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const groups = (useGroups().data ?? []).filter((g) => !g.deletedAt);
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
@@ -156,6 +173,7 @@ export function Sidebar() {
         })}
       </section>
 
+      <UpdateNotice />
       <div className="side-foot">
         <NavButton view="settings" label="Settings" icon="settings" shortcut="," />
       </div>

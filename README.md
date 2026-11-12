@@ -19,4 +19,5 @@ Press `?` in the app for keyboard shortcuts.
 
 Every push builds Milo on Windows and macOS in GitHub Actions (`.github/workflows/build.yml`),
 runs the tests there, and keeps the installers as artifacts. Testing on Windows:
-[docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md).
+[docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md). Publishing a version that installed copies update to:
+[docs/RELEASING.md](docs/RELEASING.md).

@@ -4,6 +4,7 @@ name: Build
 
 on:
   push:
+    branches: ["**"] # version tags are built by release.yml
   workflow_dispatch:
 
 jobs:
