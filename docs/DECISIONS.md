@@ -248,6 +248,11 @@ ones marked *(assumption)* are kept easy to change.
 ## Calendar behaviour
 
 - Double-click creates a one-hour event; dragging on empty space draws one.
+- **All-day events** are made by double-clicking the All day row, or with the "All day" box in
+  the event panel (From / Until dates; stored from midnight to the midnight after the last day).
+  They stay out of reminders and Insights, as imported all-day events already did.
+- Very short events (a deadline at 23:59) are drawn at least 22 px high and lifted to stay inside
+  their day, so they can always be seen and clicked.
 - Drag moves (also across days), the top and bottom edges resize, everything snaps to 15 minutes.
 - Drawing and resizing stay within one day so a sideways slip cannot stretch an event
   across days. An overnight event is made by typing an end time earlier than the start.

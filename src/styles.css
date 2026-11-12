@@ -195,7 +195,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .day-head.today .weekday { color: var(--accent); font-weight: 600; }
 .day-head.today .daynum { background: var(--accent); color: var(--on-accent); margin-left: 0; }
 
-.grid-body { display: flex; position: relative; }
+.grid-body { display: flex; position: relative; margin-bottom: 16px; } /* room under 24:00, so late events are not flush with the window edge */
 .hour-label { position: absolute; right: 8px; transform: translateY(-50%); font-size: calc(11px * var(--text-scale)); color: var(--muted); font-variant-numeric: tabular-nums; }
 .grid-cols { flex: 1; min-width: 0; overflow: hidden; position: relative; background-image: linear-gradient(to bottom, var(--line-soft) 1px, transparent 1px); }
 /* The moving strips: header, all-day row and body share one transform. */

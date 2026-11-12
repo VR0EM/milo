@@ -5,7 +5,7 @@ import { useArchiveWithUndo, useImportSources, useUpdateEvent } from "../../lib/
 import { TimeField } from "../../components/TimeField";
 import { MiniMonth } from "./MiniMonth";
 import { useUi } from "../../lib/store";
-import { addDays, fmtDuration, fmtLongDay, fmtTime, fromInputs, sameDay, toDateInput } from "../../lib/time";
+import { addDays, fmtDuration, fmtLongDay, fmtTime, fromInputs, sameDay, startOfDay, toDateInput } from "../../lib/time";
 import { type Activity, type CalEvent, type EventInput, type Space } from "../../lib/types";
 
 interface Props {
@@ -64,6 +64,28 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
     setTimes(start, e);
   };
 
+  // All-day events run from midnight to midnight; `end` is the midnight after the last day.
+  const lastDay = new Date(end.getTime() - 1);
+  const setAllDay = (on: boolean) => {
+    const day = startOfDay(start);
+    if (on) {
+      const days = Math.max(1, Math.round((startOfDay(lastDay).getTime() - day.getTime()) / 86_400_000) + 1);
+      save({ allDay: true, startAt: day.toISOString(), endAt: addDays(day, sameDay(start, lastDay) ? 1 : days).toISOString() });
+    } else {
+      const { dayStartHour, eventMinutes } = useUi.getState().prefs;
+      const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.max(dayStartHour, 9));
+      save({ allDay: false, startAt: s.toISOString(), endAt: new Date(s.getTime() + eventMinutes * 60_000).toISOString() });
+    }
+  };
+  const onAllDayStart = (date: string) => {
+    const s = fromInputs(date, "00:00");
+    if (s) setTimes(s, addDays(s, Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))));
+  };
+  const onUntil = (date: string) => {
+    const last = fromInputs(date, "00:00");
+    if (last) setTimes(start, addDays(last < start ? start : last, 1));
+  };
+
   const spaceChoices = spaces.filter((s) => !s.deletedAt || s.id === event.spaceId);
   const activityChoices = activities.filter((a) => !a.deletedAt || a.id === event.activityId);
 
@@ -81,16 +103,30 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       />
 
       <p className="panel-sub">
-        {fmtLongDay(start)} · {fmtDuration(end.getTime() - start.getTime())}
+        {fmtLongDay(start)} · {event.allDay ? (sameDay(start, lastDay) ? "All day" : `until ${fmtLongDay(lastDay)}`) : fmtDuration(end.getTime() - start.getTime())}
       </p>
 
+      <label className="check">
+        <input type="checkbox" checked={event.allDay} onChange={(e) => setAllDay(e.target.checked)} />
+        <span>All day</span>
+      </label>
+      {event.allDay ? (
+      <div className="field-row">
+        <label className="field">
+          <span>From</span>
+          <input type="date" value={toDateInput(start)} onChange={(e) => onAllDayStart(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Until</span>
+          <input type="date" value={toDateInput(lastDay)} min={toDateInput(start)} onChange={(e) => onUntil(e.target.value)} />
+        </label>
+      </div>
+      ) : (
+      <>
       <label className="field">
         <span>Date</span>
         <input type="date" value={toDateInput(start)} onChange={(e) => onStart(e.target.value, fmtTime(start))} />
       </label>
-      {event.allDay ? (
-        <p className="muted">All day{!sameDay(start, new Date(end.getTime() - 1)) ? ` until ${fmtLongDay(new Date(end.getTime() - 1))}` : ""}</p>
-      ) : (
       <div className="field-row">
         <label className="field">
           <span>Start</span>
@@ -101,6 +137,7 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
           <TimeField value={fmtTime(end)} onCommit={onEnd} />
         </label>
       </div>
+      </>
       )}
 
       <label className="field">

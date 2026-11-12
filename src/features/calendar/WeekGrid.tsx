@@ -3,7 +3,7 @@ import { colorVar } from "../../lib/colors";
 import { useCreateEvent, useUpdateEvent } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import {
-  MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes,
+  MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes, startOfDay,
 } from "../../lib/time";
 import type { CalEvent, Space, Task } from "../../lib/types";
 import { firstShown, shiftShown, shownDistance } from "./days";
@@ -23,6 +23,8 @@ interface Shown {
 }
 
 const SNAP_MS = SNAP_MINUTES * MINUTE;
+/** The smallest height an event gets, so a one-minute event can still be clicked. */
+const MIN_EVENT_PX = 22;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -307,6 +309,16 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
     );
   }
 
+  /** Double-click in the all-day row: a new all-day event on that day. */
+  function createAllDay(day: Date) {
+    if (!defaultSpaceId) return;
+    const start = startOfDay(day);
+    createEvent.mutate(
+      { spaceId: defaultSpaceId, activityId: null, title: "", startAt: start.toISOString(), endAt: addDays(start, 1).toISOString(), allDay: true, notes: "", status: "planned" },
+      { onSuccess: (created) => select(created.id, true) },
+    );
+  }
+
   function onDoubleClick(e: React.MouseEvent) {
     const t = timeAt(e.clientX, e.clientY, false);
     const start = atMinutes(t, Math.floor(minutesIntoDay(t) / 30) * 30);
@@ -352,7 +364,12 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
           <div className="h-viewport">
           <div className="h-strip" ref={alldayStripRef} style={stripStyle}>
           {days.map((d) => (
-            <div key={d.getTime()} className="allday-cell">
+            <div
+              key={d.getTime()}
+              className="allday-cell"
+              title="Double-click for an all-day event"
+              onDoubleClick={(e) => e.target === e.currentTarget && createAllDay(d)}
+            >
               {allDay
                 .filter((e) => new Date(e.startAt) < addDays(d, 1) && new Date(e.endAt) > d)
                 .map((e) => (
@@ -420,7 +437,10 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
               {layoutDay(shown, day).map((seg) => {
                 const ev = seg.item.event;
                 const space = spaceById.get(ev?.spaceId ?? defaultSpaceId ?? "");
-                const height = Math.max(px(seg.bottom - seg.top), 14);
+                // Very short events (a deadline at 23:59) still get a clickable height, and one
+                // that would run past midnight is lifted so it stays inside the day.
+                const height = Math.max(px(seg.bottom - seg.top), MIN_EVENT_PX);
+                const top = Math.min(px(seg.top), 24 * hourHeight - height);
                 const cls = [
                   "event",
                   ev && ev.id === selectedId ? "selected" : "",
@@ -433,7 +453,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                     key={seg.item.id}
                     className={cls}
                     style={{
-                      top: px(seg.top),
+                      top,
                       height: height - 1,
                       left: `calc(${(seg.col / seg.cols) * 100}% + 1px)`,
                       width: `calc(${100 / seg.cols}% - 3px)`,
