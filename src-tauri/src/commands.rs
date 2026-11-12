@@ -149,16 +149,22 @@ pub fn active_focus(db: State<Db>) -> Result<Option<FocusSession>> {
     repo::active_focus(conn!(db))
 }
 #[tauri::command]
-pub fn start_focus(db: State<Db>, input: FocusInput) -> Result<FocusSession> {
-    repo::start_focus(conn!(db), input)
+pub fn start_focus(app: AppHandle, db: State<Db>, input: FocusInput) -> Result<FocusSession> {
+    let s = repo::start_focus(conn!(db), input)?;
+    let _ = app.emit("data-changed", ()); // the small timer window follows
+    Ok(s)
 }
 #[tauri::command]
-pub fn finish_focus(db: State<Db>, id: String) -> Result<Event> {
-    repo::finish_focus(conn!(db), &id)
+pub fn finish_focus(app: AppHandle, db: State<Db>, id: String) -> Result<Event> {
+    let e = repo::finish_focus(conn!(db), &id)?;
+    let _ = app.emit("data-changed", ());
+    Ok(e)
 }
 #[tauri::command]
-pub fn discard_focus(db: State<Db>, id: String) -> Result<()> {
-    repo::discard_focus(conn!(db), &id)
+pub fn discard_focus(app: AppHandle, db: State<Db>, id: String) -> Result<()> {
+    repo::discard_focus(conn!(db), &id)?;
+    let _ = app.emit("data-changed", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -303,6 +309,75 @@ pub async fn restore_backup(app: AppHandle, name: String) -> Result<String> {
     let safety = off_main(app, move |db| backup::restore(&mut db.lock(), &dir, &name)).await?;
     let _ = handle.emit("data-changed", ());
     Ok(safety.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
+}
+
+pub const FOCUS_MINI: &str = "focus-mini";
+
+/// Sizes of the small timer: only the time, or the time with what you work on and the buttons.
+fn mini_size(expanded: bool) -> (f64, f64) {
+    if expanded {
+        (264.0, 76.0)
+    } else {
+        (108.0, 40.0)
+    }
+}
+
+/// The small always-on-top timer, in the top-right corner of the screen.
+#[tauri::command]
+pub fn show_focus_mini(app: AppHandle, expanded: bool) -> Result<()> {
+    if let Some(w) = app.get_webview_window(FOCUS_MINI) {
+        let _ = w.show();
+        return Ok(());
+    }
+    let err = |e: tauri::Error| crate::error::AppError::Invalid(e.to_string());
+    let (w, h) = mini_size(expanded);
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, FOCUS_MINI, tauri::WebviewUrl::App("index.html".into()))
+        .title("Milo focus")
+        .inner_size(w, h)
+        .resizable(false)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .visible_on_all_workspaces(true)
+        .focused(false);
+    if let Some(m) = app.get_webview_window("main").and_then(|m| m.current_monitor().ok().flatten()) {
+        let scale = m.scale_factor();
+        let size = m.size().to_logical::<f64>(scale);
+        let pos = m.position().to_logical::<f64>(scale);
+        builder = builder.position(pos.x + size.width - w - 24.0, pos.y + 48.0);
+    }
+    builder.build().map_err(err)?;
+    Ok(())
+}
+
+/// Switches the small timer between only the time and the full version. The right edge stays
+/// where it is, so the window grows to the left and does not jump away from the corner.
+#[tauri::command]
+pub fn size_focus_mini(app: AppHandle, expanded: bool) -> Result<()> {
+    let Some(w) = app.get_webview_window(FOCUS_MINI) else { return Ok(()) };
+    let err = |e: tauri::Error| crate::error::AppError::Invalid(e.to_string());
+    let scale = w.scale_factor().map_err(err)?;
+    let pos = w.outer_position().map_err(err)?.to_logical::<f64>(scale);
+    let size = w.outer_size().map_err(err)?.to_logical::<f64>(scale);
+    let (nw, nh) = mini_size(expanded);
+    w.set_size(tauri::LogicalSize::new(nw, nh)).map_err(err)?;
+    w.set_position(tauri::LogicalPosition::new(pos.x + size.width - nw, pos.y)).map_err(err)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn close_focus_mini(app: AppHandle) -> Result<()> {
+    if let Some(w) = app.get_webview_window(FOCUS_MINI) {
+        let _ = w.close();
+    }
+    Ok(())
+}
+
+/// Brings the main window forward (from the small timer).
+#[tauri::command]
+pub fn show_main_window(app: AppHandle) -> Result<()> {
+    crate::show_main(&app);
+    Ok(())
 }
 
 /// Where Milo keeps its data, for the Settings screen.

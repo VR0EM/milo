@@ -35,16 +35,19 @@ function Setup() {
   const task = spaceTasks.find((t) => t.id === taskId);
   const valid = !!space && minutes >= 1 && minutes <= 600;
 
+  const focusMini = useUi((s) => s.prefs.focusMini);
   const start = () =>
-    act.mutate(() => {
+    act.mutate(async () => {
       useUi.getState().setLastSpace(space);
-      return api.startFocus({
+      const session = await api.startFocus({
         spaceId: space,
         activityId: activityId || null,
         taskId: task?.id ?? null,
         title: task?.title ?? "",
         plannedMinutes: minutes,
       });
+      if (useUi.getState().prefs.focusMini) api.showFocusMini().catch(() => {});
+      return session;
     });
 
   return (
@@ -95,7 +98,14 @@ function Setup() {
       </label>
 
       <button type="button" className="btn primary big" disabled={!valid} onClick={start}>Start focus</button>
-      <p className="muted small">When you finish, the session is saved to the calendar with its real length.</p>
+      <label className="check small">
+        <input type="checkbox" checked={focusMini} onChange={(e) => useUi.getState().setPrefs({ focusMini: e.target.checked })} />
+        <span>Keep a small timer on top of other apps</span>
+      </label>
+      <p className="muted small">
+        Stopping saves the session to the calendar with its real length. A session left running an hour past its time is
+        saved by itself.
+      </p>
     </form>
   );
 }
@@ -137,6 +147,7 @@ function Running({ session }: { session: FocusSession }) {
       </p>
 
       <button type="button" className="btn primary big" onClick={finish}>{over ? "Finish and save" : "Stop and save"}</button>
+      <button type="button" className="btn" onClick={() => api.showFocusMini().catch(() => {})}>Show small timer</button>
       <button type="button" className="btn quiet" onClick={discard}>Stop without saving</button>
     </div>
   );

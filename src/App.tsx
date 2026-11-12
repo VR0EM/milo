@@ -10,32 +10,13 @@ import { RemindersView } from "./features/reminders/RemindersView";
 import { TodayView } from "./features/today/TodayView";
 import { TasksView } from "./features/tasks/TasksView";
 import { Sidebar } from "./features/spaces/Sidebar";
-import { TEXT_SCALE, useUi } from "./lib/store";
+import { useUi } from "./lib/store";
+import { useAppearance } from "./lib/useAppearance";
 
 export default function App() {
   const view = useUi((s) => s.view);
   useGlobalShortcuts();
-  const theme = useUi((s) => s.prefs.theme);
-  const accent = useUi((s) => s.prefs.accent);
-  const customAccent = useUi((s) => s.prefs.customAccent);
-  const font = useUi((s) => s.prefs.font);
-  const textSize = useUi((s) => s.prefs.textSize);
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "system") root.removeAttribute("data-theme");
-    else root.dataset.theme = theme;
-    root.dataset.accent = accent;
-    if (accent === "custom") {
-      // One colour from the user; the dark-mode tone is the same colour, lightened.
-      root.style.setProperty("--accent-l", customAccent);
-      root.style.setProperty("--accent-d", `color-mix(in oklab, ${customAccent} 72%, white)`);
-    } else {
-      root.style.removeProperty("--accent-l");
-      root.style.removeProperty("--accent-d");
-    }
-    root.dataset.font = font;
-    root.style.setProperty("--text-scale", String(TEXT_SCALE[textSize]));
-  }, [theme, accent, customAccent, font, textSize]);
+  useAppearance();
   return (
     <div className="app">
       <Sidebar />

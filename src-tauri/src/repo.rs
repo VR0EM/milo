@@ -636,12 +636,17 @@ pub fn start_focus(c: &Connection, input: FocusInput) -> Result<FocusSession> {
 
 /// Ends the session and writes it to the calendar as an event with its real duration.
 pub fn finish_focus(c: &Connection, id: &str) -> Result<Event> {
+    finish_focus_at(c, id, &now())
+}
+
+/// Ends the session at `end` and writes it to the calendar.
+pub fn finish_focus_at(c: &Connection, id: &str, end: &str) -> Result<Event> {
     let session = c.query_row(
         "SELECT * FROM focus_sessions WHERE id = ?1 AND ended_at IS NULL AND deleted_at IS NULL",
         [id],
         focus_from,
     )?;
-    let ts = now();
+    let ts = end.to_string();
     let event = create_event(
         c,
         EventInput {
@@ -661,6 +666,23 @@ pub fn finish_focus(c: &Connection, id: &str) -> Result<Event> {
         params![id, ts, event.id],
     )?;
     Ok(event)
+}
+
+/// Minutes past the planned end after which a running session counts as forgotten.
+pub const FORGOTTEN_AFTER_MINUTES: i64 = 60;
+
+/// A session left running long past its plan is saved by itself, with its planned length,
+/// so a forgotten timer still leaves an event but does not inflate Insights.
+/// Returns the event when it did so.
+pub fn close_forgotten_focus(c: &Connection, now: chrono::DateTime<chrono::Utc>) -> Result<Option<Event>> {
+    let Some(s) = active_focus(c)? else { return Ok(None) };
+    let Ok(started) = chrono::DateTime::parse_from_rfc3339(&s.started_at) else { return Ok(None) };
+    let planned_end = started.with_timezone(&chrono::Utc) + chrono::Duration::minutes(s.planned_minutes);
+    if now < planned_end + chrono::Duration::minutes(FORGOTTEN_AFTER_MINUTES) {
+        return Ok(None);
+    }
+    let end = planned_end.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    Ok(Some(finish_focus_at(c, &s.id, &end)?))
 }
 
 /// Stops the session without logging it. The row is kept, archived.
@@ -974,9 +996,18 @@ mod tests {
 
         let s2 = start_focus(&c, input()).unwrap();
         discard_focus(&c, &s2.id).unwrap();
+
+        // Forgotten: still running an hour past the plan -> saved with the planned length.
+        let s3 = start_focus(&c, input()).unwrap();
+        c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s3.id]).unwrap();
+        let at = |s: &str| chrono::DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&chrono::Utc);
+        assert!(close_forgotten_focus(&c, at("2020-01-01T11:20:00Z")).unwrap().is_none(), "55 min over: still running");
+        let e = close_forgotten_focus(&c, at("2020-01-01T11:30:00Z")).unwrap().expect("saved by itself");
+        assert_eq!((e.start_at.as_str(), e.end_at.as_str()), ("2020-01-01T10:00:00.000Z", "2020-01-01T10:25:00.000Z"));
+        assert!(active_focus(&c).unwrap().is_none());
         assert!(active_focus(&c).unwrap().is_none());
         let rows: i64 = c.query_row("SELECT COUNT(*) FROM focus_sessions", [], |r| r.get(0)).unwrap();
-        assert_eq!(rows, 2, "a discarded session is kept");
+        assert_eq!(rows, 3, "a discarded session is kept");
     }
 
     #[test]

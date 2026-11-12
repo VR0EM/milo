@@ -7,6 +7,7 @@ import { daysFromToday, fmtMoment, fmtRelativeDays } from "../../lib/time";
 import { taskProgress, type Space, type Task, type TaskType } from "../../lib/types";
 import { ignoreForShortcut } from "../shortcuts/keys";
 import { PriorityMark } from "../../components/PriorityMark";
+import { Icon } from "../../components/Icon";
 import { TaskPanel } from "./TaskPanel";
 
 type Due = "all" | "overdue" | "week" | "later" | "none";
@@ -31,8 +32,9 @@ function dueBucket(t: Task): Exclude<Due, "all"> {
   return daysFromToday(d) <= 7 ? "week" : "later";
 }
 
-/** Filters live for the session, so leaving Tasks and coming back keeps them. */
+/** Filters and unfolded rows live for the session, so leaving Tasks and coming back keeps them. */
 const filters = { query: "", spaceId: "", due: "all" as Due, status: "open" as Status, sort: "deadline" as Sort };
+const unfolded = new Set<string>();
 
 export function TasksView() {
   const spaces = useSpaces().data ?? [];
@@ -47,6 +49,12 @@ export function TasksView() {
   const [due, setDue] = useState<Due>(filters.due);
   const [status, setStatus] = useState<Status>(filters.status);
   const [sort, setSort] = useState<Sort>(filters.sort);
+  const [, setUnfoldTick] = useState(0);
+  const toggleUnfold = (id: string) => {
+    if (unfolded.has(id)) unfolded.delete(id);
+    else unfolded.add(id);
+    setUnfoldTick((n) => n + 1);
+  };
   Object.assign(filters, { query, spaceId, due, status, sort });
 
   const active = spaces.filter((s) => !s.deletedAt);
@@ -149,7 +157,15 @@ export function TasksView() {
               <span role="columnheader">{header("deadline", "Deadline")}</span>
             </div>
             {shown.map((t) => (
-              <TaskRow key={t.id} task={t} space={spaceById.get(t.spaceId)} type={t.typeId ? typeById.get(t.typeId) : undefined} selected={t.id === selectedId} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                space={spaceById.get(t.spaceId)}
+                type={t.typeId ? typeById.get(t.typeId) : undefined}
+                selected={t.id === selectedId}
+                open={unfolded.has(t.id)}
+                onToggle={() => toggleUnfold(t.id)}
+              />
             ))}
           </div>
           {shown.length === 0 && (
@@ -171,7 +187,9 @@ export function TasksView() {
   );
 }
 
-function TaskRow({ task, space, type, selected }: { task: Task; space?: Space; type?: TaskType; selected: boolean }) {
+function TaskRow({ task, space, type, selected, open, onToggle }: {
+  task: Task; space?: Space; type?: TaskType; selected: boolean; open: boolean; onToggle: () => void;
+}) {
   const act = useTaskAction();
   const done = task.parts.filter((p) => p.doneAt).length;
   const hasParts = task.parts.length > 0;
@@ -192,8 +210,9 @@ function TaskRow({ task, space, type, selected }: { task: Task; space?: Space; t
   };
 
   return (
+    <>
     <div
-      className={`tr${selected ? " selected" : ""}${task.completedAt ? " done" : ""}`}
+      className={`tr${selected ? " selected" : ""}${task.completedAt ? " done" : ""}${open ? " unfolded" : ""}`}
       role="row"
       tabIndex={0}
       aria-selected={selected}
@@ -212,6 +231,18 @@ function TaskRow({ task, space, type, selected }: { task: Task; space?: Space; t
         />
       </span>
       <span role="cell" className="td-title">
+        <button
+          className={`unfold${open ? " open" : ""}`}
+          aria-expanded={open}
+          aria-label={open ? `Hide the parts of ${task.title || "this task"}` : `Show the parts of ${task.title || "this task"}`}
+          title={hasParts ? (open ? "Hide parts" : "Show parts") : "Add parts"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+        >
+          <Icon name="chevron" size={12} />
+        </button>
         <span className="t-title">{task.title || "Untitled"}</span>
       </span>
       <span role="cell">
@@ -235,6 +266,54 @@ function TaskRow({ task, space, type, selected }: { task: Task; space?: Space; t
           </>
         ) : "—"}
       </span>
+    </div>
+    {open && <PartsInline task={task} />}
+    </>
+  );
+}
+
+/** The parts of a task, unfolded under its row: tick them off or add one without leaving the list. */
+function PartsInline({ task }: { task: Task }) {
+  const act = useTaskAction();
+  const [text, setText] = useState("");
+  const add = () => {
+    const t = text.trim();
+    if (!t) return;
+    setText("");
+    act.mutate(() => api.createTaskPart(task.id, t));
+  };
+  return (
+    <div className="tr-parts" role="row">
+      <ul role="cell">
+        {task.parts.map((p) => (
+          <li key={p.id}>
+            <label className={`check part-inline${p.doneAt ? " done" : ""}`}>
+              <input
+                type="checkbox"
+                checked={!!p.doneAt}
+                onChange={(e) => {
+                  const done = e.target.checked;
+                  act.mutate(() => api.setPartDone(p.id, done));
+                }}
+              />
+              <span>{p.title}</span>
+            </label>
+          </li>
+        ))}
+        <li>
+          <input
+            className="part-inline-add"
+            placeholder={task.parts.length ? "Add a part" : "Add a part, e.g. Chapter 1"}
+            aria-label={`Add a part to ${task.title || "this task"}`}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") add();
+              if (e.key === "Escape") setText("");
+            }}
+          />
+        </li>
+      </ul>
     </div>
   );
 }

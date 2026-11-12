@@ -26,7 +26,7 @@ pub(crate) fn notify(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
-fn show_main(app: &AppHandle) {
+pub(crate) fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
@@ -46,9 +46,12 @@ pub fn run() {
         // Closing the window hides it; Milo keeps running in the tray so reminders
         // still arrive. Quitting is done from the tray menu.
         .on_window_event(|window, event| {
+            // Only the main window hides instead of closing; the small timer really closes.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .setup(|app| {
@@ -73,7 +76,7 @@ pub fn run() {
             let open = MenuItem::with_id(app, "open", "Open Milo", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Milo", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;
-            let mut tray = TrayIconBuilder::new()
+            let mut tray = TrayIconBuilder::with_id("main")
                 .tooltip("Milo")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -113,6 +116,50 @@ pub fn run() {
                     }
                 }
                 std::thread::sleep(Duration::from_secs(3600));
+            });
+
+            // Focus: once a second while a session runs, the time left shows next to the tray
+            // icon (macOS menu bar) and in its tooltip (Windows). A session forgotten an hour past
+            // its plan is saved by itself, so it always leaves an event in the calendar.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let mut showing = false;
+                loop {
+                    std::thread::sleep(Duration::from_secs(1));
+                    let (left, forgotten) = {
+                        let db = handle.state::<Db>();
+                        let conn = db.lock();
+                        let forgotten = repo::close_forgotten_focus(&conn, chrono::Utc::now()).ok().flatten();
+                        let left = repo::active_focus(&conn).ok().flatten().and_then(|s| {
+                            let start = chrono::DateTime::parse_from_rfc3339(&s.started_at).ok()?;
+                            Some(start.timestamp() + s.planned_minutes * 60 - chrono::Utc::now().timestamp())
+                        });
+                        (left, forgotten)
+                    };
+                    if let Some(e) = forgotten {
+                        notify(&handle, "Focus session saved", &format!("\"{}\" was still running, so it was saved with its planned length.", e.title));
+                        let _ = handle.emit("data-changed", ());
+                    }
+                    let Some(tray) = handle.tray_by_id("main") else { continue };
+                    match left {
+                        Some(secs) => {
+                            let a = secs.abs();
+                            let text = format!("{}{}:{:02}", if secs < 0 { "+" } else { "" }, a / 60, a % 60);
+                            let _ = tray.set_title(Some(&text));
+                            let _ = tray.set_tooltip(Some(&format!("Milo · focus {text}")));
+                            showing = true;
+                        }
+                        None if showing => {
+                            let _ = tray.set_title(None::<&str>);
+                            let _ = tray.set_tooltip(Some("Milo"));
+                            if let Some(w) = handle.get_webview_window(commands::FOCUS_MINI) {
+                                let _ = w.close();
+                            }
+                            showing = false;
+                        }
+                        None => {}
+                    }
+                }
             });
 
             // Reminders: one small query every 30 seconds. The thread sleeps in between,
@@ -210,6 +257,10 @@ pub fn run() {
             commands::update_semester,
             commands::list_archived,
             commands::app_info,
+            commands::show_focus_mini,
+            commands::size_focus_mini,
+            commands::close_focus_mini,
+            commands::show_main_window,
             commands::list_confirmations,
             commands::set_confirmed,
             commands::backup_settings,

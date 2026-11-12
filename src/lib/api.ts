@@ -97,6 +97,11 @@ export const api = {
   setBackupMirror: (path: string | null) => call<number>("set_backup_mirror", { path }),
   restoreBackup: (name: string) => call<string>("restore_backup", { name }),
 
+  showFocusMini: () => call<void>("show_focus_mini", { expanded: miniExpanded() }),
+  sizeFocusMini: (expanded: boolean) => call<void>("size_focus_mini", { expanded }),
+  closeFocusMini: () => call<void>("close_focus_mini"),
+  showMainWindow: () => call<void>("show_main_window"),
+
   setArchived: (entity: Entity, id: string, archived: boolean) =>
     call<void>("set_archived", { entity, id, archived }),
 };
@@ -141,4 +146,22 @@ export async function onDataChanged(fn: () => void) {
   if (!inTauri) return;
   const { listen } = await import("@tauri-apps/api/event");
   await listen("data-changed", fn);
+}
+
+/** Which window this page is: the main window, or the small focus timer. */
+export async function windowKind(): Promise<"main" | "focus-mini"> {
+  if (!inTauri) return new URLSearchParams(location.search).has("mini") ? "focus-mini" : "main";
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  return getCurrentWindow().label === "focus-mini" ? "focus-mini" : "main";
+}
+
+/** Whether the small focus timer shows its options; remembered between sessions. */
+export const miniExpanded = () => localStorage.getItem("milo-mini-expanded") === "1";
+export const setMiniExpanded = (v: boolean) => localStorage.setItem("milo-mini-expanded", v ? "1" : "0");
+
+/** Moves the current (small timer) window along with the pointer. */
+export async function startWindowDrag() {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().startDragging();
 }

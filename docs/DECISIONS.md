@@ -51,6 +51,8 @@ ones marked *(assumption)* are kept easy to change.
   type, deadline) with a filter bar: search, space, deadline (overdue, next 7 days, later, no
   deadline) and status (open, done, all). Sorting by task, space or deadline. Ticking a task
   with parts finishes its remaining parts; it reopens by unticking a part.
+- **A row unfolds** (the arrow before its title) to tick off its parts or add one, without
+  opening the detail panel. Unfolded rows stay unfolded while Milo is open.
 - An overdue deadline is shown in a muted red text, nothing more.
 - **Tasks in the calendar.** A row above the hours shows each task on its deadline day
   ("Due", filled) and on its target day ("Aim", dashed outline). The row is always there,
@@ -72,6 +74,16 @@ ones marked *(assumption)* are kept easy to change.
   counts up quietly; nothing rings or pops up (reminders arrive in phase 4).
   "Stop without saving" archives the session instead of logging it.
 - A running session shows as one line under the navigation on every screen.
+- **Small timer on top.** Starting a focus session opens a small always-on-top window, unless
+  "Keep a small timer on top of other apps" is off; "Show small timer" brings it back. It is
+  compact by default (only the time, 108x40); a click opens the options (what you work on,
+  "Open Milo", "Save", 264x76) and a click on the time closes them, growing and shrinking
+  towards the left so the right edge stays put. The choice is remembered. A press that moves
+  drags the window instead of toggling it. It closes itself when the session ends. The time left also shows next to the tray icon in the macOS menu bar, and
+  in the tray tooltip on Windows.
+- **A session always leaves an event.** Stopping saves it with its real length. A session still
+  running an hour past its plan (forgotten, or the app was closed) is saved by itself with its
+  planned length, with a notification, so it never inflates Insights.
 - `focus_sessions` links the event and the task; events themselves do not carry a task id yet.
 
 ## Reminders, tray and autostart

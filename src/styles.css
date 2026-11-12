@@ -636,3 +636,34 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
 .restore-list { max-height: 320px; overflow-y: auto; margin: 4px 0 8px; }
 .dialog > h2 { margin-bottom: 8px; }
 .dialog > p { margin-bottom: 12px; line-height: 1.5; }
+
+/* ---------- small focus timer window ---------- */
+html.mini-window, html.mini-window body { background: var(--raised); overflow: hidden; }
+.mini { height: 100vh; box-sizing: border-box; border: 1px solid var(--line); cursor: default; user-select: none; -webkit-user-select: none; }
+.mini.expanded { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; align-items: center; gap: 0 10px; padding: 10px 12px 8px 14px; }
+.mini.compact { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 4px 10px 5px; cursor: pointer; }
+.mini.compact:hover { background: color-mix(in srgb, var(--text) 4%, var(--raised)); }
+.mini-text { grid-column: 1; grid-row: 1; min-width: 0; }
+.mini-clock { font-weight: 500; line-height: 1.1; font-size: calc(22px * var(--text-scale)); }
+.mini.expanded .mini-clock { cursor: pointer; }
+.mini.compact .mini-clock { font-size: calc(17px * var(--text-scale)); }
+.mini-clock.over { color: var(--accent); }
+.mini-what { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: calc(12px * var(--text-scale)); min-width: 0; }
+.mini-actions { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 4px; }
+.mini-progress-bar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--c) 18%, transparent); overflow: hidden; margin-top: 6px; width: 100%; }
+.mini.compact .mini-progress-bar { margin-top: 4px; height: 2px; }
+.mini-progress-bar span { display: block; height: 100%; background: var(--c); }
+
+/* ---------- unfolding parts in the task list ---------- */
+.unfold { flex: none; width: 22px; height: 22px; margin: 0 4px 0 -6px; display: inline-grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.unfold:hover { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); }
+.unfold .icon { transition: transform 150ms ease-out; }
+.unfold.open .icon { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .unfold .icon { transition: none; } }
+.tr.unfolded { border-bottom-color: transparent; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.tr-parts { padding: 2px 10px 10px calc(28px + 12px + 10px + 22px); border-bottom: 1px solid var(--line-soft); }
+.tr-parts ul { display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); padding-left: 12px; }
+.part-inline { padding: 3px 0; cursor: pointer; }
+.part-inline.done span { color: var(--muted); text-decoration: line-through; }
+.part-inline-add { width: min(320px, 100%); margin-top: 4px; background: transparent; border: 1px dashed var(--line); border-radius: 6px; padding: 4px 8px; min-height: 28px; }
+.part-inline-add:focus { border-style: solid; border-color: var(--accent); background: var(--raised); }

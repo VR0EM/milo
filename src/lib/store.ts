@@ -30,11 +30,13 @@ export interface Prefs {
   customAccent: string;
   font: Font;
   textSize: TextSize;
+  /** Open the small always-on-top timer when a focus session starts. */
+  focusMini: boolean;
   showWeekends: boolean;
   eventMinutes: number;
   dayStartHour: number;
 }
-export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
+export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
 export type InsightsPeriod = "week" | "month" | "semester";
 
 interface Notice {

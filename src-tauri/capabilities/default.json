@@ -2,6 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
-  "permissions": ["core:default", "autostart:default", "dialog:default"]
+  "windows": [
+    "main",
+    "focus-mini"
+  ],
+  "permissions": [
+    "core:default",
+    "autostart:default",
+    "dialog:default",
+    "core:window:allow-start-dragging"
+  ]
 }

@@ -2,7 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
-import { files, onDataChanged } from "./lib/api";
+import { MiniTimer } from "./features/today/MiniTimer";
+import { files, onDataChanged, windowKind } from "./lib/api";
 import "./styles.css";
 
 // Local database: data never goes stale on its own, so no background refetching.
@@ -19,11 +20,12 @@ const demo = !files.available && new URLSearchParams(location.search).has("demo"
   : Promise.resolve();
 
 await demo;
+const kind = await windowKind();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      {kind === "focus-mini" ? <MiniTimer /> : <App />}
     </QueryClientProvider>
   </React.StrictMode>,
 );
