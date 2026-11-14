@@ -19,25 +19,48 @@ pub fn run_if_due(conn: &Connection, dir: &Path) -> Result<Option<PathBuf>> {
     Ok(Some(target))
 }
 
-/// Backups in `dir`, newest first.
+/// Backups in `dir`, newest first (by when the file was written).
 pub fn list(dir: &Path) -> Vec<BackupFile> {
-    let mut files: Vec<BackupFile> = std::fs::read_dir(dir)
-        .map(|it| {
-            it.filter_map(|e| e.ok())
-                .filter_map(|e| {
-                    let name = e.file_name().to_string_lossy().to_string();
-                    if !(name.starts_with("milo-") && name.ends_with(".sqlite")) {
-                        return None;
-                    }
-                    let meta = e.metadata().ok()?;
-                    let date = name.trim_start_matches("milo-").trim_end_matches(".sqlite").to_string();
-                    Some(BackupFile { name, date, bytes: meta.len() })
-                })
-                .collect()
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut files: Vec<(BackupFile, Option<std::time::SystemTime>)> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            if !(name.starts_with("milo-") && name.ends_with(".sqlite")) {
+                return None;
+            }
+            let meta = e.metadata().ok()?;
+            Some((BackupFile { date: label(&name), name, bytes: meta.len() }, meta.modified().ok()))
         })
-        .unwrap_or_default();
-    files.sort_by(|a, b| b.name.cmp(&a.name));
-    files
+        .collect();
+    files.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.name.cmp(&a.0.name)));
+    files.into_iter().map(|(f, _)| f).collect()
+}
+
+/// What a backup is, in words: "2026-11-14" for a daily one, and for the copies made
+/// before a restore or an update "2026-11-14 09:15, before an update".
+fn label(name: &str) -> String {
+    let core = name.trim_start_matches("milo-").trim_end_matches(".sqlite");
+    let (kind, stamp) = if let Some(rest) = core.strip_prefix("before-restore-") {
+        ("before a restore", rest)
+    } else if let Some(rest) = core.strip_prefix("before-v") {
+        ("before an update", rest.split_once('-').map(|(_, r)| r).unwrap_or(rest))
+    } else {
+        return core.to_string();
+    };
+    // stamp: YYYY-MM-DD-HHMMSS
+    match (stamp.get(..10), stamp.get(11..13), stamp.get(13..15)) {
+        (Some(day), Some(h), Some(m)) => format!("{day} {h}:{m}, {kind}"),
+        _ => format!("{stamp}, {kind}"),
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn labels_say_what_a_backup_is() {
+    assert_eq!(label("milo-2026-11-14.sqlite"), "2026-11-14");
+    assert_eq!(label("milo-before-v10-2026-11-14-091500.sqlite"), "2026-11-14 09:15, before an update");
+    assert_eq!(label("milo-before-restore-2026-11-14-221003.sqlite"), "2026-11-14 22:10, before a restore");
 }
 
 /// Copies every backup that the second folder does not have yet. Returns how many.

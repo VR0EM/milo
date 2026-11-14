@@ -6,6 +6,7 @@ import { useUi } from "../../lib/store";
 import { addDays, daysFromToday, fmtDuration, fmtRange, fmtRelativeDays, startOfDay, startOfWeek, toDateInput } from "../../lib/time";
 import { taskProgress, type CalEvent, type Insights, type Task } from "../../lib/types";
 import { useNow } from "../../lib/useNow";
+import { SpaceMark } from "../../components/Icon";
 import { fmtMinutes } from "../insights/Charts";
 import { deadlineLine } from "../tasks/TasksView";
 import { TaskPanel } from "../tasks/TaskPanel";
@@ -120,7 +121,7 @@ export function SpaceView() {
       <main className={`page space-page${selectedTask ? "" : " full"}`} style={{ ["--c" as string]: colorVar(space.color) }}>
         <header className="toolbar">
           <h1>
-            <span className="swatch big-sq space-swatch" aria-hidden />
+            <SpaceMark icon={space.icon} size={18} />
             {space.name}
             {group && <span className="h1-note">{group.name}</span>}
           </h1>

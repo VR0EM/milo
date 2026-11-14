@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { rangeEnd, useUi } from "../../lib/store";
-import { addDays, fmtMonth, sameDay, startOfWeek } from "../../lib/time";
+import { addDays, fmtMonth, sameDay, startOfWeek, weekStart } from "../../lib/time";
 
-const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 /** A small month to jump through the calendar. The days on screen are marked. */
 export function MiniMonth() {
@@ -32,7 +32,7 @@ export function MiniMonth() {
         <button className="icon-btn" aria-label="Next month" onClick={() => step(1)}><Icon name="right" size={14} /></button>
       </div>
       <div className="mini-grid" role="grid" aria-label={fmtMonth(month)}>
-        {WEEKDAYS.map((d) => <span key={d} className="mini-wd">{d}</span>)}
+        {Array.from({ length: 7 }, (_, i) => WEEKDAYS[(weekStart() + i) % 7]).map((d) => <span key={d} className="mini-wd">{d}</span>)}
         {weeks.flat().map((d, i) => (
           <button
             key={d.getTime()}

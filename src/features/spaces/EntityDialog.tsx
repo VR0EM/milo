@@ -5,6 +5,7 @@ import { PALETTE, colorVar, isCustomColor } from "../../lib/colors";
 import { useArchiveWithUndo, useGroups, useSpaces } from "../../lib/queries";
 import { useUi, type Dialog } from "../../lib/store";
 import type { ActivityCategory, SpaceRole } from "../../lib/types";
+import { Icon, SPACE_ICONS } from "../../components/Icon";
 
 const TITLES = { space: "space", group: "group", activity: "activity", task_type: "task type" } as const;
 
@@ -27,6 +28,7 @@ function Form({ dialog }: { dialog: Dialog }) {
   const [groupId, setGroupId] = useState<string>(
     dialog.kind === "space" ? (dialog.item?.groupId ?? dialog.groupId ?? "") : "",
   );
+  const [icon, setIcon] = useState<string | null>(dialog.kind === "space" ? (dialog.item?.icon ?? null) : null);
   const [role, setRole] = useState<SpaceRole>(dialog.kind === "space" ? (dialog.item?.role ?? "normal") : "normal");
   const [category, setCategory] = useState<ActivityCategory>(
     dialog.kind === "activity" ? (dialog.item?.category ?? "other") : "other",
@@ -41,7 +43,7 @@ function Form({ dialog }: { dialog: Dialog }) {
     e.preventDefault();
     try {
       if (dialog.kind === "space") {
-        const input = { name, color, role, groupId: groupId || null };
+        const input = { name, color, role, groupId: groupId || null, icon };
         await (item ? api.updateSpace(item.id, input) : api.createSpace(input));
         qc.invalidateQueries({ queryKey: ["spaces"] });
       } else if (dialog.kind === "group") {
@@ -96,6 +98,19 @@ function Form({ dialog }: { dialog: Dialog }) {
                     style={isCustomColor(color) ? { ["--c" as string]: color } : undefined}
                   />
                 </label>
+              </div>
+            </fieldset>
+            <fieldset className="field">
+              <legend>Icon</legend>
+              <div className="icon-picker" role="radiogroup" aria-label="Icon" style={{ ["--c" as string]: colorVar(color) }}>
+                <button type="button" role="radio" aria-checked={!icon} aria-label="No icon" title="No icon" className={!icon ? "on" : ""} onClick={() => setIcon(null)}>
+                  <span className="swatch big-sq" />
+                </button>
+                {SPACE_ICONS.map((i) => (
+                  <button type="button" key={i} role="radio" aria-checked={icon === i} aria-label={i} title={i} className={icon === i ? "on" : ""} onClick={() => setIcon(i)}>
+                    <Icon name={i} size={16} />
+                  </button>
+                ))}
               </div>
             </fieldset>
             <label className="field">

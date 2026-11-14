@@ -7,8 +7,9 @@ import { TimeField } from "../../components/TimeField";
 import { MiniMonth } from "./MiniMonth";
 import { TaskTray } from "./TaskTray";
 import { RepeatField } from "./RepeatField";
+import { EarlierVersions } from "../history/EarlierVersions";
 import { useUi } from "../../lib/store";
-import { addDays, fmtDuration, fmtLongDay, fmtTime, fromInputs, sameDay, startOfDay, toDateInput } from "../../lib/time";
+import { addDays, fmtDuration, fmtLongDay, fromInputs, sameDay, startOfDay, toDateInput, toTimeInput } from "../../lib/time";
 import { type Activity, type CalEvent, type EventInput, type Space } from "../../lib/types";
 
 interface Props {
@@ -42,6 +43,9 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
   const titleRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(event.title);
   const [notes, setNotes] = useState(event.notes);
+  // Changed from elsewhere (a restored version, an undo): show the new text.
+  useEffect(() => setTitle(event.title), [event.title]);
+  useEffect(() => setNotes(event.notes), [event.notes]);
 
   useEffect(() => {
     if (focusTitle) {
@@ -159,16 +163,16 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       <>
       <label className="field">
         <span>Date</span>
-        <input type="date" value={toDateInput(start)} onChange={(e) => onStart(e.target.value, fmtTime(start))} />
+        <input type="date" value={toDateInput(start)} onChange={(e) => onStart(e.target.value, toTimeInput(start))} />
       </label>
       <div className="field-row">
         <label className="field">
           <span>Start</span>
-          <TimeField value={fmtTime(start)} onCommit={(t) => onStart(toDateInput(start), t)} />
+          <TimeField value={toTimeInput(start)} onCommit={(t) => onStart(toDateInput(start), t)} />
         </label>
         <label className="field">
           <span>End{!sameDay(start, end) ? " (next day)" : ""}</span>
-          <TimeField value={fmtTime(end)} onCommit={onEnd} />
+          <TimeField value={toTimeInput(end)} onCommit={onEnd} />
         </label>
       </div>
       </>
@@ -216,6 +220,8 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       </label>
 
       {event.source === "import" && <ImportedNote event={event} />}
+
+      <EarlierVersions entity="event" item={event} />
 
       <div className="panel-foot">
         <button

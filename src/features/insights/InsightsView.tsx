@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
-import { useArchiveWithUndo, useInsights, useSemesters, useSpaces, useAction } from "../../lib/queries";
+import { useArchiveWithUndo, useImportSources, useInsights, useSemesters, useSpaces, useAction } from "../../lib/queries";
 import { useUi, type InsightsPeriod } from "../../lib/store";
 import { addDays, startOfWeek, toDateInput } from "../../lib/time";
 import type { Insights, Semester, Space } from "../../lib/types";
@@ -123,6 +123,26 @@ function Report({ period, previous, kind }: { period: Period; previous: Period |
   return <ReportBody data={data} before={previous ? before ?? null : null} kind={kind} spaces={spaces} />;
 }
 
+/** A period with nothing in it yet: say how Insights fills up, instead of a page of zeros. */
+function EmptyReport({ kind }: { kind: InsightsPeriod }) {
+  const sources = useImportSources().data ?? [];
+  const ui = useUi.getState();
+  return (
+    <section className="block empty-report">
+      <h2>Nothing to count for this {kind} yet</h2>
+      <p className="muted">
+        Insights adds up the time in your calendar: class, self-study and sleep, per space. It fills up by itself as
+        events happen, from an imported timetable, from blocks you plan for tasks, and from the focus timer.
+      </p>
+      <div className="inline">
+        {sources.length === 0 && <button className="btn small" onClick={() => ui.openSettings("import")}>Import your timetable</button>}
+        <button className="btn small" onClick={() => ui.setView("today")}>Start a focus session</button>
+        <button className="link" onClick={() => ui.setView("calendar")}>Open the calendar</button>
+      </div>
+    </section>
+  );
+}
+
 function Block({ title, legend, table, children, className = "" }: {
   title: string; legend?: Series[]; table?: React.ReactNode; children: React.ReactNode; className?: string;
 }) {
@@ -187,6 +207,9 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
     .filter((s) => s.total > 0);
   const maxSpace = Math.max(1, ...perSpace.map((s) => s.total));
   const split = Math.max(1, data.totals.class, data.totals.selfStudy);
+
+  const total = data.totals.class + data.totals.selfStudy + data.totals.other + data.totals.sleep;
+  if (total === 0 && data.tasksDone === 0) return <EmptyReport kind={kind} />;
 
   return (
     <>

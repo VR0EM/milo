@@ -85,6 +85,7 @@ fn space_from(r: &Row) -> rusqlite::Result<Space> {
         name: r.get("name")?,
         color: r.get("color")?,
         role: r.get("role")?,
+        icon: r.get("icon")?,
         sort_order: r.get("sort_order")?,
         deleted_at: r.get("deleted_at")?,
     })
@@ -104,14 +105,15 @@ pub fn create_space(c: &Connection, input: SpaceInput) -> Result<Space> {
     one_of(&input.role, &["normal", "sleep"], "role")?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO spaces (id, group_id, name, color, role, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        "INSERT INTO spaces (id, group_id, name, color, role, icon, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
         params![
             id,
             input.group_id,
             non_empty(&input.name, "Name")?,
             input.color,
             input.role,
+            icon(&input.icon)?,
             next_sort(c, "spaces")?,
             ts
         ],
@@ -122,10 +124,28 @@ pub fn create_space(c: &Connection, input: SpaceInput) -> Result<Space> {
 pub fn update_space(c: &Connection, id: &str, input: SpaceInput) -> Result<Space> {
     one_of(&input.role, &["normal", "sleep"], "role")?;
     changed(c.execute(
-        "UPDATE spaces SET group_id = ?2, name = ?3, color = ?4, role = ?5, updated_at = ?6 WHERE id = ?1",
-        params![id, input.group_id, non_empty(&input.name, "Name")?, input.color, input.role, now()],
+        "UPDATE spaces SET group_id = ?2, name = ?3, color = ?4, role = ?5, icon = ?6, updated_at = ?7 WHERE id = ?1",
+        params![id, input.group_id, non_empty(&input.name, "Name")?, input.color, input.role, icon(&input.icon)?, now()],
     )?)?;
     get_space(c, id)
+}
+
+/// An icon name is a short word from the app's own set; anything else is refused.
+fn icon(value: &Option<String>) -> Result<Option<String>> {
+    match value.as_deref().map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(v) if v.len() <= 24 && v.chars().all(|ch| ch.is_ascii_lowercase() || ch == '-') => Ok(Some(v.to_string())),
+        Some(v) => Err(AppError::Invalid(format!("Unknown icon: {v}"))),
+    }
+}
+
+/// Puts spaces in the order given (the order in the sidebar). Spaces not named keep theirs.
+pub fn reorder_spaces(c: &Connection, ids: &[String]) -> Result<()> {
+    let ts = now();
+    for (i, id) in ids.iter().enumerate() {
+        c.execute("UPDATE spaces SET sort_order = ?2, updated_at = ?3 WHERE id = ?1", params![id, i as i64, ts])?;
+    }
+    Ok(())
 }
 
 // ---------- activities ----------
@@ -240,7 +260,28 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
     get_event(c, &id)
 }
 
+/// Changes an event, keeping its earlier version (see history.rs) when something differs.
 pub fn update_event(c: &Connection, id: &str, input: EventInput) -> Result<Event> {
+    check_event(&input)?;
+    let before = get_event(c, id)?;
+    let same = before.space_id == input.space_id
+        && before.activity_id == input.activity_id
+        && before.title == input.title.trim()
+        && before.start_at == input.start_at
+        && before.end_at == input.end_at
+        && before.all_day == input.all_day
+        && before.notes == input.notes
+        && before.status == input.status
+        && before.task_id == input.task_id;
+    if same {
+        return Ok(before);
+    }
+    crate::history::remember(c, "event", id, &before, false)?;
+    update_event_unlogged(c, id, input)
+}
+
+/// Changes an event without keeping a version (history.rs keeps it itself when restoring).
+pub fn update_event_unlogged(c: &Connection, id: &str, input: EventInput) -> Result<Event> {
     check_event(&input)?;
     changed(c.execute(
         "UPDATE events SET space_id = ?2, activity_id = ?3, title = ?4, start_at = ?5, end_at = ?6,
@@ -386,7 +427,26 @@ pub fn create_task(c: &Connection, input: TaskInput) -> Result<Task> {
     get_task(c, &id)
 }
 
+/// Changes a task, keeping its earlier version (see history.rs) when something differs.
 pub fn update_task(c: &Connection, id: &str, input: TaskInput) -> Result<Task> {
+    check_priority(&input.priority)?;
+    let before = get_task(c, id)?;
+    let same = before.space_id == input.space_id
+        && before.type_id == input.type_id
+        && before.title == input.title.trim()
+        && before.notes == input.notes
+        && before.deadline_at == input.deadline_at
+        && before.target_at == input.target_at
+        && before.priority == input.priority;
+    if same {
+        return Ok(before);
+    }
+    crate::history::remember(c, "task", id, &before, false)?;
+    update_task_unlogged(c, id, input)
+}
+
+/// Changes a task without keeping a version.
+pub fn update_task_unlogged(c: &Connection, id: &str, input: TaskInput) -> Result<Task> {
     check_priority(&input.priority)?;
     changed(c.execute(
         "UPDATE tasks SET space_id = ?2, type_id = ?3, title = ?4, notes = ?5, deadline_at = ?6, target_at = ?7,
@@ -726,6 +786,20 @@ pub fn add_inbox(c: &Connection, text: &str) -> Result<InboxItem> {
     let (id, ts) = (new_id(), now());
     c.execute("INSERT INTO inbox_items (id, text, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", params![id, text, ts])?;
     Ok(InboxItem { id, text, created_at: ts })
+}
+
+/// Makes a task of a note (in `space_id`) and marks the note handled.
+pub fn inbox_to_task(c: &Connection, id: &str, space_id: &str) -> Result<Task> {
+    let text: String = c
+        .query_row("SELECT text FROM inbox_items WHERE id = ?1 AND deleted_at IS NULL", [id], |r| r.get(0))
+        .optional()?
+        .ok_or(AppError::NotFound)?;
+    let task = create_task(
+        c,
+        TaskInput { space_id: space_id.into(), type_id: None, title: text, notes: String::new(), deadline_at: None, target_at: None, priority: None },
+    )?;
+    set_inbox_done(c, id, true)?;
+    Ok(task)
 }
 
 /// A handled note leaves the inbox. The row stays, like everything in Milo.
@@ -1113,12 +1187,33 @@ mod tests {
         let c = open_in_memory().unwrap();
         let s = create_space(
             &c,
-            SpaceInput { group_id: Some("seed-group-school".into()), name: "Analysis".into(), color: "green".into(), role: "normal".into() },
+            SpaceInput { group_id: Some("seed-group-school".into()), name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None },
         )
         .unwrap();
         assert_eq!(s.sort_order, 3);
         set_archived(&c, "space", &s.id, true).unwrap();
         let all = list_spaces(&c).unwrap();
         assert!(all.iter().any(|x| x.id == s.id && x.deleted_at.is_some()), "archived spaces stay listed");
+    }
+
+    #[test]
+    fn space_icons_and_order() {
+        let c = open_in_memory().unwrap();
+        let seeds = list_spaces(&c).unwrap();
+        let sleep = seeds.iter().find(|s| s.id == "seed-space-sleep").unwrap();
+        assert_eq!(sleep.icon.as_deref(), Some("moon"), "the seeds get an icon");
+
+        let input = |icon: Option<&str>| SpaceInput {
+            group_id: None, name: "Chemistry".into(), color: "teal".into(), role: "normal".into(), icon: icon.map(Into::into),
+        };
+        let s = create_space(&c, input(Some("flask"))).unwrap();
+        assert_eq!(s.icon.as_deref(), Some("flask"));
+        assert!(update_space(&c, &s.id, input(Some("<svg>"))).is_err());
+        assert_eq!(update_space(&c, &s.id, input(Some(""))).unwrap().icon, None);
+
+        reorder_spaces(&c, &[s.id.clone(), "seed-space-personal".into()]).unwrap();
+        let order: Vec<String> = list_spaces(&c).unwrap().into_iter().map(|x| x.id).collect();
+        assert_eq!(order[0], s.id);
+        assert_eq!(order[1], "seed-space-personal");
     }
 }

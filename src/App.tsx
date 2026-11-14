@@ -12,9 +12,14 @@ import { SpaceView } from "./features/spaces/SpaceView";
 import { useUi } from "./lib/store";
 import { useAppearance } from "./lib/useAppearance";
 import { checkAutomatically } from "./lib/updates";
+import { setClockPrefs } from "./lib/time";
 
 export default function App() {
   const view = useUi((s) => s.view);
+  // The clock and week start are read by plain helpers; a change redraws the whole app.
+  const timeFormat = useUi((s) => s.prefs.timeFormat);
+  const weekStart = useUi((s) => s.prefs.weekStart);
+  setClockPrefs({ timeFormat, weekStart });
   useGlobalShortcuts();
   useAppearance();
   const autoUpdates = useUi((s) => s.prefs.autoUpdates);
@@ -22,7 +27,7 @@ export default function App() {
     if (autoUpdates) checkAutomatically();
   }, [autoUpdates]);
   return (
-    <div className="app">
+    <div className="app" key={`${timeFormat}-${weekStart}`}>
       <Sidebar />
       {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : view === "space" ? <SpaceView /> : <CalendarView />}
       <EntityDialog />

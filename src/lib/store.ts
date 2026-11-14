@@ -37,8 +37,39 @@ export interface Prefs {
   showWeekends: boolean;
   eventMinutes: number;
   dayStartHour: number;
+  /** How strongly events are filled with their space colour. */
+  eventStrength: "soft" | "normal" | "strong";
+  timeFormat: "24h" | "12h";
+  /** 1 = Monday, 0 = Sunday. */
+  weekStart: 0 | 1;
+  /** The screen Milo opens on. "last" is where it was left. */
+  startView: "today" | "calendar" | "last";
+  /** Screens left out of the sidebar (still reachable from Settings and shortcuts). */
+  hiddenScreens: View[];
+  /** Order of the blocks on Today, and which are hidden. */
+  todayOrder: TodayBlock[];
+  todayHidden: TodayBlock[];
+  /** The welcome guide was finished or skipped. */
+  setupDone: boolean;
+  /** The "Getting started" card on Today was put away. */
+  startCardHidden: boolean;
 }
-export const DEFAULT_PREFS: Prefs = { theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true, autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7 };
+export type TodayBlock = "day" | "whatnow" | "inbox" | "confirm" | "routine" | "deadlines" | "wrapup";
+export const TODAY_BLOCKS: [TodayBlock, string][] = [
+  ["day", "Your day"],
+  ["whatnow", "What now?"],
+  ["inbox", "Inbox"],
+  ["confirm", "Medication and other checks"],
+  ["routine", "Routine"],
+  ["deadlines", "Deadlines"],
+  ["wrapup", "End of the day"],
+];
+export const DEFAULT_PREFS: Prefs = {
+  theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true,
+  autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7,
+  eventStrength: "normal", timeFormat: "24h", weekStart: 1, startView: "last", hiddenScreens: [],
+  todayOrder: TODAY_BLOCKS.map(([b]) => b), todayHidden: [], setupDone: false, startCardHidden: false,
+};
 export type InsightsPeriod = "week" | "month" | "semester";
 
 interface Notice {
@@ -72,6 +103,8 @@ interface UiState {
   spaceViewId: string | null;
   /** A task to point out in the list beside the calendar ("Plan time"). */
   planTaskId: string | null;
+  /** The welcome guide is open. */
+  setupOpen: boolean;
   openSpace: (id: string) => void;
   setCalMode: (mode: CalMode) => void;
   /** Show the day, week or month (by the current mode) that holds `d`. */
@@ -128,6 +161,7 @@ export const useUi = create<UiState>()(
       calMode: "week",
       spaceViewId: null,
       planTaskId: null,
+      setupOpen: false,
       openSpace: (id) => set({ view: "space", spaceViewId: id, selectedTaskId: null, selectedEventId: null }),
       setCalMode: (mode) =>
         set((s) => {
@@ -200,6 +234,11 @@ export const useUi = create<UiState>()(
       merge: (saved, current) => {
         const s = (saved ?? {}) as Partial<UiState>;
         const merged = { ...current, ...s, prefs: { ...DEFAULT_PREFS, ...(s.prefs ?? {}) } };
+        // The start screen from Settings, unless it is "where I left off".
+        if (merged.prefs.startView !== "last") merged.view = merged.prefs.startView;
+        // Blocks added to Today in a later version join the saved order at their place.
+        const known = new Set(merged.prefs.todayOrder);
+        merged.prefs.todayOrder = [...merged.prefs.todayOrder, ...TODAY_BLOCKS.map(([b]) => b).filter((b) => !known.has(b))];
         // The calendar opens on today, in the day, week or month view that was used last.
         merged.viewStart = startFor(merged.calMode ?? "week", new Date());
         // Import & export and Archive used to be pages of their own; they now live in Settings.

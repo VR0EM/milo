@@ -1,10 +1,12 @@
+import { fmtHour } from "../../lib/time";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, autostart, files } from "../../lib/api";
 import type { BackupFile } from "../../lib/types";
 import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
 import { useActivities, useGroups, useTaskTypes } from "../../lib/queries";
-import { useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
+import { TODAY_BLOCKS, useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
+import { NAV } from "../spaces/Sidebar";
 import { MOD_LABEL } from "../shortcuts/keys";
 import { Icon } from "../../components/Icon";
 import { HelpTip } from "../../components/HelpTip";
@@ -35,7 +37,56 @@ function Row({ title, info, children }: { title: string; info?: React.ReactNode;
   );
 }
 
-const SECTIONS = ["appearance", "calendar", "import", "archive", "data"];
+const SECTIONS = ["appearance", "today", "calendar", "import", "archive", "data"];
+
+/** A row of buttons for one choice. */
+function Choice<T extends string>({ value, label, options, onChange }: { value: T; label: string; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label={label}>
+      {options.map(([v, text]) => (
+        <button key={v} role="radio" aria-checked={value === v} className={value === v ? "on" : ""} onClick={() => onChange(v)}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Today's blocks: a tick to show each, and arrows to move it up or down. */
+function TodayBlocks() {
+  const order = useUi((s) => s.prefs.todayOrder);
+  const hidden = useUi((s) => s.prefs.todayHidden);
+  const setPrefs = useUi((s) => s.setPrefs);
+  const label = new Map(TODAY_BLOCKS);
+  const move = (i: number, d: number) => {
+    const next = [...order];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    setPrefs({ todayOrder: next });
+  };
+  return (
+    <ul className="order-list">
+      {order.map((b, i) => (
+        <li key={b}>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={!hidden.includes(b)}
+              onChange={(e) => setPrefs({ todayHidden: e.target.checked ? hidden.filter((x) => x !== b) : [...hidden, b] })}
+            />
+            <span>{label.get(b)}</span>
+          </label>
+          <span className="spacer" />
+          <button className="icon-btn" aria-label={`Move ${label.get(b)} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+            <span className="arrow up" aria-hidden><Icon name="chevron" size={12} /></span>
+          </button>
+          <button className="icon-btn" aria-label={`Move ${label.get(b)} down`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
+            <span className="arrow down" aria-hidden><Icon name="chevron" size={12} /></span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** A settings block that folds open and shut. Which ones are open is remembered. */
 function Section({ id, title, info, children }: { id: string; title: string; info?: React.ReactNode; children: React.ReactNode }) {
@@ -142,6 +193,42 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
+          <Row title="Event colours" info="How strongly events are filled with the colour of their space. Soft is calmer, strong is easier to tell apart.">
+            <Choice value={prefs.eventStrength} label="Event colours" options={[["soft", "Soft"], ["normal", "Normal"], ["strong", "Strong"]]} onChange={(eventStrength) => setPrefs({ eventStrength })} />
+          </Row>
+          <Row title="Clock" info="How times are shown everywhere in Milo. Typing a time works both ways: 14:30 or 2:30 pm.">
+            <Choice value={prefs.timeFormat} label="Clock" options={[["24h", "14:30"], ["12h", "2:30 pm"]]} onChange={(timeFormat) => setPrefs({ timeFormat })} />
+          </Row>
+          <Row title="Week starts on" info="The first day of the week in the calendar, the small month and Insights.">
+            <Choice value={String(prefs.weekStart)} label="Week starts on" options={[["1", "Monday"], ["0", "Sunday"]]} onChange={(v) => setPrefs({ weekStart: v === "0" ? 0 : 1 })} />
+          </Row>
+          <Row title="Open Milo on" info="The screen Milo shows when it starts.">
+            <select value={prefs.startView} onChange={(e) => setPrefs({ startView: e.target.value as typeof prefs.startView })}>
+              <option value="last">Where I left off</option>
+              <option value="today">Today</option>
+              <option value="calendar">Calendar</option>
+            </select>
+          </Row>
+          <Row title="In the sidebar" info="Screens you do not use can leave the sidebar. They stay reachable with the keyboard and nothing in them is lost.">
+            <div className="check-list">
+              {NAV.filter(([v]) => v !== "today").map(([v, label]) => (
+                <label key={v} className="check">
+                  <input
+                    type="checkbox"
+                    checked={!prefs.hiddenScreens.includes(v)}
+                    onChange={(e) =>
+                      setPrefs({ hiddenScreens: e.target.checked ? prefs.hiddenScreens.filter((x) => x !== v) : [...prefs.hiddenScreens, v] })
+                    }
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </Row>
+        </Section>
+
+        <Section id="today" title="Today" info="Which blocks Today shows, and in what order. Blocks with nothing to show stay out of the way by themselves.">
+          <TodayBlocks />
         </Section>
 
         <Section id="calendar" title="Calendar &amp; lists">
@@ -158,7 +245,7 @@ export function SettingsView() {
           </Row>
           <Row title="Open the calendar at" info="The hour shown at the top when the calendar opens. Earlier hours are a scroll away.">
             <select value={prefs.dayStartHour} onChange={(e) => setPrefs({ dayStartHour: Number(e.target.value) })}>
-              {Array.from({ length: 13 }, (_, h) => h).map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+              {Array.from({ length: 13 }, (_, h) => h).map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}
             </select>
           </Row>
           <Lists />

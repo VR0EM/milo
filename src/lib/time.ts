@@ -7,8 +7,17 @@ export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d
 export const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
 
-/** Monday as the first day of the week. */
-export const startOfWeek = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 6) % 7));
+// Two display choices from Settings, set once per render of the app (see App.tsx).
+let weekStartsOn: 0 | 1 = 1;
+let hour12 = false;
+export function setClockPrefs(prefs: { weekStart: 0 | 1; timeFormat: "24h" | "12h" }) {
+  weekStartsOn = prefs.weekStart;
+  hour12 = prefs.timeFormat === "12h";
+}
+export const weekStart = () => weekStartsOn;
+
+/** The first day of the week (Monday, or Sunday when chosen in Settings). */
+export const startOfWeek = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 7 - weekStartsOn) % 7));
 
 export const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -22,9 +31,23 @@ export const snapMinutes = (m: number, step = SNAP_MINUTES) => Math.round(m / st
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** 24-hour clock, e.g. 09:30. */
-export const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-export const fmtRange = (a: Date, b: Date) => `${fmtTime(a)} – ${fmtTime(b)}`;
+/** Always 24-hour "09:30": for fields and comparisons, never shown as a choice. */
+export const toTimeInput = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/** "14:30", or "2:30 pm" when Settings says 12-hour. */
+export const fmtHm = (hhmm: string) => {
+  if (!hour12) return hhmm;
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${pad(m)} ${h < 12 ? "am" : "pm"}`;
+};
+/** A time as shown everywhere: "09:30" or "9:30 am". */
+export const fmtTime = (d: Date) => fmtHm(toTimeInput(d));
+/** A whole hour for the calendar's side: "09:00" or "9 am". */
+export const fmtHour = (h: number) => (hour12 ? `${h % 12 || 12} ${h < 12 ? "am" : "pm"}` : `${pad(h)}:00`);
+/** "09:00 – 10:30", or "9:00 – 10:30 am" (the am/pm once when both are the same). */
+export const fmtRange = (a: Date, b: Date) => {
+  if (hour12 && a.getHours() < 12 === b.getHours() < 12) return `${fmtTime(a).replace(/ [ap]m$/, "")} – ${fmtTime(b)}`;
+  return `${fmtTime(a)} – ${fmtTime(b)}`;
+};
 
 export const toDateInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
@@ -33,12 +56,19 @@ export function fromInputs(date: string, time: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Lenient 24-hour input: "9", "930", "9:30", "09.30", "9h30" all work. Returns HH:MM or null. */
+/**
+ * Lenient time input: "9", "930", "9:30", "09.30", "9h30", and with am/pm "2pm", "2:30 pm".
+ * Returns HH:MM (24-hour) or null.
+ */
 export function parseTime(text: string): string | null {
-  const m = /^(\d{1,2})[:.h ]?(\d{2})?$/.exec(text.trim().toLowerCase());
+  const m = /^(\d{1,2})[:.h ]?(\d{2})?\s*(a|am|p|pm)?$/.exec(text.trim().toLowerCase().replace(/\./g, ":").replace(/:(?=\s*[ap])/, ""));
   if (!m) return null;
-  const h = Number(m[1]);
+  let h = Number(m[1]);
   const min = Number(m[2] ?? 0);
+  if (m[3]) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (m[3].startsWith("p") ? 12 : 0);
+  }
   return h < 24 && min < 60 ? `${pad(h)}:${pad(min)}` : null;
 }
 

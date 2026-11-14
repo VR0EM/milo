@@ -5,6 +5,7 @@ import { useAction, useActiveFocus, useActivities, useSpaces, useTasks } from ".
 import { useUi } from "../../lib/store";
 import { daysFromToday, fmtDuration, fmtRelativeDays, fmtTime, startOfDay } from "../../lib/time";
 import type { CalEvent, Task } from "../../lib/types";
+import { SpaceMark } from "../../components/Icon";
 
 /** After this hour the day counts as done; "free time" stops there. */
 const DAY_ENDS_AT = 22;
@@ -96,6 +97,9 @@ export function WhatNow({ now, live }: { now: Date; live: CalEvent[] }) {
     useUi.setState({ planTaskId: task.id });
   };
 
+  // Nothing to suggest: the block stays away instead of saying so.
+  if (!task) return null;
+
   return (
     <section className="block what-now">
       <div className="block-head">
@@ -107,7 +111,7 @@ export function WhatNow({ now, live }: { now: Date; live: CalEvent[] }) {
       ) : (
         <div className="suggestion" style={{ ["--c" as string]: colorVar(space?.color ?? "gray") }}>
           <div className="suggestion-main">
-            <span className="swatch big-sq" />
+            <SpaceMark icon={space?.icon} size={16} />
             <div className="suggestion-text">
               <div className="suggestion-title">{task.title || "Untitled"}</div>
               <div className="muted small">

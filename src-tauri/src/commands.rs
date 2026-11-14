@@ -15,169 +15,189 @@ async fn off_main<T: Send + 'static>(app: AppHandle, f: impl FnOnce(&Db) -> Resu
         .map_err(|e| crate::error::AppError::Invalid(e.to_string()))?
 }
 
+/// Set when a focus session starts, so the tray clock looks at once instead of at its next
+/// slow check. Starts true so a session still running from before a restart is found.
+pub static FOCUS_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
 macro_rules! conn {
     ($db:expr) => {
         &*$db.0.lock().unwrap_or_else(|e| e.into_inner())
     };
 }
 
-#[tauri::command]
+/// Runs a change as one transaction: all of it is saved, or none of it (also when a change
+/// takes several steps, like a repeat that writes many events).
+macro_rules! tx {
+    ($db:expr, |$c:ident| $body:expr) => {{
+        let guard = $db.0.lock().unwrap_or_else(|e| e.into_inner());
+        let t = guard.unchecked_transaction()?;
+        let out = {
+            let $c: &rusqlite::Connection = &t;
+            $body
+        }?;
+        t.commit()?;
+        Ok::<_, crate::error::AppError>(out)
+    }};
+}
+
+#[tauri::command(async)]
 pub fn list_groups(db: State<Db>) -> Result<Vec<Group>> {
     repo::list_groups(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_group(db: State<Db>, input: GroupInput) -> Result<Group> {
-    repo::create_group(conn!(db), input)
+    tx!(db, |c| repo::create_group(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_group(db: State<Db>, id: String, input: GroupInput) -> Result<Group> {
-    repo::update_group(conn!(db), &id, input)
+    tx!(db, |c| repo::update_group(c, &id, input))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_spaces(db: State<Db>) -> Result<Vec<Space>> {
     repo::list_spaces(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_space(db: State<Db>, input: SpaceInput) -> Result<Space> {
-    repo::create_space(conn!(db), input)
+    tx!(db, |c| repo::create_space(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_space(db: State<Db>, id: String, input: SpaceInput) -> Result<Space> {
-    repo::update_space(conn!(db), &id, input)
+    tx!(db, |c| repo::update_space(c, &id, input))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_activities(db: State<Db>) -> Result<Vec<Activity>> {
     repo::list_activities(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_activity(db: State<Db>, input: ActivityInput) -> Result<Activity> {
-    repo::create_activity(conn!(db), input)
+    tx!(db, |c| repo::create_activity(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_activity(db: State<Db>, id: String, input: ActivityInput) -> Result<Activity> {
-    repo::update_activity(conn!(db), &id, input)
+    tx!(db, |c| repo::update_activity(c, &id, input))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_events(db: State<Db>, from: String, to: String) -> Result<Vec<Event>> {
     repo::list_events(conn!(db), &from, &to)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_event(db: State<Db>, input: EventInput) -> Result<Event> {
-    repo::create_event(conn!(db), input, "manual")
+    tx!(db, |c| repo::create_event(c, input, "manual"))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_event(db: State<Db>, id: String, input: EventInput) -> Result<Event> {
-    repo::update_event(conn!(db), &id, input)
+    tx!(db, |c| repo::update_event(c, &id, input))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_task_types(db: State<Db>) -> Result<Vec<TaskType>> {
     repo::list_task_types(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_task_type(db: State<Db>, input: TaskTypeInput) -> Result<TaskType> {
-    repo::create_task_type(conn!(db), input)
+    tx!(db, |c| repo::create_task_type(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_task_type(db: State<Db>, id: String, input: TaskTypeInput) -> Result<TaskType> {
-    repo::update_task_type(conn!(db), &id, input)
+    tx!(db, |c| repo::update_task_type(c, &id, input))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_tasks(db: State<Db>) -> Result<Vec<Task>> {
     repo::list_tasks(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_task(db: State<Db>, input: TaskInput) -> Result<Task> {
-    repo::create_task(conn!(db), input)
+    tx!(db, |c| repo::create_task(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_task(db: State<Db>, id: String, input: TaskInput) -> Result<Task> {
-    repo::update_task(conn!(db), &id, input)
+    tx!(db, |c| repo::update_task(c, &id, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_task_completed(db: State<Db>, id: String, completed: bool) -> Result<Task> {
-    repo::set_task_completed(conn!(db), &id, completed)
+    tx!(db, |c| repo::set_task_completed(c, &id, completed))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_task_part(db: State<Db>, task_id: String, input: TaskPartInput) -> Result<Task> {
-    repo::create_task_part(conn!(db), &task_id, input)
+    tx!(db, |c| repo::create_task_part(c, &task_id, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_task_part(db: State<Db>, id: String, input: TaskPartInput) -> Result<Task> {
-    repo::update_task_part(conn!(db), &id, input)
+    tx!(db, |c| repo::update_task_part(c, &id, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_part_done(db: State<Db>, id: String, done: bool) -> Result<Task> {
-    repo::set_part_done(conn!(db), &id, done)
+    tx!(db, |c| repo::set_part_done(c, &id, done))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_routines(db: State<Db>) -> Result<Vec<Routine>> {
     repo::list_routines(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_routine(db: State<Db>, input: RoutineInput) -> Result<Routine> {
-    repo::create_routine(conn!(db), input)
+    tx!(db, |c| repo::create_routine(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_routine(db: State<Db>, id: String, input: RoutineInput) -> Result<Routine> {
-    repo::update_routine(conn!(db), &id, input)
+    tx!(db, |c| repo::update_routine(c, &id, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_routine_item(db: State<Db>, routine_id: String, title: String) -> Result<Routine> {
-    repo::create_routine_item(conn!(db), &routine_id, &title)
+    tx!(db, |c| repo::create_routine_item(c, &routine_id, &title))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_routine_item(db: State<Db>, id: String, title: String) -> Result<Routine> {
-    repo::update_routine_item(conn!(db), &id, &title)
+    tx!(db, |c| repo::update_routine_item(c, &id, &title))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_routine_checks(db: State<Db>, day: String) -> Result<Vec<String>> {
     repo::list_routine_checks(conn!(db), &day)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_routine_check(db: State<Db>, item_id: String, day: String, checked: bool) -> Result<()> {
-    repo::set_routine_check(conn!(db), &item_id, &day, checked)
+    tx!(db, |c| repo::set_routine_check(c, &item_id, &day, checked))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn active_focus(db: State<Db>) -> Result<Option<FocusSession>> {
     repo::active_focus(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_focus(app: AppHandle, db: State<Db>, input: FocusInput) -> Result<FocusSession> {
-    let s = repo::start_focus(conn!(db), input)?;
+    let s = tx!(db, |c| repo::start_focus(c, input))?;
+    FOCUS_STARTED.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = app.emit("data-changed", ()); // the small timer window follows
     Ok(s)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn finish_focus(app: AppHandle, db: State<Db>, id: String) -> Result<Event> {
-    let e = repo::finish_focus(conn!(db), &id)?;
+    let e = tx!(db, |c| repo::finish_focus(c, &id))?;
     let _ = app.emit("data-changed", ());
     Ok(e)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn discard_focus(app: AppHandle, db: State<Db>, id: String) -> Result<()> {
-    repo::discard_focus(conn!(db), &id)?;
+    tx!(db, |c| repo::discard_focus(c, &id))?;
     let _ = app.emit("data-changed", ());
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_reminder_rules(db: State<Db>) -> Result<Vec<ReminderRule>> {
     repo::list_reminder_rules(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_reminder_rule(db: State<Db>, input: ReminderRuleInput) -> Result<ReminderRule> {
-    repo::create_reminder_rule(conn!(db), input)
+    tx!(db, |c| repo::create_reminder_rule(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_reminder_rule(db: State<Db>, id: String, input: ReminderRuleInput) -> Result<ReminderRule> {
-    repo::update_reminder_rule(conn!(db), &id, input)
+    tx!(db, |c| repo::update_reminder_rule(c, &id, input))
 }
 /// Shows one notification right away, so the user can see what a reminder looks like.
 #[tauri::command]
@@ -186,12 +206,12 @@ pub fn send_test_reminder(app: tauri::AppHandle) -> Result<()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn follow_import(db: State<Db>, id: String) -> Result<Event> {
-    repo::follow_import(conn!(db), &id)
+    tx!(db, |c| repo::follow_import(c, &id))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_import_sources(db: State<Db>) -> Result<Vec<ImportSource>> {
     importer::list_sources(conn!(db))
 }
@@ -203,9 +223,9 @@ pub async fn add_calendar_link(app: AppHandle, input: ImportSourceInput) -> Resu
     })
     .await
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_import_source(db: State<Db>, id: String, input: ImportSourceInput) -> Result<ImportSource> {
-    importer::update_source(conn!(db), &id, input)
+    tx!(db, |c| importer::update_source(c, &id, input))
 }
 #[tauri::command]
 pub async fn sync_calendar_link(app: AppHandle, id: String) -> Result<SyncReport> {
@@ -224,19 +244,19 @@ pub async fn import_csv(app: AppHandle, path: String, title_column: usize, date_
     off_main(app, move |db| importer::import_csv(&db.lock(), &path, title_column, date_column, &space_id)).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_title_mappings(db: State<Db>) -> Result<Vec<TitleMapping>> {
     importer::list_mappings(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_title_mapping(db: State<Db>, input: TitleMappingInput) -> Result<TitleMapping> {
-    importer::create_mapping(conn!(db), input)
+    tx!(db, |c| importer::create_mapping(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_title_mapping(db: State<Db>, id: String, input: TitleMappingInput) -> Result<TitleMapping> {
-    importer::update_mapping(conn!(db), &id, input)
+    tx!(db, |c| importer::update_mapping(c, &id, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_unmapped_titles(db: State<Db>) -> Result<Vec<UnmappedTitle>> {
     importer::unmapped_titles(conn!(db))
 }
@@ -246,43 +266,43 @@ pub async fn export_all(app: AppHandle, path: String) -> Result<usize> {
     off_main(app, move |db| export::export_all(&db.lock(), &path)).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_insights(db: State<Db>, from: String, to: String) -> Result<Insights> {
     insights::insights_for(conn!(db), &from, &to)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_semesters(db: State<Db>) -> Result<Vec<Semester>> {
     insights::list_semesters(conn!(db))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_semester(db: State<Db>, input: SemesterInput) -> Result<Semester> {
-    insights::create_semester(conn!(db), input)
+    tx!(db, |c| insights::create_semester(c, input))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_semester(db: State<Db>, id: String, input: SemesterInput) -> Result<Semester> {
-    insights::update_semester(conn!(db), &id, input)
+    tx!(db, |c| insights::update_semester(c, &id, input))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_archived(db: State<Db>, query: String) -> Result<ArchiveList> {
     let (items, hidden_events) = archive::list_archived(conn!(db), &query)?;
     Ok(ArchiveList { items, hidden_events })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_confirmations(db: State<Db>) -> Result<Vec<Confirmation>> {
     reminders::confirmations(conn!(db), chrono::Local::now())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_confirmed(db: State<Db>, rule_id: String, occurrence: String, done: bool) -> Result<()> {
-    reminders::set_confirmed(conn!(db), &rule_id, &occurrence, done)
+    tx!(db, |c| reminders::set_confirmed(c, &rule_id, &occurrence, done))
 }
 
 fn backup_dir(app: &AppHandle) -> Result<std::path::PathBuf> {
     Ok(app.path().app_data_dir().map_err(|e| crate::error::AppError::Invalid(e.to_string()))?.join("backups"))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_settings(app: AppHandle, db: State<Db>) -> Result<BackupSettings> {
     let mirror_dir = repo::get_setting(conn!(db), "backup_mirror_dir")?.filter(|v| !v.is_empty());
     Ok(BackupSettings { mirror_dir, backups: backup::list(&backup_dir(&app)?) })
@@ -398,43 +418,49 @@ pub fn app_info(app: AppHandle) -> Result<AppInfo> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_archived(db: State<Db>, entity: String, id: String, archived: bool) -> Result<()> {
-    repo::set_archived(conn!(db), &entity, &id, archived)
+    tx!(db, |c| repo::set_archived(c, &entity, &id, archived))
 }
 
 // ---------- repeating events ----------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_series(db: State<Db>) -> Result<Vec<EventSeries>> {
     crate::series::list(conn!(db))
 }
 
 /// Makes an event repeat from now on (this and the following ones), or stops it with `None`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_repeat(db: State<Db>, id: String, rule: Option<RepeatRule>) -> Result<Event> {
-    crate::series::set_repeat(conn!(db), &id, rule, chrono::Utc::now())
+    tx!(db, |c| crate::series::set_repeat(c, &id, rule, chrono::Utc::now()))
 }
 
 // ---------- inbox and quick capture ----------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_inbox(db: State<Db>) -> Result<Vec<InboxItem>> {
     repo::list_inbox(conn!(db))
 }
 
 /// Saves a quick note. The main window hears about it, also when the note came from the
 /// small capture window.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_inbox(app: AppHandle, db: State<Db>, text: String) -> Result<InboxItem> {
-    let item = repo::add_inbox(conn!(db), &text)?;
+    let item = tx!(db, |c| repo::add_inbox(c, &text))?;
     let _ = app.emit("data-changed", ());
     Ok(item)
 }
 
-#[tauri::command]
+/// Turns a note into a task in one step: the task is made and the note handled together.
+#[tauri::command(async)]
+pub fn inbox_to_task(db: State<Db>, id: String, space_id: String) -> Result<Task> {
+    tx!(db, |c| repo::inbox_to_task(c, &id, &space_id))
+}
+
+#[tauri::command(async)]
 pub fn set_inbox_done(db: State<Db>, id: String, done: bool) -> Result<()> {
-    repo::set_inbox_done(conn!(db), &id, done)
+    tx!(db, |c| repo::set_inbox_done(c, &id, done))
 }
 
 pub const CAPTURE: &str = "capture";
@@ -486,4 +512,22 @@ pub fn hide_capture(app: AppHandle) -> Result<()> {
         let _ = w.hide();
     }
     Ok(())
+}
+
+// ---------- earlier versions ----------
+
+#[tauri::command(async)]
+pub fn list_changes(db: State<Db>, entity: String, id: String) -> Result<Vec<Change>> {
+    crate::history::list(conn!(db), &entity, &id)
+}
+
+/// Puts an event or task back the way an earlier version has it.
+#[tauri::command(async)]
+pub fn restore_change(db: State<Db>, id: String) -> Result<()> {
+    tx!(db, |c| crate::history::restore(c, &id)).map(|_| ())
+}
+
+#[tauri::command(async)]
+pub fn reorder_spaces(db: State<Db>, ids: Vec<String>) -> Result<()> {
+    tx!(db, |c| repo::reorder_spaces(c, &ids))
 }

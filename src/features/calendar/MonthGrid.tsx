@@ -2,11 +2,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { colorVar } from "../../lib/colors";
 import { useCreateEvent, useUpdateEvent } from "../../lib/queries";
 import { useUi } from "../../lib/store";
-import { addDays, fmtLongDay, fmtTime, sameDay, startOfDay, startOfWeek } from "../../lib/time";
+import { addDays, fmtLongDay, fmtTime, fmtWeekday, sameDay, startOfDay, startOfWeek, weekStart } from "../../lib/time";
 import type { CalEvent, Space, Task } from "../../lib/types";
 import { lanesPerColumn, layoutSpans } from "./spans";
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 /** Height of one line in a day cell, and the room above the first line. Keep in step with the CSS. */
 const ITEM_PX = 22;
 const HEAD_PX = 30;
@@ -47,6 +47,8 @@ export function MonthGrid({ month, weekends, events, tasks, spaces, defaultSpace
   const updateEvent = useUpdateEvent();
   const weeks = useMemo(() => monthWeeks(month), [month.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
   const cols = weekends ? 7 : 5;
+  // Without weekends the five columns are Monday to Friday, also when weeks start on Sunday.
+  const firstCol = !weekends && weekStart() === 0 ? 1 : 0;
   const today = new Date();
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -101,7 +103,7 @@ export function MonthGrid({ month, weekends, events, tasks, spaces, defaultSpace
     if (!row?.dataset.week) return null;
     const r = row.getBoundingClientRect();
     const col = Math.min(cols - 1, Math.max(0, Math.floor(((x - r.left) / r.width) * cols)));
-    return addDays(new Date(Number(row.dataset.week)), col);
+    return addDays(new Date(Number(row.dataset.week)), firstCol + col);
   };
 
   /** Drag an event to another day: it keeps its times and length. A press without moving is a click. */
@@ -129,10 +131,20 @@ export function MonthGrid({ month, weekends, events, tasks, spaces, defaultSpace
       if (!moved || !over) return;
       const shift = Math.round((startOfDay(over).getTime() - startOfDay(grab).getTime()) / DAY_MS);
       if (shift === 0) return;
-      updateEvent.mutate({
-        id: ev.id,
-        patch: { startAt: addDays(new Date(ev.startAt), shift).toISOString(), endAt: addDays(new Date(ev.endAt), shift).toISOString() },
-      });
+      const before = { startAt: ev.startAt, endAt: ev.endAt };
+      updateEvent.mutate(
+        {
+          id: ev.id,
+          patch: { startAt: addDays(new Date(ev.startAt), shift).toISOString(), endAt: addDays(new Date(ev.endAt), shift).toISOString() },
+        },
+        {
+          onSuccess: () =>
+            useUi.getState().notify({
+              text: `Moved to ${fmtLongDay(addDays(new Date(ev.startAt), shift))}`,
+              undo: () => updateEvent.mutate({ id: ev.id, patch: before }),
+            }),
+        },
+      );
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -144,11 +156,11 @@ export function MonthGrid({ month, weekends, events, tasks, spaces, defaultSpace
   return (
     <div className="month" style={{ ["--cols" as string]: cols }}>
       <div className="month-head">
-        {WEEKDAYS.slice(0, cols).map((w) => <span key={w}>{w}</span>)}
+        {Array.from({ length: cols }, (_, i) => addDays(weeks[0], firstCol + i)).map((d) => <span key={d.getDay()}>{fmtWeekday(d)}</span>)}
       </div>
       <div className="month-grid" ref={gridRef} style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
         {weeks.map((w) => {
-          const days = Array.from({ length: cols }, (_, i) => addDays(w, i));
+          const days = Array.from({ length: cols }, (_, i) => addDays(w, firstCol + i));
           const spans = layoutSpans(events, days);
           // Bars use at most all lines but one, so there is always room to say what is hidden.
           const laneCap = Math.max(0, fits - 1);

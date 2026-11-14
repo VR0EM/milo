@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Icon, type IconName } from "../../components/Icon";
+import { Icon, SpaceMark, type IconName } from "../../components/Icon";
 import { colorVar } from "../../lib/colors";
-import { useActiveFocus, useGroups, useInbox, useSpaces } from "../../lib/queries";
+import { useAction, useActiveFocus, useGroups, useInbox, useSpaces } from "../../lib/queries";
+import { api } from "../../lib/api";
 import { useUi, type View } from "../../lib/store";
 import { fmtClock } from "../../lib/time";
 import type { Space } from "../../lib/types";
@@ -116,7 +117,11 @@ function UpdateNotice() {
   );
 }
 
+/** The screens in the sidebar, without the ones hidden in Settings. Cmd/Ctrl+1… follow this. */
+export const visibleNav = (hidden: View[]) => NAV.filter(([v]) => v === "today" || !hidden.includes(v));
+
 export function Sidebar() {
+  const hiddenScreens = useUi((s) => s.prefs.hiddenScreens);
   const groups = (useGroups().data ?? []).filter((g) => !g.deletedAt);
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const hidden = useUi((s) => s.hiddenSpaceIds);
@@ -128,17 +133,71 @@ export function Sidebar() {
   const groupIds = new Set(groups.map((g) => g.id));
   const loose = spaces.filter((s) => !s.groupId || !groupIds.has(s.groupId));
 
+  // ---- dragging a space up or down within its list sets the order -------------------------
+  const reorder = useAction("spaces");
+  const [drag, setDrag] = useState<{ id: string; ids: string[]; over: number } | null>(null);
+  const justDragged = useRef(false);
+  const pressRow = (e: React.PointerEvent, s: Space, list: Space[]) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest(".space-toggle, .link")) return;
+    const y0 = e.clientY;
+    const ids = list.map((x) => x.id);
+    let moving = false;
+    let over = ids.indexOf(s.id);
+    const onMove = (m: PointerEvent) => {
+      if (!moving && Math.abs(m.clientY - y0) < 5) return;
+      moving = true;
+      justDragged.current = true;
+      over = ids.length;
+      for (let i = 0; i < ids.length; i++) {
+        const r = document.querySelector(`[data-space-row="${ids[i]}"]`)?.getBoundingClientRect();
+        if (r && m.clientY < r.top + r.height / 2) {
+          over = i;
+          break;
+        }
+      }
+      setDrag({ id: s.id, ids, over });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDrag(null);
+      setTimeout(() => (justDragged.current = false), 0);
+      if (!moving) return;
+      const from = ids.indexOf(s.id);
+      const next = ids.filter((x) => x !== s.id);
+      next.splice(over > from ? over - 1 : over, 0, s.id);
+      if (next.join() !== ids.join()) reorder.mutate(() => api.reorderSpaces(next));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   // The coloured square shows or hides the space in the calendar; the name opens its overview.
-  const row = (s: Space) => {
+  const row = (s: Space, list: Space[]) => {
     const shown = !hidden.includes(s.id);
     const current = view === "space" && spaceViewId === s.id;
+    const i = list.indexOf(s);
+    const dropHere = drag && drag.ids.includes(s.id) && drag.over === i && drag.id !== s.id;
+    const dropAfter = drag && drag.ids.includes(s.id) && drag.over === list.length && i === list.length - 1;
     return (
-      <li key={s.id} className={`side-row space-row-side${current ? " current" : ""}${shown ? "" : " hidden-space"}`}>
-        <label className="space-toggle" title={shown ? "Hide in the calendar" : "Show in the calendar"}>
+      <li
+        key={s.id}
+        data-space-row={s.id}
+        onPointerDown={(e) => pressRow(e, s, list)}
+        className={[
+          "side-row space-row-side",
+          current ? "current" : "",
+          shown ? "" : "hidden-space",
+          drag?.id === s.id ? "dragging" : "",
+          dropHere ? "drop-before" : "",
+          dropAfter ? "drop-after" : "",
+        ].join(" ")}
+      >
+        <label className="space-toggle" title={shown ? "Hide in the calendar" : "Show in the calendar"} style={{ ["--c" as string]: colorVar(s.color) }}>
           <input type="checkbox" aria-label={`Show ${s.name} in the calendar`} checked={shown} onChange={() => toggleSpace(s.id)} />
-          <span className="swatch" style={{ ["--c" as string]: colorVar(s.color) }} />
+          <SpaceMark icon={s.icon} filled={false} />
         </label>
-        <button className="space-open" aria-current={current ? "page" : undefined} onClick={() => useUi.getState().openSpace(s.id)}>
+        <button className="space-open" aria-current={current ? "page" : undefined} title="Open, or drag to reorder" onClick={() => !justDragged.current && useUi.getState().openSpace(s.id)}>
           <span className="side-name">{s.name}</span>
         </button>
         <button className="link" onClick={() => openDialog({ kind: "space", item: s })}>Edit</button>
@@ -154,7 +213,7 @@ export function Sidebar() {
       </div>
 
       <ul className="nav">
-        {NAV.map(([v, label, icon], i) => (
+        {visibleNav(hiddenScreens).map(([v, label, icon], i) => (
           <li key={v}>
             <NavButton view={v} label={label} icon={icon} shortcut={String(i + 1)} />
           </li>
@@ -167,7 +226,7 @@ export function Sidebar() {
           <h2>Spaces</h2>
           <AddMenu />
         </div>
-        <ul>{loose.map(row)}</ul>
+        <ul>{loose.map((s) => row(s, loose))}</ul>
         {groups.map((g) => {
           const members = spaces.filter((s) => s.groupId === g.id);
           const open = !collapsed.includes(g.id);
@@ -181,7 +240,18 @@ export function Sidebar() {
                 </button>
                 <button className="link" onClick={() => openDialog({ kind: "group", item: g })}>Edit</button>
               </div>
-              {open && <ul className="group-members">{members.map(row)}</ul>}
+              {open && (
+                <ul className="group-members">
+                  {members.map((s) => row(s, members))}
+                  {members.length === 0 && (
+                    <li className="side-row">
+                      <button className="link side-add" onClick={() => openDialog({ kind: "space", groupId: g.id })}>
+                        <Icon name="plus" size={12} /> Add a space
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              )}
             </div>
           );
         })}

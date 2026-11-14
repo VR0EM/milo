@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useUi } from "../../lib/store";
-import { NAV } from "../spaces/Sidebar";
+import { visibleNav } from "../spaces/Sidebar";
 import { IS_MAC, MOD_LABEL, isTyping, CAPTURE_KEY } from "./keys";
 
 /** App-wide keys: switching screens and opening this overview. */
@@ -9,9 +9,10 @@ export function useGlobalShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       const mod = IS_MAC ? e.metaKey : e.ctrlKey;
       const n = Number(e.key);
-      if (mod && !e.shiftKey && !e.altKey && n >= 1 && n <= NAV.length) {
+      const nav = visibleNav(useUi.getState().prefs.hiddenScreens);
+      if (mod && !e.shiftKey && !e.altKey && n >= 1 && n <= nav.length) {
         e.preventDefault();
-        useUi.getState().setView(NAV[n - 1][0]);
+        useUi.getState().setView(nav[n - 1][0]);
         return;
       }
       if (mod && e.key === ",") {
@@ -46,7 +47,7 @@ export function ShortcutsDialog() {
       <table className="keys">
         <tbody>
           <tr><td colSpan={2}><h3>Everywhere</h3></td></tr>
-          {NAV.map(([, label], i) => (
+          {visibleNav(useUi.getState().prefs.hiddenScreens).map(([, label], i) => (
             <tr key={label}><td>{k(`${MOD_LABEL}${i + 1}`)}</td><td>{label}</td></tr>
           ))}
           <tr><td>{k(`${MOD_LABEL},`)}</td><td>Settings</td></tr>

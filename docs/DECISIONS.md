@@ -334,3 +334,45 @@ The core is ready for it without changes:
    `list_tasks`), so it sees exactly what the user sees.
 5. The layer is off by default, behind a setting, and is the only part of Milo that would ever
    talk to a model; with it off, no data leaves the machine.
+
+## Backend hardening (after 0.3.3)
+
+- **A copy before every database update.** When a new version has migrations to run, `db::open`
+  first writes `backups/milo-before-vN-<date-time>.sqlite` (VACUUM INTO). It is listed and
+  restorable in Settings like the daily backups ("…, before an update"); the backup list is now
+  sorted by file time. A copy that cannot be made is logged and does not block starting.
+  A test updates a real schema-8 database with data in it and checks nothing is lost.
+- **Database commands run off the main thread** (`#[tauri::command(async)]`), so the window
+  never waits on the database. Window commands stay on the main thread.
+- **Every change is one transaction** (`tx!` in commands.rs): all of it is saved or none of it,
+  also for changes with many steps (a repeat that writes 180 events, stopping focus, parts).
+  "Make task" from the Inbox is one command (`inbox_to_task`). `synchronous=NORMAL` with WAL:
+  safe against corruption, and no disk flush per change.
+- **The focus clock checks the database every 30 seconds when no session runs**, and every
+  second while one does. Starting a session wakes it at once.
+- **Earlier versions of events and tasks** (`change_log`, history.rs). Before an edit changes an
+  item, its state is kept as JSON; edits within two minutes count as one version, and saving
+  without a change keeps none. The panel shows "Earlier versions" with what differed and
+  Restore; a restore keeps the state before it too, so it can be undone. Dragging or resizing an
+  event shows "Event moved · Undo". Sync updates of imported events are not versions.
+
+## Fuller and more personal (after 0.3.3)
+
+- **An icon per space** (`spaces.icon`, migration 011), drawn in the app's own icon style and
+  shown in the space colour: sidebar, space overview, Today, the task list beside the calendar.
+  The seeds get one (Personal: home, Sleep: moon, Transport: bus). No icon keeps the square.
+- **Spaces can be dragged up or down in the sidebar** (within their list) to set the order.
+  An empty group shows "Add a space" instead of nothing.
+- **Appearance choices** in Settings: event colour strength (soft / normal / strong, a factor
+  on the theme's own fill), clock (24-hour or am/pm, for display; typing accepts both), the
+  first day of the week (Monday or Sunday), the screen Milo opens on, and which screens are in
+  the sidebar (Today always is; hidden screens keep their keyboard shortcut order).
+- **Today is built from blocks** in an order chosen in Settings > Today, each shown only when it
+  has something to say: Your day (all-day items and every event with its time, a "now" line,
+  time left for what runs), What now?, Inbox, checks, Routine, Deadlines, and from 17:00 End of
+  the day (productive time and tasks done today, and what tomorrow starts with; no score).
+  The title greets by the time of day. While Milo is still empty, one "Let Milo fill up" card
+  replaces the many "nothing" lines.
+- **An empty Insights period** explains how Insights fills up, with a way to start, instead of
+  a page of zeros.
+

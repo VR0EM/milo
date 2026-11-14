@@ -4,9 +4,10 @@ import { TimeField } from "../../components/TimeField";
 import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
 import { useArchiveWithUndo, useEvents, useImportSources, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
-import { addDays, fmtDuration, fmtRange, fmtTime, fromInputs, startOfDay, toDateInput } from "../../lib/time";
+import { addDays, fmtDuration, fmtRange, fromInputs, startOfDay, toDateInput, toTimeInput } from "../../lib/time";
 import { type CalEvent, type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
 import { deadlineLine } from "./TasksView";
+import { EarlierVersions } from "../history/EarlierVersions";
 
 interface Props {
   task: Task | null;
@@ -33,6 +34,9 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
   const titleRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
+  // Changed from elsewhere (a restored version): show the new text.
+  useEffect(() => setTitle(task.title), [task.title]);
+  useEffect(() => setNotes(task.notes), [task.notes]);
   const [newPart, setNewPart] = useState("");
 
   useEffect(() => {
@@ -139,6 +143,8 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== task.notes && save({ notes })} />
       </label>
 
+      <EarlierVersions entity="task" item={task} />
+
       <div className="panel-foot">
         <button
           type="button"
@@ -200,11 +206,11 @@ function MomentField({ label, value, onChange }: { label: string; value: string 
     <div className="field-row moment">
       <label className="field">
         <span>{label}</span>
-        <input type="date" value={d ? toDateInput(d) : ""} onChange={(e) => set(e.target.value, d ? fmtTime(d) : "23:59")} />
+        <input type="date" value={d ? toDateInput(d) : ""} onChange={(e) => set(e.target.value, d ? toTimeInput(d) : "23:59")} />
       </label>
       <label className="field time">
         <span>Time</span>
-        {d ? <TimeField value={fmtTime(d)} onCommit={(t) => set(toDateInput(d), t)} /> : <input disabled placeholder="hh:mm" />}
+        {d ? <TimeField value={toTimeInput(d)} onCommit={(t) => set(toDateInput(d), t)} /> : <input disabled placeholder="hh:mm" />}
       </label>
       {d && <button type="button" className="link clear" onClick={() => onChange(null)}>Clear</button>}
     </div>

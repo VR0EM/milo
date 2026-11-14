@@ -23,6 +23,8 @@ pub struct Space {
     pub name: String,
     pub color: String,
     pub role: String,
+    /// A drawn icon name from the app's set, or None for the plain square.
+    pub icon: Option<String>,
     pub sort_order: i64,
     pub deleted_at: Option<String>,
 }
@@ -34,6 +36,8 @@ pub struct SpaceInput {
     pub name: String,
     pub color: String,
     pub role: String,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -497,4 +501,14 @@ pub struct EventSeries {
     pub id: String,
     pub rule: RepeatRule,
     pub first_date: String,
+}
+
+/// An earlier version of an event or task.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Change {
+    pub id: String,
+    pub created_at: String,
+    /// The item as it was, in the same shape the app reads it.
+    pub snapshot: serde_json::Value,
 }

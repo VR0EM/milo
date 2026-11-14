@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { parseTime } from "../lib/time";
+import { fmtHm, parseTime } from "../lib/time";
 
 /**
- * A plain 24-hour time field. The native time input follows the system locale
- * (AM/PM on some machines), which would disagree with the calendar grid.
+ * A plain time field that shows the clock chosen in Settings (24-hour or am/pm) and reads
+ * either. The native time input follows the system locale, which could disagree with Milo.
+ * `value` and what `onCommit` gets are always 24-hour "HH:MM".
  */
 export function TimeField({ value, onCommit }: { value: string; onCommit: (hhmm: string) => void }) {
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
+  const [text, setText] = useState(fmtHm(value));
+  useEffect(() => setText(fmtHm(value)), [value]);
   const commit = () => {
     const parsed = parseTime(text);
     if (parsed && parsed !== value) onCommit(parsed);
-    else setText(value);
+    else setText(fmtHm(value));
   };
   return (
     <input

@@ -5,6 +5,7 @@ import { useUi } from "../../lib/store";
 import { daysFromToday, fmtRelativeDays } from "../../lib/time";
 import type { Task } from "../../lib/types";
 import { pressTask, useTaskDrag } from "./taskDrag";
+import { SpaceMark } from "../../components/Icon";
 
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 
@@ -56,7 +57,7 @@ export function TaskTray() {
                 onPointerDown={(e) => mode !== "month" && pressTask(e, t)}
                 title={mode === "month" ? undefined : "Drag onto the calendar"}
               >
-                <span className="swatch big-sq" />
+                <SpaceMark icon={spaceById.get(t.spaceId)?.icon} />
                 <span className="tray-title">{t.title || "Untitled"}</span>
                 {days !== null && <span className={`tray-due small${days < 0 ? " late" : ""}`}>{fmtRelativeDays(days)}</span>}
               </div>

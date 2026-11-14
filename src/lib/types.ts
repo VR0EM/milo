@@ -16,10 +16,12 @@ export interface Space {
   name: string;
   color: string;
   role: SpaceRole;
+  /** A drawn icon name (see SPACE_ICONS), or null for the plain square. */
+  icon: string | null;
   sortOrder: number;
   deletedAt: string | null;
 }
-export type SpaceInput = Pick<Space, "groupId" | "name" | "color" | "role">;
+export type SpaceInput = Pick<Space, "groupId" | "name" | "color" | "role"> & { icon?: string | null };
 
 export type ActivityCategory = "class" | "self_study" | "other";
 export interface Activity {
@@ -71,6 +73,13 @@ export interface EventSeries {
   id: string;
   rule: RepeatRule;
   firstDate: string;
+}
+
+/** An earlier version of an event or task; `snapshot` has the same shape as the item. */
+export interface Change {
+  id: string;
+  createdAt: string;
+  snapshot: Record<string, unknown>;
 }
 
 export interface InboxItem {

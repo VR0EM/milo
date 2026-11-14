@@ -36,11 +36,7 @@ export function InboxBlock() {
     const spaceId = (spaces.find((s) => s.id === lastSpaceId) ?? spaces[0])?.id;
     if (!spaceId) return;
     act.mutate(
-      async () => {
-        const task = await api.createTask({ spaceId, typeId: null, title: item.text, notes: "", deadlineAt: null, targetAt: null, priority: null });
-        await api.setInboxDone(item.id, true);
-        return task;
-      },
+      () => api.inboxToTask(item.id, spaceId),
       {
         onSuccess: (task) => {
           const ui = useUi.getState();

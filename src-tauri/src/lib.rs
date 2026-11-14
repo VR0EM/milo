@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod error;
 mod export;
+mod history;
 mod ics;
 mod importer;
 mod insights;
@@ -146,11 +147,19 @@ pub fn run() {
             // Focus: once a second while a session runs, the time left shows next to the tray
             // icon (macOS menu bar) and in its tooltip (Windows). A session forgotten an hour past
             // its plan is saved by itself, so it always leaves an event in the calendar.
+            // Without a session the database is asked only every 30 seconds; starting one from
+            // Milo wakes this up at once (FOCUS_STARTED).
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut showing = false;
+                let mut tick: u64 = 0;
                 loop {
                     std::thread::sleep(Duration::from_secs(1));
+                    tick += 1;
+                    let started = commands::FOCUS_STARTED.swap(false, std::sync::atomic::Ordering::Relaxed);
+                    if !showing && !started && !tick.is_multiple_of(30) {
+                        continue;
+                    }
                     let (left, forgotten) = {
                         let db = handle.state::<Db>();
                         let conn = db.lock();
@@ -210,7 +219,15 @@ pub fn run() {
                 loop {
                     let db = handle.state::<Db>();
                     // Repeating events keep half a year ahead in the calendar.
-                    match series::extend(&db.lock(), chrono::Utc::now()) {
+                    let extended = {
+                        let conn = db.lock();
+                        conn.unchecked_transaction().map_err(Into::into).and_then(|t| {
+                            let n = series::extend(&t, chrono::Utc::now())?;
+                            t.commit()?;
+                            Ok::<_, error::AppError>(n)
+                        })
+                    };
+                    match extended {
                         Ok(n) if n > 0 => {
                             let _ = handle.emit("data-changed", ());
                         }
@@ -305,6 +322,10 @@ pub fn run() {
             commands::list_inbox,
             commands::add_inbox,
             commands::set_inbox_done,
+            commands::inbox_to_task,
+            commands::list_changes,
+            commands::restore_change,
+            commands::reorder_spaces,
             commands::open_capture,
             commands::hide_capture,
         ])

@@ -8,6 +8,10 @@ export function useAppearance() {
   const customAccent = useUi((s) => s.prefs.customAccent);
   const font = useUi((s) => s.prefs.font);
   const textSize = useUi((s) => s.prefs.textSize);
+  const strength = useUi((s) => s.prefs.eventStrength);
+  useEffect(() => {
+    document.documentElement.dataset.events = strength;
+  }, [strength]);
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "system") root.removeAttribute("data-theme");

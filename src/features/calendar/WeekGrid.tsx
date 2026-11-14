@@ -3,7 +3,7 @@ import { colorVar } from "../../lib/colors";
 import { useActivities, useCreateEvent, useUpdateEvent } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import {
-  MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes, startOfDay,
+  MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes, startOfDay, fmtHour,
 } from "../../lib/time";
 import type { CalEvent, Space, Task } from "../../lib/types";
 import { firstShown, shiftShown, shownDistance } from "./days";
@@ -294,7 +294,19 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
       if (mode === "create") {
         createNew(times.startAt, times.endAt, clear);
       } else if (done.start.getTime() !== s0 || done.end.getTime() !== e0) {
-        updateEvent.mutate({ id: ev!.id, patch: times }, { onSettled: clear });
+        const id = ev!.id;
+        updateEvent.mutate(
+          { id, patch: times },
+          {
+            onSettled: clear,
+            // One step back is always at hand; older versions are in the panel.
+            onSuccess: () =>
+              useUi.getState().notify({
+                text: mode === "move" ? "Event moved" : "Event changed",
+                undo: () => updateEvent.mutate({ id, patch: { startAt: new Date(s0).toISOString(), endAt: new Date(e0).toISOString() } }),
+              }),
+          },
+        );
       } else {
         clear();
       }
@@ -478,7 +490,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
         <div className="gutter">
           {HOURS.slice(1).map((h) => (
             <div key={h} className="hour-label" style={{ top: h * hourHeight }}>
-              {String(h).padStart(2, "0")}:00
+              {fmtHour(h)}
             </div>
           ))}
         </div>

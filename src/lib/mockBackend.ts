@@ -10,9 +10,9 @@ const base = (id: string, sortOrder: number) => ({ id, sortOrder, createdAt: ts(
 const tables: Record<string, Row[]> = {
   group: [{ ...base("seed-group-school", 0), name: "School" }],
   space: [
-    { ...base("seed-space-personal", 0), groupId: null, name: "Personal", color: "blue", role: "normal" },
-    { ...base("seed-space-sleep", 1), groupId: null, name: "Sleep", color: "purple", role: "sleep" },
-    { ...base("seed-space-transport", 2), groupId: null, name: "Transport", color: "gray", role: "normal" },
+    { ...base("seed-space-personal", 0), groupId: null, name: "Personal", color: "blue", role: "normal", icon: "home" },
+    { ...base("seed-space-sleep", 1), groupId: null, name: "Sleep", color: "purple", role: "sleep", icon: "moon" },
+    { ...base("seed-space-transport", 2), groupId: null, name: "Transport", color: "gray", role: "normal", icon: "bus" },
   ],
   activity: [
     { ...base("seed-activity-class", 0), name: "Class", category: "class" },
@@ -23,6 +23,7 @@ const tables: Record<string, Row[]> = {
   event: [],
   series: [],
   inbox: [],
+  change: [],
   task_type: [
     { ...base("seed-type-assignment", 0), name: "Assignment" },
     { ...base("seed-type-theory", 1), name: "Theory" },
@@ -124,6 +125,16 @@ function setRepeat(id: string, rule: Row | null): Row {
   return { ...e };
 }
 
+/** Browser stand-in for history.rs: keeps the old version, one per two minutes of edits. */
+function remember(entity: string, id: string, input: Row) {
+  const row = tables[entity].find((r) => r.id === id);
+  if (!row) return;
+  if (Object.keys(input).every((k) => row[k] === input[k] || (row[k] ?? null) === (input[k] ?? null))) return;
+  const last = tables.change.filter((c) => c.entity === entity && c.entityId === id).sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0];
+  if (last && Date.now() - new Date(last.createdAt).getTime() < 120_000) return;
+  tables.change.push({ ...base(crypto.randomUUID(), 0), entity, entityId: id, snapshot: { ...row } });
+}
+
 function checkEvent(input: Row) {
   if (input.endAt <= input.startAt) throw "An event must end after it starts";
 }
@@ -132,7 +143,8 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
   const out = ((): unknown => {
     switch (cmd) {
       case "list_groups": return tables.group.map((r) => ({ ...r }));
-      case "list_spaces": return tables.space.map((r) => ({ ...r }));
+      case "list_spaces": return tables.space.map((r): Row => ({ icon: null, ...r })).sort((x, y) => x.sortOrder - y.sortOrder);
+      case "reorder_spaces": (a.ids as string[]).forEach((id, i) => { const r = tables.space.find((x) => x.id === id); if (r) r.sortOrder = i; }); return null;
       case "list_activities": return tables.activity.map((r) => ({ ...r }));
       case "create_group": return create("group", a.input);
       case "update_group": return update("group", a.id, a.input);
@@ -146,13 +158,13 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           .sort((x, y) => x.startAt.localeCompare(y.startAt))
           .map((r) => ({ ...r }));
       case "create_event": checkEvent(a.input); return create("event", { taskId: null, ...a.input }, { source: "manual", sourceId: null, locallyModified: false, seriesId: null });
-      case "update_event": checkEvent(a.input); return update("event", a.id, a.input);
+      case "update_event": checkEvent(a.input); remember("event", a.id, a.input); return update("event", a.id, a.input);
       case "list_task_types": return tables.task_type.map((r) => ({ ...r }));
       case "create_task_type": return create("task_type", a.input);
       case "update_task_type": return update("task_type", a.id, a.input);
       case "list_tasks": return tables.task.filter((t) => !t.deletedAt).map((t) => taskView(t.id));
       case "create_task": return taskView(create("task", a.input, { completedAt: null, sourceId: null, locallyModified: false }).id);
-      case "update_task": return taskView(update("task", a.id, a.input).id);
+      case "update_task": remember("task", a.id, a.input); return taskView(update("task", a.id, a.input).id);
       case "set_task_completed":
         if (taskView(a.id).parts.length) throw "This task is completed by finishing its parts";
         return taskView(update("task", a.id, { completedAt: a.completed ? ts() : null }).id);
@@ -213,6 +225,30 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         return create("inbox", { text: String(a.text).trim() });
       case "set_inbox_done": update("inbox", a.id, { deletedAt: a.done ? ts() : null }); return null;
       case "open_capture": case "hide_capture": return null;
+      case "inbox_to_task": {
+        const note = tables.inbox.find((r) => r.id === a.id && !r.deletedAt);
+        if (!note) throw "Not found";
+        const t = create("task", { spaceId: a.spaceId, typeId: null, title: note.text, notes: "", deadlineAt: null, targetAt: null, priority: null }, { completedAt: null, sourceId: null, locallyModified: false });
+        note.deletedAt = ts();
+        return taskView(t.id);
+      }
+      case "list_changes":
+        return tables.change.filter((c) => c.entity === a.entity && c.entityId === a.id)
+          .sort((x, y) => y.createdAt.localeCompare(x.createdAt)).slice(0, 20)
+          .map((c) => ({ id: c.id, createdAt: c.createdAt, snapshot: c.snapshot }));
+      case "restore_change": {
+        const ch = tables.change.find((c) => c.id === a.id);
+        if (!ch) throw "Not found";
+        const table = ch.entity === "event" ? "event" : "task";
+        const current = tables[table].find((r) => r.id === ch.entityId)!;
+        tables.change.push({ ...base(crypto.randomUUID(), 0), entity: ch.entity, entityId: ch.entityId, snapshot: { ...current } });
+        const keys = table === "event"
+          ? ["spaceId", "activityId", "title", "startAt", "endAt", "allDay", "notes", "status", "taskId"]
+          : ["spaceId", "typeId", "title", "notes", "deadlineAt", "targetAt", "priority"];
+        keys.forEach((k) => { current[k] = ch.snapshot[k] ?? null; });
+        current.updatedAt = ts();
+        return null;
+      }
       case "discard_focus": update("focus", a.id, { endedAt: ts(), deletedAt: ts() }); return null;
       case "list_reminder_rules": return tables.reminder_rule.filter((r) => !r.deletedAt).map((r) => ({ ...r }));
       case "create_reminder_rule": return create("reminder_rule", { ...a.input, name: a.input.title });
@@ -249,7 +285,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         const q = String(a.query ?? "").toLowerCase();
         const label = (r: Row) => r.title ?? r.name ?? r.pattern ?? "";
         const items = Object.entries(tables)
-          .filter(([k]) => !["focus", "series", "inbox"].includes(k))
+          .filter(([k]) => !["focus", "series", "inbox", "change"].includes(k))
           .flatMap(([entity, rows]) =>
             rows.filter((r) => r.deletedAt && !r.replaced && label(r).toLowerCase().includes(q)).map((r) => ({
               entity, id: r.id, label: label(r), context: null, when: r.startAt ?? r.deadlineAt ?? null,

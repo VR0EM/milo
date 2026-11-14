@@ -9,7 +9,7 @@ import type {
   ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
-  EventSeries, InboxItem, RepeatRule,
+  EventSeries, InboxItem, RepeatRule, Change,
 } from "./types";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
@@ -104,6 +104,11 @@ export const api = {
   listInbox: () => call<InboxItem[]>("list_inbox"),
   addInbox: (text: string) => call<InboxItem>("add_inbox", { text }),
   setInboxDone: (id: string, done: boolean) => call<void>("set_inbox_done", { id, done }),
+  reorderSpaces: (ids: string[]) => call<void>("reorder_spaces", { ids }),
+  inboxToTask: (id: string, spaceId: string) => call<Task>("inbox_to_task", { id, spaceId }),
+
+  listChanges: (entity: "event" | "task", id: string) => call<Change[]>("list_changes", { entity, id }),
+  restoreChange: (id: string) => call<void>("restore_change", { id }),
   openCapture: () => call<void>("open_capture"),
   hideCapture: () => call<void>("hide_capture"),
 
