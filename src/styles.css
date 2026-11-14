@@ -881,3 +881,26 @@ html.capture-window body { overflow: hidden; }
 .empty-report { max-width: 640px; }
 .empty-report p { margin: 0; }
 .side-add { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: calc(12px * var(--text-scale)); }
+
+/* ---------- welcome guide ---------- */
+.dialog.setup { width: min(560px, calc(100vw - 48px)); padding: 22px 26px 18px; display: flex; flex-direction: column; gap: 14px; }
+.setup-top { display: flex; align-items: center; min-height: 20px; }
+.setup-body { display: flex; flex-direction: column; gap: 12px; min-height: 260px; }
+.setup-body h2 { font-size: calc(20px * var(--text-scale)); font-weight: 650; letter-spacing: -0.01em; }
+.setup-body p { margin: 0; line-height: 1.5; }
+.setup-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.setup-field > span { color: var(--muted); font-size: calc(13px * var(--text-scale)); }
+.setup-field.inline { justify-content: flex-start; gap: 8px; margin-left: 26px; }
+.setup-field input, .setup-field select, .setup-link input, .setup-textarea { background-color: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; min-height: 32px; }
+.setup-field input { width: 96px; }
+.setup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.setup-textarea { width: 100%; resize: vertical; font: inherit; line-height: 1.5; }
+.setup-link { display: flex; gap: 8px; }
+.setup-link input { flex: 1; min-width: 0; }
+.setup-check { display: flex; flex-direction: column; gap: 6px; }
+.setup-tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
+.setup-foot { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.setup-dots { display: flex; gap: 6px; }
+.setup-dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--line); }
+.setup-dots span.done { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.setup-dots span.on { width: 18px; background: var(--accent); }

@@ -13,7 +13,7 @@ import { HelpTip } from "../../components/HelpTip";
 import { ImportSettings } from "../import/ImportView";
 import { ArchiveSettings } from "../archive/ArchiveView";
 
-const ACCENTS: [Accent, string][] = [["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["plum", "Violet"], ["clay", "Coral"]];
+export const ACCENTS: [Accent, string][] = [["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["plum", "Violet"], ["clay", "Coral"]];
 const FONTS: [Font, string, string][] = [
   ["system", "Standard", "The computer's own typeface"],
   ["rounded", "Rounded", "Softer letter ends (rounded on Mac)"],
@@ -262,6 +262,9 @@ export function SettingsView() {
           <h3 className="fold-sub">App</h3>
           <Updates />
           <Startup />
+          <Row title="Welcome guide" info="The short guide from the first start: look, courses, timetable, deadlines and rhythm. Running it again adds; it removes nothing.">
+            <button className="btn" onClick={() => useUi.setState({ setupOpen: true })}>Open the guide</button>
+          </Row>
           <Row title="Keyboard shortcuts" info={`Press ? anywhere for the list. ${MOD_LABEL}, opens Settings.`}>
             <button className="btn" onClick={() => useUi.setState({ shortcutsOpen: true })}>Show shortcuts</button>
           </Row>

@@ -375,4 +375,12 @@ The core is ready for it without changes:
   replaces the many "nothing" lines.
 - **An empty Insights period** explains how Insights fills up, with a way to start, instead of
   a page of zeros.
+- **A welcome guide** opens by itself on the first start of an empty Milo (no tasks, no calendar
+  links, only the seeded spaces); a Milo already in use never sees it by surprise. Steps: look
+  (theme, accent, text size, event colours), courses (one per line, each a space with its own
+  colour and a book icon in the School group; names already there or repeated are skipped),
+  timetable link, deadlines link (as tasks), rhythm (wake-up and bed time set the morning and
+  evening routines and where the calendar opens; medication and water reminders), ready.
+  Every step can be skipped; it can be opened again from Settings › Data & app and from the
+  "Let Milo fill up" card on Today. Running it again only adds.
 
