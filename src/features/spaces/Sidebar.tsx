@@ -114,21 +114,30 @@ export function Sidebar() {
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const hidden = useUi((s) => s.hiddenSpaceIds);
   const collapsed = useUi((s) => s.collapsedGroups);
+  const view = useUi((s) => s.view);
+  const spaceViewId = useUi((s) => s.spaceViewId);
   const { toggleSpace, toggleGroup, openDialog } = useUi.getState();
 
   const groupIds = new Set(groups.map((g) => g.id));
   const loose = spaces.filter((s) => !s.groupId || !groupIds.has(s.groupId));
 
-  const row = (s: Space) => (
-    <li key={s.id} className="side-row">
-      <label className="space-toggle">
-        <input type="checkbox" aria-label={`Show ${s.name}`} checked={!hidden.includes(s.id)} onChange={() => toggleSpace(s.id)} />
-        <span className="swatch" style={{ ["--c" as string]: colorVar(s.color) }} />
-        <span className="side-name">{s.name}</span>
-      </label>
-      <button className="link" onClick={() => openDialog({ kind: "space", item: s })}>Edit</button>
-    </li>
-  );
+  // The coloured square shows or hides the space in the calendar; the name opens its overview.
+  const row = (s: Space) => {
+    const shown = !hidden.includes(s.id);
+    const current = view === "space" && spaceViewId === s.id;
+    return (
+      <li key={s.id} className={`side-row space-row-side${current ? " current" : ""}${shown ? "" : " hidden-space"}`}>
+        <label className="space-toggle" title={shown ? "Hide in the calendar" : "Show in the calendar"}>
+          <input type="checkbox" aria-label={`Show ${s.name} in the calendar`} checked={shown} onChange={() => toggleSpace(s.id)} />
+          <span className="swatch" style={{ ["--c" as string]: colorVar(s.color) }} />
+        </label>
+        <button className="space-open" aria-current={current ? "page" : undefined} onClick={() => useUi.getState().openSpace(s.id)}>
+          <span className="side-name">{s.name}</span>
+        </button>
+        <button className="link" onClick={() => openDialog({ kind: "space", item: s })}>Edit</button>
+      </li>
+    );
+  };
 
   return (
     <nav className="sidebar" aria-label="Main">

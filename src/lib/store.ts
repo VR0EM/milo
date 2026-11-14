@@ -15,7 +15,7 @@ export type Dialog =
   | { kind: "activity"; item?: Activity }
   | { kind: "task_type"; item?: TaskType };
 
-export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings";
+export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings" | "space";
 export type Theme = "system" | "light" | "dark";
 export type Accent = "blue" | "teal" | "green" | "plum" | "clay" | "custom";
 export type Font = "system" | "rounded" | "humanist" | "serif";
@@ -68,6 +68,9 @@ interface UiState {
   /** The first day on screen: the day, the first day of the week strip, or the 1st of the month. */
   viewStart: Date;
   calMode: CalMode;
+  /** The space whose overview is open (view "space"). */
+  spaceViewId: string | null;
+  openSpace: (id: string) => void;
   setCalMode: (mode: CalMode) => void;
   /** Show the day, week or month (by the current mode) that holds `d`. */
   showDate: (d: Date) => void;
@@ -121,6 +124,8 @@ export const useUi = create<UiState>()(
       showCompleted: false,
       viewStart: startOfWeek(new Date()),
       calMode: "week",
+      spaceViewId: null,
+      openSpace: (id) => set({ view: "space", spaceViewId: id, selectedTaskId: null, selectedEventId: null }),
       setCalMode: (mode) =>
         set((s) => {
           if (mode === s.calMode) return {};
@@ -202,7 +207,7 @@ export const useUi = create<UiState>()(
         }
         return merged;
       },
-      partialize: (s) => ({ prefs: s.prefs, calMode: s.calMode, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
+      partialize: (s) => ({ prefs: s.prefs, calMode: s.calMode, spaceViewId: s.spaceViewId, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
     },
   ),
 );

@@ -8,6 +8,7 @@ import { RemindersView } from "./features/reminders/RemindersView";
 import { TodayView } from "./features/today/TodayView";
 import { TasksView } from "./features/tasks/TasksView";
 import { Sidebar } from "./features/spaces/Sidebar";
+import { SpaceView } from "./features/spaces/SpaceView";
 import { useUi } from "./lib/store";
 import { useAppearance } from "./lib/useAppearance";
 import { checkAutomatically } from "./lib/updates";
@@ -23,7 +24,7 @@ export default function App() {
   return (
     <div className="app">
       <Sidebar />
-      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : <CalendarView />}
+      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : view === "space" ? <SpaceView /> : <CalendarView />}
       <EntityDialog />
       <ShortcutsDialog />
       <Notice />

@@ -226,6 +226,10 @@ ones marked *(assumption)* are kept easy to change.
 - **Sidebar shows only what is used daily:** the screens (with icons and Cmd/Ctrl+number) and
   the spaces, with groups that fold away. Activities, task types and groups are edited in
   Settings > Lists. Import & export and Archive are rarely used, so they live in Settings too.
+- **A space's name opens its overview**: time this week and month (from the calendar, as in
+  Insights), open tasks and the next deadline, what is coming in the next 14 days, its open
+  tasks (with a New task button for that space) and the last 30 days. The coloured square in
+  front of the name still shows or hides the space in the calendar.
 - **Settings has five blocks** (Appearance, Calendar & lists, Import & export, Archive,
   Data & app) that fold open and shut (click the row). Which ones are open is remembered;
   "Open all / Close all" sits at the top. "Go to Import & export" opens that block and scrolls

@@ -143,12 +143,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .side-row .link { opacity: 0; }
 .side-row:hover .link, .side-row:focus-within .link { opacity: 1; }
 .side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.space-toggle { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; cursor: pointer; }
+.space-toggle { display: grid; place-items: center; width: 20px; height: 20px; margin: 0 -4px; border-radius: 5px; cursor: pointer; flex: none; }
+.space-toggle:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.space-open { flex: 1; min-width: 0; display: flex; align-items: center; background: none; border: 0; padding: 0; text-align: left; color: inherit; cursor: pointer; }
+.space-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.side-row.space-row-side { gap: 9px; }
+.side-row.current { background: var(--accent-soft); }
+.side-row.current .side-name { font-weight: 600; }
+.side-row.hidden-space .side-name { color: var(--muted); }
 .space-toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .swatch { width: 11px; height: 11px; border-radius: 3px; border: 1.5px solid var(--c); flex: none; }
 .space-toggle input:checked + .swatch, .swatch.big { background: var(--c); }
 .space-toggle input:focus-visible + .swatch { outline: 2px solid var(--accent); outline-offset: 2px; }
-.space-toggle input:not(:checked) ~ .side-name { color: var(--muted); }
 .side-group { margin-top: 2px; }
 .group-row { padding-left: 2px; }
 .group-toggle { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; background: none; border: 0; padding: 0; cursor: pointer; font-weight: 600; text-align: left; }
@@ -741,3 +747,20 @@ body.month-dragging, body.month-dragging * { cursor: grabbing !important; }
 /* ---------- Today: all-day events ---------- */
 .today-allday { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); margin-bottom: 2px; }
 .today-allday .task-chip { width: auto; max-width: 100%; align-items: center; padding: 2px 8px; }
+
+/* ---------- space overview ---------- */
+.space-page h1 { display: flex; align-items: center; gap: 10px; }
+.space-swatch { width: 14px; height: 14px; border-radius: 4px; }
+.space-list { display: flex; flex-direction: column; }
+.space-row { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; text-align: left; padding: 6px 8px; border-radius: 6px; cursor: pointer; min-height: 32px; }
+.space-row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.space-row.selected { background: var(--accent-soft); }
+.space-row.skipped .space-title { text-decoration: line-through; color: var(--muted); }
+.space-when { width: 96px; flex: none; font-weight: 550; }
+.space-time { width: 104px; flex: none; }
+.space-title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.space-progress { display: flex; align-items: center; gap: 8px; flex: none; }
+.space-progress .progress { display: block; width: 72px; }
+.space-progress .progress > span { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+.space-progress .tabular { width: 34px; text-align: right; }
+.space-due { flex: none; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
