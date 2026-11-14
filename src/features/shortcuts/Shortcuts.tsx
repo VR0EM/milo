@@ -54,11 +54,13 @@ export function ShortcutsDialog() {
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>
           <tr><td colSpan={2}><h3>Calendar</h3></td></tr>
           <tr><td>{k("N")}</td><td>New event at the next half hour</td></tr>
-          <tr><td>{k("T")}</td><td>Go to this week</td></tr>
-          <tr><td>{k("←")} {k("→")}</td><td>Previous or next week</td></tr>
+          <tr><td>{k("D")} {k("W")} {k("M")}</td><td>Day, week or month view</td></tr>
+          <tr><td>{k("T")}</td><td>Go to today</td></tr>
+          <tr><td>{k("←")} {k("→")}</td><td>Previous or next day, week or month</td></tr>
           <tr><td>{k("Delete")}</td><td>Archive the selected event (with Undo)</td></tr>
-          <tr><td>Double-click</td><td>New one-hour event</td></tr>
+          <tr><td>Double-click</td><td>New event (in the All day row or the month: an all-day event)</td></tr>
           <tr><td>Drag on empty space</td><td>Draw a new event</td></tr>
+          <tr><td>Drag in the month</td><td>Move an event to another day</td></tr>
           <tr><td>{k(IS_MAC ? "⌘" : "Ctrl")} + scroll, or pinch</td><td>Zoom the hours</td></tr>
           <tr><td>Sideways swipe</td><td>Move through the days</td></tr>
           <tr><td colSpan={2}><h3>Tasks</h3></td></tr>

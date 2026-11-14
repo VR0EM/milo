@@ -3,7 +3,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { startOfWeek } from "./time";
+import { addDays, startOfDay, startOfWeek } from "./time";
 import type { Activity, Group, Space, TaskType } from "./types";
 
 export const MIN_HOUR_HEIGHT = 24;
@@ -47,9 +47,32 @@ interface Notice {
   undo?: () => void;
 }
 
+/** How much of the calendar is on screen. */
+export type CalMode = "day" | "week" | "month";
+
+const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+/** The first day after the range that `mode` shows from `start`. */
+export function rangeEnd(mode: CalMode, start: Date): Date {
+  if (mode === "month") return new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  return addDays(start, mode === "day" ? 1 : 7);
+}
+
+/** Where the calendar starts when it shows `d` in `mode`. */
+export function startFor(mode: CalMode, d: Date): Date {
+  return mode === "day" ? startOfDay(d) : mode === "week" ? startOfWeek(d) : firstOfMonth(d);
+}
+
 interface UiState {
   view: View;
+  /** The first day on screen: the day, the first day of the week strip, or the 1st of the month. */
   viewStart: Date;
+  calMode: CalMode;
+  setCalMode: (mode: CalMode) => void;
+  /** Show the day, week or month (by the current mode) that holds `d`. */
+  showDate: (d: Date) => void;
+  /** One day, week or month forward (1) or back (-1). */
+  stepCalendar: (n: number) => void;
   selectedTaskId: string | null;
   showCompleted: boolean;
   selectedEventId: string | null;
@@ -97,6 +120,23 @@ export const useUi = create<UiState>()(
       selectedTaskId: null,
       showCompleted: false,
       viewStart: startOfWeek(new Date()),
+      calMode: "week",
+      setCalMode: (mode) =>
+        set((s) => {
+          if (mode === s.calMode) return {};
+          // Keep today in view when it is on screen; otherwise keep the first day shown.
+          const today = new Date();
+          const focus = today >= s.viewStart && today < rangeEnd(s.calMode, s.viewStart) ? today : s.viewStart;
+          return { calMode: mode, viewStart: startFor(mode, focus) };
+        }),
+      showDate: (d) => set((s) => ({ viewStart: startFor(s.calMode, d) })),
+      stepCalendar: (n) =>
+        set((s) => ({
+          viewStart:
+            s.calMode === "month"
+              ? new Date(s.viewStart.getFullYear(), s.viewStart.getMonth() + n, 1)
+              : addDays(s.viewStart, s.calMode === "day" ? n : 7 * n),
+        })),
       selectedEventId: null,
       focusTitle: false,
       dialog: null,
@@ -152,6 +192,8 @@ export const useUi = create<UiState>()(
       merge: (saved, current) => {
         const s = (saved ?? {}) as Partial<UiState>;
         const merged = { ...current, ...s, prefs: { ...DEFAULT_PREFS, ...(s.prefs ?? {}) } };
+        // The calendar opens on today, in the day, week or month view that was used last.
+        merged.viewStart = startFor(merged.calMode ?? "week", new Date());
         // Import & export and Archive used to be pages of their own; they now live in Settings.
         const old = s.view as string | undefined;
         if (old === "import" || old === "archive") {
@@ -160,7 +202,7 @@ export const useUi = create<UiState>()(
         }
         return merged;
       },
-      partialize: (s) => ({ prefs: s.prefs, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
+      partialize: (s) => ({ prefs: s.prefs, calMode: s.calMode, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
     },
   ),
 );

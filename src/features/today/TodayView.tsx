@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useAction, useEvents, useRoutineChecks, useRoutines, useSpaces, useTasks } from "../../lib/queries";
 import { useUi } from "../../lib/store";
-import { addDays, daysFromToday, fmtDuration, fmtLongDay, fmtRange, fmtTime, startOfDay, toDateInput } from "../../lib/time";
+import { addDays, daysFromToday, fmtDuration, fmtLongDay, fmtRange, fmtTime, fmtWeekday, startOfDay, toDateInput } from "../../lib/time";
 import { taskProgress, type CalEvent, type Confirmation, type Space } from "../../lib/types";
 import { useNow } from "../../lib/useNow";
 import { deadlineLine } from "../tasks/TasksView";
@@ -13,6 +13,9 @@ import { RoutineEditor } from "./RoutineEditor";
 import { activeRoutine, nextRoutine } from "./routines";
 
 const DEADLINE_WINDOW_DAYS = 14;
+/** "Wed", or "Wed 18 Nov" when it is more than a week away. */
+const fmtWeekdayShort = (d: Date) =>
+  daysFromToday(d) < 7 ? fmtWeekday(d) : `${fmtWeekday(d)} ${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })}`;
 
 export function TodayView() {
   const now = useNow(15_000);
@@ -26,6 +29,17 @@ export function TodayView() {
 
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const live = events.filter((e) => e.status !== "skipped" && !e.allDay);
+  const tomorrowStart = addDays(dayStart, 1);
+  const allDayToday = events.filter(
+    (e) => e.allDay && e.status !== "skipped" && new Date(e.startAt) < tomorrowStart && new Date(e.endAt) > dayStart,
+  );
+  const openInCalendar = (id: string) => {
+    const ui = useUi.getState();
+    ui.setView("calendar");
+    ui.setCalMode("day");
+    ui.showDate(now);
+    ui.select(id);
+  };
   const current = live.filter((e) => new Date(e.startAt) <= now && new Date(e.endAt) > now);
   const next = live.find((e) => new Date(e.startAt) > now) ?? null;
 
@@ -44,6 +58,27 @@ export function TodayView() {
         </header>
         <div className="page-scroll">
           <section className="block">
+            {allDayToday.length > 0 && (
+              <div className="today-allday">
+                <span className="muted small">All day</span>
+                {allDayToday.map((e) => {
+                  const last = new Date(new Date(e.endAt).getTime() - 1);
+                  const more = startOfDay(last) > dayStart;
+                  return (
+                    <button
+                      key={e.id}
+                      className="task-chip allday-event"
+                      style={{ ["--c" as string]: colorVar(spaceById.get(e.spaceId)?.color ?? "gray") }}
+                      title="Open in the calendar"
+                      onClick={() => openInCalendar(e.id)}
+                    >
+                      <span className="chip-title">{e.title || "Untitled"}</span>
+                      {more && <span className="chip-kind">until {fmtWeekdayShort(last)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <h2>Now</h2>
             {current.length === 0 && <p className="muted">Nothing planned right now.</p>}
             {current.map((e) => <EventLine key={e.id} event={e} space={spaceById.get(e.spaceId)} now={now} kind="now" />)}

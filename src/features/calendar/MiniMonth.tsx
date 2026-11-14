@@ -1,22 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { useUi } from "../../lib/store";
+import { rangeEnd, useUi } from "../../lib/store";
 import { addDays, fmtMonth, sameDay, startOfWeek } from "../../lib/time";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-/** A small month to jump through weeks. The week on screen is marked. */
+/** A small month to jump through the calendar. The days on screen are marked. */
 export function MiniMonth() {
   const viewStart = useUi((s) => s.viewStart);
-  const [month, setMonth] = useState(() => {
-    const mid = addDays(viewStart, 3);
-    return new Date(mid.getFullYear(), mid.getMonth(), 1);
-  });
+  const mode = useUi((s) => s.calMode);
+  // The month that holds what the calendar shows. It follows the calendar; the arrows here
+  // only browse until the calendar moves again.
+  const mid = mode === "week" ? addDays(viewStart, 3) : viewStart;
+  const shownMonth = new Date(mid.getFullYear(), mid.getMonth(), 1).getTime();
+  const [month, setMonth] = useState(() => new Date(shownMonth));
+  useEffect(() => setMonth(new Date(shownMonth)), [shownMonth]);
   const today = new Date();
   const first = startOfWeek(month);
   const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, d) => addDays(first, w * 7 + d)));
   const weekends = useUi((s) => s.prefs.showWeekends);
-  const shown = (d: Date) => d >= viewStart && d < addDays(viewStart, 7) && (weekends || (d.getDay() !== 0 && d.getDay() !== 6));
+  // In the month view the whole month is on screen, so nothing needs marking.
+  const shown = (d: Date) =>
+    mode !== "month" && d >= viewStart && d < rangeEnd(mode, viewStart) && (mode === "day" || weekends || (d.getDay() !== 0 && d.getDay() !== 6));
   const step = (n: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + n, 1));
 
   return (
@@ -41,7 +46,7 @@ export function MiniMonth() {
               sameDay(d, today) ? "today" : "",
             ].join(" ")}
             aria-label={d.toDateString()}
-            onClick={() => useUi.getState().setViewStart(startOfWeek(d))}
+            onClick={() => useUi.getState().showDate(d)}
           >
             {d.getDate()}
           </button>

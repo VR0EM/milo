@@ -248,6 +248,17 @@ ones marked *(assumption)* are kept easy to change.
 ## Calendar behaviour
 
 - Double-click creates a one-hour event; dragging on empty space draws one.
+- **Day, Week and Month views** (toolbar, or D / W / M). The choice is remembered and the
+  calendar opens on today in it. The day view steps through every day; week and month follow
+  "Show weekends". The month shows all-day events, task deadlines and timed events (on the day
+  they start); what does not fit becomes "n more", which opens that day. Double-click in a
+  month cell makes an all-day event; the day number opens the day view.
+- **All-day events are one bar** over the days they cover, in the week's All day row and in each
+  week of the month (overlapping bars go on separate lines). A bar that began before the first
+  visible day keeps its title in view.
+- **In the month, events can be dragged to another day**; they keep their times and length.
+- **Today shows today's all-day events** above Now; a click opens them in the day view.
+- The mini month follows the calendar; its arrows only browse until the calendar moves.
 - **All-day events** are made by double-clicking the All day row, or with the "All day" box in
   the event panel (From / Until dates; stored from midnight to the midnight after the last day).
   They stay out of reminders and Insights, as imported all-day events already did.

@@ -700,3 +700,44 @@ select:not([multiple]) {
   background-repeat: no-repeat; background-position: right 8px center; background-size: 14px;
   cursor: pointer;
 }
+
+/* ---------- month view ---------- */
+.month { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.month-head { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.month-head span { padding: 6px 10px; font-size: calc(12px * var(--text-scale)); color: var(--muted); font-weight: 550; border-left: 1px solid var(--line-soft); }
+.month-head span:first-child { border-left: 0; }
+.month-grid { flex: 1; min-height: 0; display: grid; }
+.month-week { position: relative; min-height: 0; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+.month-week .allday-bar { z-index: 1; }
+.month-cell.drop-target { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.month .drag-source { opacity: 0.45; }
+body.month-dragging, body.month-dragging * { cursor: grabbing !important; }
+.month-cell { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 4px 4px 4px; border-left: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.month-cell.first-col { border-left: 0; }
+.month-cell.outside { background: color-mix(in srgb, var(--text) 2.5%, transparent); }
+.month-cell.outside .month-daynum { color: var(--muted); }
+.month-daynum { align-self: flex-start; height: 24px; min-width: 24px; padding: 0 6px; border-radius: 12px; border: 0; background: none; cursor: pointer; font-size: calc(13px * var(--text-scale)); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; flex: none; }
+.month-daynum:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.month-cell.today .month-daynum { background: var(--accent); color: var(--on-accent); }
+.month-items { display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.month-items > button { height: 20px; flex: none; }
+.month-items > .task-chip { align-items: center; }
+.month-event { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; padding: 0 5px; border: 0; border-radius: 5px; background: none; cursor: pointer; text-align: left; font-size: calc(12px * var(--text-scale)); color: var(--text); }
+.month-event:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.month-event.selected { background: color-mix(in srgb, var(--c) var(--event-mix), var(--surface)); box-shadow: 0 0 0 1px var(--c); }
+.month-event.skipped .chip-title { text-decoration: line-through; color: var(--muted); }
+.month-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
+.month-time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.month-more { align-self: flex-start; padding: 0 6px; border: 0; border-radius: 5px; background: none; cursor: pointer; font-size: calc(12px * var(--text-scale)); color: var(--muted); font-weight: 550; }
+.month-more:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.toolbar-actions .segmented { margin-right: 6px; }
+
+/* ---------- all-day bars (week row and month) ---------- */
+.allday-strip { position: relative; }
+.allday-bar { position: absolute; height: 20px; width: auto; align-items: center; z-index: 1; }
+.allday-bar.cut-start { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.allday-bar.cut-end { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+/* ---------- Today: all-day events ---------- */
+.today-allday { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); margin-bottom: 2px; }
+.today-allday .task-chip { width: auto; max-width: 100%; align-items: center; padding: 2px 8px; }

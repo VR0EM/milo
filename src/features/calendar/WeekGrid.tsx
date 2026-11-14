@@ -8,6 +8,7 @@ import {
 import type { CalEvent, Space, Task } from "../../lib/types";
 import { firstShown, shiftShown, shownDistance } from "./days";
 import { layoutDay } from "./layout";
+import { lanesPerColumn, layoutSpans } from "./spans";
 
 type Mode = "move" | "start" | "end" | "create";
 interface Draft {
@@ -25,6 +26,8 @@ interface Shown {
 const SNAP_MS = SNAP_MINUTES * MINUTE;
 /** The smallest height an event gets, so a one-minute event can still be clicked. */
 const MIN_EVENT_PX = 22;
+/** One line in the all-day row: a bar and the gap under it. Keep in step with .allday-bar. */
+const LANE_PX = 22;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -325,7 +328,8 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
     createNew(start.toISOString(), new Date(start.getTime() + useUi.getState().prefs.eventMinutes * MINUTE).toISOString());
   }
 
-  const allDay = useMemo(() => events.filter((e) => e.allDay), [events]);
+  const spans = useMemo(() => layoutSpans(events, days), [events, days]);
+  const lanes = useMemo(() => lanesPerColumn(spans, days.length), [spans, days.length]);
   const shown = useMemo<Shown[]>(() => {
     const list: Shown[] = events.filter((e) => !e.allDay).map((event) =>
       draft?.id === event.id
@@ -362,27 +366,43 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
         <div className="grid-header-row allday">
           <div className="gutter"><span className="allday-label">All day</span></div>
           <div className="h-viewport">
-          <div className="h-strip" ref={alldayStripRef} style={stripStyle}>
-          {days.map((d) => (
+          <div className="h-strip allday-strip" ref={alldayStripRef} style={stripStyle}>
+          {spans.map((sp) => {
+            const e = sp.event;
+            // A bar that began before the first visible day keeps its title in view.
+            const hiddenBefore = Math.max(0, buffer - sp.from);
+            return (
+              <button
+                key={e.id}
+                className={[
+                  "task-chip allday-event allday-bar",
+                  sp.cutStart ? "cut-start" : "",
+                  sp.cutEnd ? "cut-end" : "",
+                  e.id === selectedId ? "selected" : "",
+                  e.status === "skipped" ? "done" : "",
+                ].join(" ")}
+                style={{
+                  ["--c" as string]: colorVar(spaceById.get(e.spaceId)?.color ?? "gray"),
+                  left: `calc(${(sp.from / days.length) * 100}% + 2px)`,
+                  width: `calc(${((sp.to - sp.from + 1) / days.length) * 100}% - 4px)`,
+                  top: 3 + sp.lane * LANE_PX,
+                  paddingLeft: hiddenBefore > 0 && hiddenBefore <= sp.to - sp.from ? `calc(${(hiddenBefore / days.length) * 100}% + 6px)` : undefined,
+                }}
+                title={e.title || "Untitled"}
+                onClick={() => select(e.id)}
+              >
+                <span className="chip-title">{e.title || "Untitled"}</span>
+              </button>
+            );
+          })}
+          {days.map((d, col) => (
             <div
               key={d.getTime()}
               className="allday-cell"
+              style={{ paddingTop: 3 + lanes[col] * LANE_PX }}
               title="Double-click for an all-day event"
               onDoubleClick={(e) => e.target === e.currentTarget && createAllDay(d)}
             >
-              {allDay
-                .filter((e) => new Date(e.startAt) < addDays(d, 1) && new Date(e.endAt) > d)
-                .map((e) => (
-                  <button
-                    key={e.id}
-                    className={`task-chip allday-event${e.id === selectedId ? " selected" : ""}${e.status === "skipped" ? " done" : ""}`}
-                    style={{ ["--c" as string]: colorVar(spaceById.get(e.spaceId)?.color ?? "gray") }}
-                    title={e.title || "Untitled"}
-                    onClick={() => select(e.id)}
-                  >
-                    <span className="chip-title">{e.title || "Untitled"}</span>
-                  </button>
-                ))}
               {tasks.flatMap((t) => {
                 const due = !!t.deadlineAt && sameDay(new Date(t.deadlineAt), d);
                 const aim = !due && !!t.targetAt && sameDay(new Date(t.targetAt), d);
