@@ -402,3 +402,88 @@ pub fn app_info(app: AppHandle) -> Result<AppInfo> {
 pub fn set_archived(db: State<Db>, entity: String, id: String, archived: bool) -> Result<()> {
     repo::set_archived(conn!(db), &entity, &id, archived)
 }
+
+// ---------- repeating events ----------
+
+#[tauri::command]
+pub fn list_series(db: State<Db>) -> Result<Vec<EventSeries>> {
+    crate::series::list(conn!(db))
+}
+
+/// Makes an event repeat from now on (this and the following ones), or stops it with `None`.
+#[tauri::command]
+pub fn set_repeat(db: State<Db>, id: String, rule: Option<RepeatRule>) -> Result<Event> {
+    crate::series::set_repeat(conn!(db), &id, rule, chrono::Utc::now())
+}
+
+// ---------- inbox and quick capture ----------
+
+#[tauri::command]
+pub fn list_inbox(db: State<Db>) -> Result<Vec<InboxItem>> {
+    repo::list_inbox(conn!(db))
+}
+
+/// Saves a quick note. The main window hears about it, also when the note came from the
+/// small capture window.
+#[tauri::command]
+pub fn add_inbox(app: AppHandle, db: State<Db>, text: String) -> Result<InboxItem> {
+    let item = repo::add_inbox(conn!(db), &text)?;
+    let _ = app.emit("data-changed", ());
+    Ok(item)
+}
+
+#[tauri::command]
+pub fn set_inbox_done(db: State<Db>, id: String, done: bool) -> Result<()> {
+    repo::set_inbox_done(conn!(db), &id, done)
+}
+
+pub const CAPTURE: &str = "capture";
+const CAPTURE_SIZE: (f64, f64) = (520.0, 64.0);
+
+/// The small "write it down" window, in the middle of the screen near the top. It is made once
+/// and then shown and hidden, so it appears at once.
+pub fn show_capture(app: &AppHandle) -> Result<()> {
+    let err = |e: tauri::Error| crate::error::AppError::Invalid(e.to_string());
+    let window = match app.get_webview_window(CAPTURE) {
+        Some(w) => w,
+        None => tauri::WebviewWindowBuilder::new(app, CAPTURE, tauri::WebviewUrl::App("index.html".into()))
+            .title("Milo note")
+            .inner_size(CAPTURE_SIZE.0, CAPTURE_SIZE.1)
+            .resizable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .visible_on_all_workspaces(true)
+            .visible(false)
+            .build()
+            .map_err(err)?,
+    };
+    // On the screen the mouse is on would be nicest; the main window's screen is a good guess.
+    let monitor = app
+        .get_webview_window("main")
+        .and_then(|m| m.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+    if let Some(m) = monitor {
+        let scale = m.scale_factor();
+        let size = m.size().to_logical::<f64>(scale);
+        let pos = m.position().to_logical::<f64>(scale);
+        let _ = window.set_position(tauri::LogicalPosition::new(pos.x + (size.width - CAPTURE_SIZE.0) / 2.0, pos.y + size.height * 0.22));
+    }
+    window.show().map_err(err)?;
+    window.set_focus().map_err(err)?;
+    let _ = window.emit("capture-open", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_capture(app: AppHandle) -> Result<()> {
+    show_capture(&app)
+}
+
+#[tauri::command]
+pub fn hide_capture(app: AppHandle) -> Result<()> {
+    if let Some(w) = app.get_webview_window(CAPTURE) {
+        let _ = w.hide();
+    }
+    Ok(())
+}

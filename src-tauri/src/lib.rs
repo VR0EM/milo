@@ -10,6 +10,7 @@ mod insights;
 mod models;
 mod reminders;
 mod repo;
+mod series;
 
 use db::Db;
 use std::sync::Mutex;
@@ -41,6 +42,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // One key from anywhere opens the small "write it down" window.
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        if let Err(e) = commands::show_capture(app) {
+                            eprintln!("quick note window failed: {e}");
+                        }
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -50,7 +63,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Only the main window hides instead of closing; the small timer really closes.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
+                if window.label() == "main" || window.label() == commands::CAPTURE {
                     api.prevent_close();
                     let _ = window.hide();
                 }
@@ -67,6 +80,16 @@ pub fn run() {
                         let _ = window.set_size(tauri::PhysicalSize::new(size.width.min(w), size.height.min(h)));
                     }
                     let _ = window.center();
+                }
+            }
+
+            // Cmd+Shift+Space on a Mac, Ctrl+Shift+Space on Windows. Another app may hold it
+            // already; Milo then simply works without it.
+            {
+                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+                let modifier = if cfg!(target_os = "macos") { Modifiers::SUPER } else { Modifiers::CONTROL };
+                if let Err(e) = app.global_shortcut().register(Shortcut::new(Some(modifier | Modifiers::SHIFT), Code::Space)) {
+                    eprintln!("quick note shortcut not available: {e}");
                 }
             }
 
@@ -186,6 +209,14 @@ pub fn run() {
                 std::thread::sleep(Duration::from_secs(10));
                 loop {
                     let db = handle.state::<Db>();
+                    // Repeating events keep half a year ahead in the calendar.
+                    match series::extend(&db.lock(), chrono::Utc::now()) {
+                        Ok(n) if n > 0 => {
+                            let _ = handle.emit("data-changed", ());
+                        }
+                        Ok(_) => {}
+                        Err(e) => eprintln!("extending repeats failed: {e}"),
+                    }
                     let due = importer::links_due(&db.lock()).unwrap_or_default();
                     let mut changed = false;
                     for id in due {
@@ -269,6 +300,13 @@ pub fn run() {
             commands::set_backup_mirror,
             commands::restore_backup,
             commands::set_archived,
+            commands::list_series,
+            commands::set_repeat,
+            commands::list_inbox,
+            commands::add_inbox,
+            commands::set_inbox_done,
+            commands::open_capture,
+            commands::hide_capture,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Milo")

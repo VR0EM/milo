@@ -9,6 +9,8 @@ import { taskProgress, type CalEvent, type Confirmation, type Space } from "../.
 import { useNow } from "../../lib/useNow";
 import { deadlineLine } from "../tasks/TasksView";
 import { FocusPanel } from "./FocusPanel";
+import { InboxBlock } from "./InboxBlock";
+import { WhatNow } from "./WhatNow";
 import { RoutineEditor } from "./RoutineEditor";
 import { activeRoutine, nextRoutine } from "./routines";
 
@@ -86,6 +88,10 @@ export function TodayView() {
             {next ? <EventLine event={next} space={spaceById.get(next.spaceId)} now={now} kind="next" />
               : <p className="muted">Nothing else planned today or tomorrow.</p>}
           </section>
+
+          <WhatNow now={now} live={live} />
+
+          <InboxBlock />
 
           <ConfirmBlock now={now} />
 

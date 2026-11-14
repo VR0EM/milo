@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
 import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
-import { useArchiveWithUndo, useImportSources, useTaskAction, useUpdateTask } from "../../lib/queries";
+import { useArchiveWithUndo, useEvents, useImportSources, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
-import { fmtTime, fromInputs, toDateInput } from "../../lib/time";
-import { type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
+import { addDays, fmtDuration, fmtRange, fmtTime, fromInputs, startOfDay, toDateInput } from "../../lib/time";
+import { type CalEvent, type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
 import { deadlineLine } from "./TasksView";
 
 interface Props {
@@ -68,6 +68,8 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
         onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
       />
       {due && <p className={`panel-sub${due.late ? " late" : ""}`}>{due.text}</p>}
+
+      <PlannedTime task={task} />
 
       <div className="field-row">
         <label className="field">
@@ -220,6 +222,65 @@ function ImportedTaskNote({ task }: { task: Task }) {
           ? "You changed this task, so syncing leaves it as it is."
           : "If you change it, your version is kept when the calendar syncs. Ticking it off is always yours."}
       </span>
+    </div>
+  );
+}
+
+const PLAN_BACK_DAYS = 90;
+const PLAN_AHEAD_DAYS = 60;
+const blockDay = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
+
+/** Time set aside for this task in the calendar: what is coming, and what was spent. */
+function PlannedTime({ task }: { task: Task }) {
+  const [from, to] = useState(() => {
+    const today = startOfDay(new Date());
+    return [addDays(today, -PLAN_BACK_DAYS), addDays(today, PLAN_AHEAD_DAYS)];
+  })[0];
+  const events = (useEvents(from, to).data ?? []).filter((e) => e.taskId === task.id && e.status !== "skipped");
+  const now = Date.now();
+  const coming = events.filter((e) => new Date(e.endAt).getTime() > now);
+  const spent = events
+    .filter((e) => new Date(e.endAt).getTime() <= now)
+    .reduce((sum, e) => sum + new Date(e.endAt).getTime() - new Date(e.startAt).getTime(), 0);
+
+  const open = (e: CalEvent) => {
+    const ui = useUi.getState();
+    ui.setView("calendar");
+    if (ui.calMode === "month") ui.setCalMode("week");
+    ui.showDate(new Date(e.startAt));
+    ui.select(e.id);
+  };
+  const plan = () => {
+    const ui = useUi.getState();
+    ui.setView("calendar");
+    if (ui.calMode === "month") ui.setCalMode("week");
+    ui.selectTask(null);
+    useUi.setState({ planTaskId: task.id });
+  };
+
+  return (
+    <div className="planned-time">
+      <div className="planned-head">
+        <span className="field-label">Planned time</span>
+        {spent > 0 && <span className="muted small">{fmtDuration(spent)} spent</span>}
+        <span className="spacer" />
+        <button type="button" className="btn small" onClick={plan}>Plan time</button>
+      </div>
+      {coming.length === 0 ? (
+        <p className="muted small">Nothing planned yet. Drag the task onto the calendar to set time aside.</p>
+      ) : (
+        <ul>
+          {coming.slice(0, 3).map((e) => (
+            <li key={e.id}>
+              <button type="button" className="planned-block" onClick={() => open(e)}>
+                <span>{blockDay.format(new Date(e.startAt))}</span>
+                <span className="muted tabular">{fmtRange(new Date(e.startAt), new Date(e.endAt))}</span>
+              </button>
+            </li>
+          ))}
+          {coming.length > 3 && <li className="muted small">{coming.length - 3} more</li>}
+        </ul>
+      )}
     </div>
   );
 }

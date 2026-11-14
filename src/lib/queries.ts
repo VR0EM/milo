@@ -126,6 +126,8 @@ export const useSemesters = () => useQuery({ queryKey: ["semesters"], queryFn: a
 export const useInsights = (from: string, to: string) =>
   useQuery({ queryKey: ["insights", from, to], queryFn: () => api.getInsights(from, to), staleTime: 0, refetchOnMount: "always" });
 export const useActiveFocus = () => useQuery({ queryKey: ["focus"], queryFn: api.activeFocus });
+export const useSeries = () => useQuery({ queryKey: ["series"], queryFn: api.listSeries });
+export const useInbox = () => useQuery({ queryKey: ["inbox"], queryFn: api.listInbox });
 
 /** Run a change and refresh the lists it touches. */
 export function useAction(...keys: string[]) {

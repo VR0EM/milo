@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import { MiniTimer } from "./features/today/MiniTimer";
+import { CaptureWindow } from "./features/capture/CaptureWindow";
 import { files, onDataChanged, windowKind } from "./lib/api";
 import "./styles.css";
 
@@ -25,7 +26,7 @@ const kind = await windowKind();
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      {kind === "focus-mini" ? <MiniTimer /> : <App />}
+      {kind === "focus-mini" ? <MiniTimer /> : kind === "capture" ? <CaptureWindow /> : <App />}
     </QueryClientProvider>
   </React.StrictMode>,
 );

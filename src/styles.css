@@ -764,3 +764,57 @@ body.month-dragging, body.month-dragging * { cursor: grabbing !important; }
 .space-progress .progress > span { display: block; height: 100%; background: var(--c); border-radius: 3px; }
 .space-progress .tabular { width: 34px; text-align: right; }
 .space-due { flex: none; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- planning tasks into the calendar ---------- */
+.task-tray { display: flex; flex-direction: column; gap: 6px; min-height: 0; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+.task-tray h3 { font-size: calc(13px * var(--text-scale)); font-weight: 600; }
+.task-tray ul { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 40vh; margin: 0 -6px; padding: 0 6px; }
+.tray-task { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: grab; touch-action: none; user-select: none; }
+.tray-task:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.tray-task.highlight { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.tray-task.drag-source { opacity: 0.45; }
+.tray-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.tray-due { color: var(--muted); flex: none; }
+.task-ghost { position: fixed; z-index: 50; pointer-events: none; padding: 4px 10px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: calc(12px * var(--text-scale)); font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.task-dragging, body.task-dragging * { cursor: grabbing !important; }
+/* An event that is time for a task carries a small open square before its title. */
+.event.task-block .event-title::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border: 1.5px solid currentColor; border-radius: 2px; vertical-align: 1px; opacity: 0.8; }
+.task-link { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.task-link .link { font-weight: 600; text-align: left; }
+.planned-time { display: flex; flex-direction: column; gap: 4px; }
+.planned-head { display: flex; align-items: center; gap: 8px; }
+.planned-head .field-label { font-size: calc(12px * var(--text-scale)); color: var(--muted); font-weight: 550; }
+.planned-time ul { display: flex; flex-direction: column; gap: 1px; }
+.planned-block { display: flex; gap: 10px; width: 100%; background: none; border: 0; padding: 4px 6px; margin: 0 -6px; border-radius: 5px; cursor: pointer; text-align: left; }
+.planned-block:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+
+/* ---------- quick note window ---------- */
+html.capture-window body { overflow: hidden; }
+.capture { height: 100vh; display: flex; align-items: center; gap: 10px; padding: 0 18px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); }
+.capture input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: calc(16px * var(--text-scale)); color: var(--text); }
+.capture input::placeholder { color: var(--muted); }
+.capture-error { color: var(--danger); font-size: calc(12px * var(--text-scale)); white-space: nowrap; }
+
+/* ---------- inbox ---------- */
+.inbox-list { display: flex; flex-direction: column; }
+.inbox-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
+.inbox-row:last-child { border-bottom: 0; }
+.inbox-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.inbox-add input { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; min-height: 32px; }
+.nav button .count { margin-left: auto; min-width: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 600; text-align: center; line-height: 18px; }
+
+/* ---------- what now? ---------- */
+.what-now .block-head { flex-wrap: wrap; }
+.suggestion { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--c) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 22%, var(--line)); }
+.suggestion-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px; }
+.suggestion-text { min-width: 0; }
+.suggestion-title { font-weight: 600; font-size: calc(15px * var(--text-scale)); overflow-wrap: anywhere; }
+.suggestion-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---------- repeat ---------- */
+.repeat-field { display: flex; flex-direction: column; gap: 8px; }
+.repeat-field .field > span { display: inline-flex; align-items: center; }
+.repeat-custom { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--sunken); }
+.repeat-custom input[type="number"] { width: 56px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 28px; }
+.repeat-custom select, .repeat-field .inline select, .repeat-field .inline input[type="date"] { background-color: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 28px; }
+.repeat-copy { align-self: flex-start; text-align: left; font-size: calc(12px * var(--text-scale)); }

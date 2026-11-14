@@ -8,6 +8,7 @@ import { TaskPanel } from "../tasks/TaskPanel";
 import { EventPanel } from "./EventPanel";
 import { WeekGrid } from "./WeekGrid";
 import { MonthGrid, monthWeeks } from "./MonthGrid";
+import { TaskDragGhost } from "./TaskTray";
 
 const MODES: [CalMode, string, string][] = [["day", "Day", "D"], ["week", "Week", "W"], ["month", "Month", "M"]];
 import { BUFFER, firstShown, shiftShown } from "./days";
@@ -109,6 +110,7 @@ export function CalendarView() {
             </div>
           </div>
         </header>
+        <TaskDragGhost />
         {mode === "month" ? (
           <MonthGrid month={viewStart} weekends={showWeekends} events={visible} tasks={tasks} spaces={spaces} defaultSpaceId={defaultSpaceId} />
         ) : (

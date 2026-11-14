@@ -2,6 +2,8 @@
 export const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl+";
 export const MOD_ARIA = IS_MAC ? "Meta" : "Control";
+/** The key that opens the quick note window from anywhere (set in src-tauri/src/lib.rs). */
+export const CAPTURE_KEY = IS_MAC ? "⌘⇧Space" : "Ctrl+Shift+Space";
 
 /** True when the key press belongs to a text field or dialog, not to the app. */
 export function isTyping(e: KeyboardEvent) {

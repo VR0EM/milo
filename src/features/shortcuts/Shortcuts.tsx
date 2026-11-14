@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useUi } from "../../lib/store";
 import { NAV } from "../spaces/Sidebar";
-import { IS_MAC, MOD_LABEL, isTyping } from "./keys";
+import { IS_MAC, MOD_LABEL, isTyping, CAPTURE_KEY } from "./keys";
 
 /** App-wide keys: switching screens and opening this overview. */
 export function useGlobalShortcuts() {
@@ -50,6 +50,7 @@ export function ShortcutsDialog() {
             <tr key={label}><td>{k(`${MOD_LABEL}${i + 1}`)}</td><td>{label}</td></tr>
           ))}
           <tr><td>{k(`${MOD_LABEL},`)}</td><td>Settings</td></tr>
+          <tr><td>{k(CAPTURE_KEY)}</td><td>Write something down, from any app (lands in the Inbox on Today)</td></tr>
           <tr><td>{k("?")}</td><td>This overview</td></tr>
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>
           <tr><td colSpan={2}><h3>Calendar</h3></td></tr>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
 import { colorVar } from "../../lib/colors";
-import { useActiveFocus, useGroups, useSpaces } from "../../lib/queries";
+import { useActiveFocus, useGroups, useInbox, useSpaces } from "../../lib/queries";
 import { useUi, type View } from "../../lib/store";
 import { fmtClock } from "../../lib/time";
 import type { Space } from "../../lib/types";
@@ -55,8 +55,15 @@ function NavButton({ view: v, label, icon, shortcut }: { view: View; label: stri
     >
       <Icon name={icon} />
       <span>{label}</span>
+      {v === "today" && <InboxCount />}
     </button>
   );
+}
+
+/** How many quick notes wait in the Inbox on Today. */
+function InboxCount() {
+  const n = useInbox().data?.length ?? 0;
+  return n ? <span className="count" aria-label={`${n} notes in the inbox`}>{n}</span> : null;
 }
 
 /** "+" next to Spaces: a new space or a new group. */

@@ -21,6 +21,8 @@ const tables: Record<string, Row[]> = {
     { ...base("seed-activity-exam", 3), name: "Exam", category: "other" },
   ],
   event: [],
+  series: [],
+  inbox: [],
   task_type: [
     { ...base("seed-type-assignment", 0), name: "Assignment" },
     { ...base("seed-type-theory", 1), name: "Theory" },
@@ -82,6 +84,46 @@ function update(table: string, id: string, input: Row): Row {
   return { ...row };
 }
 
+const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Browser stand-in for series.rs: same rules, written out half a year ahead. */
+function setRepeat(id: string, rule: Row | null): Row {
+  const e = tables.event.find((r) => r.id === id);
+  if (!e) throw "Not found";
+  if (e.source === "import") throw "Imported events repeat in the calendar they come from";
+  const cut = e.startAt > ts() ? e.startAt : ts();
+  if (e.seriesId) {
+    tables.event.filter((r) => r.seriesId === e.seriesId && !r.deletedAt && r.startAt > cut && r.id !== e.id)
+      .forEach((r) => Object.assign(r, { deletedAt: ts(), replaced: true }));
+    const old = tables.series.find((r) => r.id === e.seriesId);
+    if (old) old.rule = { ...old.rule, untilDate: dateKey(new Date(cut)) };
+  }
+  if (!rule) { e.seriesId = null; return { ...e }; }
+  const start = new Date(e.startAt);
+  const length = new Date(e.endAt).getTime() - start.getTime();
+  const first = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const series = create("series", { rule, firstDate: dateKey(first) });
+  e.seriesId = series.id;
+  const until = rule.untilDate ? new Date(`${rule.untilDate}T23:59`) : new Date(Date.now() + 180 * 86_400_000);
+  const days = rule.weekdays ? String(rule.weekdays).split("").map(Number) : [((first.getDay() + 6) % 7) + 1];
+  const week0 = new Date(first); week0.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  for (let d = new Date(first); d <= until; d.setDate(d.getDate() + 1)) {
+    const diff = Math.round((d.getTime() - first.getTime()) / 86_400_000);
+    const on =
+      rule.freq === "daily" ? diff % rule.interval === 0
+      : rule.freq === "weekly" ? days.includes(((d.getDay() + 6) % 7) + 1) && Math.floor(Math.round((d.getTime() - week0.getTime()) / 86_400_000) / 7) % rule.interval === 0
+      : d.getDate() === first.getDate() && ((d.getFullYear() - first.getFullYear()) * 12 + d.getMonth() - first.getMonth()) % rule.interval === 0;
+    if (!on) continue;
+    const s = e.allDay ? new Date(d) : new Date(d.getFullYear(), d.getMonth(), d.getDate(), start.getHours(), start.getMinutes());
+    if (s.toISOString() <= cut) continue;
+    create("event", {
+      spaceId: e.spaceId, activityId: e.activityId, title: e.title, startAt: s.toISOString(),
+      endAt: new Date(s.getTime() + length).toISOString(), allDay: e.allDay, notes: e.notes, status: "planned", taskId: null,
+    }, { source: "manual", sourceId: null, locallyModified: false, seriesId: series.id });
+  }
+  return { ...e };
+}
+
 function checkEvent(input: Row) {
   if (input.endAt <= input.startAt) throw "An event must end after it starts";
 }
@@ -103,7 +145,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           .filter((e) => !e.deletedAt && e.startAt < a.to && e.endAt > a.from)
           .sort((x, y) => x.startAt.localeCompare(y.startAt))
           .map((r) => ({ ...r }));
-      case "create_event": checkEvent(a.input); return create("event", a.input, { source: "manual", sourceId: null, locallyModified: false });
+      case "create_event": checkEvent(a.input); return create("event", { taskId: null, ...a.input }, { source: "manual", sourceId: null, locallyModified: false, seriesId: null });
       case "update_event": checkEvent(a.input); return update("event", a.id, a.input);
       case "list_task_types": return tables.task_type.map((r) => ({ ...r }));
       case "create_task_type": return create("task_type", a.input);
@@ -146,17 +188,31 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       }
       case "start_focus":
         if (tables.focus.some((x) => !x.endedAt && !x.deletedAt)) throw "A focus session is already running";
-        return create("focus", a.input, { startedAt: ts(), endedAt: null, eventId: null });
+        return create("focus", { ...a.input, eventId: a.input.eventId ?? null }, { startedAt: ts(), endedAt: null });
       case "finish_focus": {
         const f = tables.focus.find((x) => x.id === a.id)!;
         const end = new Date(Math.max(Date.now(), new Date(f.startedAt).getTime() + 1)).toISOString();
+        // Started from a planned block: that block takes the real times.
+        const planned = f.eventId && tables.event.find((e) => e.id === f.eventId && !e.deletedAt);
+        if (planned) {
+          Object.assign(f, { endedAt: end });
+          return update("event", planned.id, { startAt: f.startedAt, endAt: end });
+        }
         const ev = create("event", {
           spaceId: f.spaceId, activityId: f.activityId, title: f.title || "Focus", startAt: f.startedAt, endAt: end,
-          allDay: false, notes: "", status: "planned",
-        }, { source: "focus" });
+          allDay: false, notes: "", status: "planned", taskId: f.taskId ?? null,
+        }, { source: "focus", seriesId: null });
         Object.assign(f, { endedAt: end, eventId: ev.id });
         return ev;
       }
+      case "list_series": return tables.series.filter((r) => !r.deletedAt).map((r) => ({ id: r.id, rule: r.rule, firstDate: r.firstDate }));
+      case "set_repeat": return setRepeat(a.id, a.rule);
+      case "list_inbox": return tables.inbox.filter((r) => !r.deletedAt).map((r) => ({ id: r.id, text: r.text, createdAt: r.createdAt }));
+      case "add_inbox":
+        if (!String(a.text).trim()) throw "Note cannot be empty";
+        return create("inbox", { text: String(a.text).trim() });
+      case "set_inbox_done": update("inbox", a.id, { deletedAt: a.done ? ts() : null }); return null;
+      case "open_capture": case "hide_capture": return null;
       case "discard_focus": update("focus", a.id, { endedAt: ts(), deletedAt: ts() }); return null;
       case "list_reminder_rules": return tables.reminder_rule.filter((r) => !r.deletedAt).map((r) => ({ ...r }));
       case "create_reminder_rule": return create("reminder_rule", { ...a.input, name: a.input.title });
@@ -193,9 +249,9 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         const q = String(a.query ?? "").toLowerCase();
         const label = (r: Row) => r.title ?? r.name ?? r.pattern ?? "";
         const items = Object.entries(tables)
-          .filter(([k]) => k !== "focus")
+          .filter(([k]) => !["focus", "series", "inbox"].includes(k))
           .flatMap(([entity, rows]) =>
-            rows.filter((r) => r.deletedAt && label(r).toLowerCase().includes(q)).map((r) => ({
+            rows.filter((r) => r.deletedAt && !r.replaced && label(r).toLowerCase().includes(q)).map((r) => ({
               entity, id: r.id, label: label(r), context: null, when: r.startAt ?? r.deadlineAt ?? null,
               archivedAt: r.deletedAt, removedBySync: false,
             })),

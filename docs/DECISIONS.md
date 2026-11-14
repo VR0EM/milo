@@ -261,6 +261,30 @@ ones marked *(assumption)* are kept easy to change.
   week of the month (overlapping bars go on separate lines). A bar that began before the first
   visible day keeps its title in view.
 - **In the month, events can be dragged to another day**; they keep their times and length.
+- **Plan time for a task (time-blocking):** beside the calendar, "Plan a task" lists open tasks
+  (deadline first, then priority). Dragging one onto the hours makes a block linked to the task
+  (`events.task_id`), with the Study activity so it counts as productive. Pointer events, not
+  HTML drag and drop, because the Windows webview takes HTML drops for files. The task panel
+  shows its coming blocks, the time already spent, and "Plan time".
+- **Start focus from a block:** the session fills that block (`focus_sessions.event_id` set at
+  the start). When it stops, the block takes the real start and end, so the time is never
+  counted twice. A session from elsewhere still adds its own event, now linked to its task.
+- **Quick note from anywhere:** Cmd+Shift+Space (Mac) / Ctrl+Shift+Space (Windows) opens a small
+  window, also when Milo is hidden in the tray. Enter saves to `inbox_items`; nothing to choose.
+  Today has an Inbox: "Make task" (in the last used space, then opens it) or "Done" (with Undo).
+  The sidebar shows the count next to Today. If another app holds the key, Milo works without it.
+- **"What now?" on Today** suggests one open task for the free time until the next event (the
+  day ends at 22:00), with the reason in words. The order is plain rules: overdue first, then the
+  nearest deadline, pulled forward by high priority and by an aim of today. A block planned for
+  now comes first. "Something else" shows the next one. Hidden while a focus session runs.
+- **Repeating events made in Milo** (`event_series`): every day, every (2) week(s) on a day, every
+  weekday, every month, or custom (every n days/weeks/months, weekdays), until a date or not.
+  Every occurrence is an ordinary event row, so reminders and Insights need nothing new. A series
+  without an end keeps 180 days ahead and is topped up by the background thread. A change of the
+  repeat applies to this event and later ones; past occurrences are never changed. Replaced
+  future occurrences are kept (`replaced`) but not listed in the Archive. Editing one occurrence
+  changes only that one; "Copy … to later events" passes its details on. Imported events repeat
+  in their own calendar and cannot be given a Milo repeat.
 - **Today shows today's all-day events** above Now; a click opens them in the day view.
 - The mini month follows the calendar; its arrows only browse until the calendar moves.
 - **All-day events** are made by double-clicking the All day row, or with the "All day" box in

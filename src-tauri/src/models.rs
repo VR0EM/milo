@@ -68,6 +68,10 @@ pub struct Event {
     pub source: String,
     pub source_id: Option<String>,
     pub locally_modified: bool,
+    /// The task this is time for, if any.
+    pub task_id: Option<String>,
+    /// The repeat this occurrence belongs to, if any.
+    pub series_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -87,6 +91,8 @@ pub struct EventInput {
     pub notes: String,
     #[serde(default = "default_status")]
     pub status: String,
+    #[serde(default)]
+    pub task_id: Option<String>,
 }
 
 fn default_status() -> String {
@@ -214,6 +220,10 @@ pub struct FocusInput {
     pub space_id: String,
     pub activity_id: Option<String>,
     pub task_id: Option<String>,
+    /// A planned block this session fills: when it ends, that event takes the real times
+    /// instead of a second event being added.
+    #[serde(default)]
+    pub event_id: Option<String>,
     #[serde(default)]
     pub title: String,
     pub planned_minutes: i64,
@@ -451,4 +461,40 @@ pub struct BackupFile {
 pub struct BackupSettings {
     pub mirror_dir: Option<String>,
     pub backups: Vec<BackupFile>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxItem {
+    pub id: String,
+    pub text: String,
+    pub created_at: String,
+}
+
+/// How an event repeats.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RepeatRule {
+    /// 'daily' | 'weekly' | 'monthly'
+    pub freq: String,
+    #[serde(default = "one")]
+    pub interval: i64,
+    /// Weekly only: '135' = Monday, Wednesday, Friday. Empty means the event's own weekday.
+    #[serde(default)]
+    pub weekdays: String,
+    /// Local 'YYYY-MM-DD', inclusive. None repeats without end.
+    #[serde(default)]
+    pub until_date: Option<String>,
+}
+
+fn one() -> i64 {
+    1
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventSeries {
+    pub id: String,
+    pub rule: RepeatRule,
+    pub first_date: String,
 }

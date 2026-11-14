@@ -224,7 +224,7 @@ mod tests {
                 end_at: iso(start + Duration::hours(1)),
                 all_day: false,
                 notes: String::new(),
-                status: "planned".into(),
+                status: "planned".into(), task_id: None,
             },
             "manual",
         )
@@ -265,7 +265,7 @@ mod tests {
         assert!(tick(&c, Local.with_ymd_and_hms(2026, 11, 12, 8, 31, 0).unwrap()).unwrap().is_empty());
 
         // A focus session that reached its length is announced once.
-        let s = repo::start_focus(&c, crate::models::FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, title: "Essay".into(), planned_minutes: 25 }).unwrap();
+        let s = repo::start_focus(&c, crate::models::FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, event_id: None, title: "Essay".into(), planned_minutes: 25 }).unwrap();
         assert!(tick(&c, Local::now()).unwrap().iter().all(|d| !d.title.starts_with("Focus")), "not yet");
         c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
         let done: Vec<_> = tick(&c, Local::now()).unwrap().into_iter().filter(|d| d.title.starts_with("Focus")).collect();

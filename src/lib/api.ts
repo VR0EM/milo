@@ -9,6 +9,7 @@ import type {
   ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
+  EventSeries, InboxItem, RepeatRule,
 } from "./types";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
@@ -97,6 +98,15 @@ export const api = {
   setBackupMirror: (path: string | null) => call<number>("set_backup_mirror", { path }),
   restoreBackup: (name: string) => call<string>("restore_backup", { name }),
 
+  listSeries: () => call<EventSeries[]>("list_series"),
+  setRepeat: (id: string, rule: RepeatRule | null) => call<CalEvent>("set_repeat", { id, rule }),
+
+  listInbox: () => call<InboxItem[]>("list_inbox"),
+  addInbox: (text: string) => call<InboxItem>("add_inbox", { text }),
+  setInboxDone: (id: string, done: boolean) => call<void>("set_inbox_done", { id, done }),
+  openCapture: () => call<void>("open_capture"),
+  hideCapture: () => call<void>("hide_capture"),
+
   showFocusMini: () => call<void>("show_focus_mini", { expanded: miniExpanded() }),
   sizeFocusMini: (expanded: boolean) => call<void>("size_focus_mini", { expanded }),
   closeFocusMini: () => call<void>("close_focus_mini"),
@@ -148,11 +158,24 @@ export async function onDataChanged(fn: () => void) {
   await listen("data-changed", fn);
 }
 
-/** Which window this page is: the main window, or the small focus timer. */
-export async function windowKind(): Promise<"main" | "focus-mini"> {
-  if (!inTauri) return new URLSearchParams(location.search).has("mini") ? "focus-mini" : "main";
+export type WindowKind = "main" | "focus-mini" | "capture";
+
+/** Which window this page is: the main window, the small focus timer, or the quick note. */
+export async function windowKind(): Promise<WindowKind> {
+  if (!inTauri) {
+    const q = new URLSearchParams(location.search);
+    return q.has("mini") ? "focus-mini" : q.has("capture") ? "capture" : "main";
+  }
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  return getCurrentWindow().label === "focus-mini" ? "focus-mini" : "main";
+  const label = getCurrentWindow().label;
+  return label === "focus-mini" || label === "capture" ? label : "main";
+}
+
+/** Runs `fn` each time the quick note window is shown again. */
+export async function onCaptureOpen(fn: () => void) {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().listen("capture-open", fn);
 }
 
 /** Whether the small focus timer shows its options; remembered between sessions. */

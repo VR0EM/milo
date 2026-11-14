@@ -45,6 +45,10 @@ export interface CalEvent {
   source: string;
   sourceId: string | null;
   locallyModified: boolean;
+  /** The task this is time for ("Work on: ..."), if any. */
+  taskId: string | null;
+  /** The repeat this occurrence belongs to, if any. */
+  seriesId: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -52,7 +56,28 @@ export interface CalEvent {
 export type EventInput = Pick<
   CalEvent,
   "spaceId" | "activityId" | "title" | "startAt" | "endAt" | "allDay" | "notes" | "status"
->;
+> & { taskId?: string | null };
+
+export type RepeatFreq = "daily" | "weekly" | "monthly";
+export interface RepeatRule {
+  freq: RepeatFreq;
+  interval: number;
+  /** Weekly: "135" = Mon, Wed, Fri (1 = Monday). Empty = the event's own weekday. */
+  weekdays: string;
+  /** Local "YYYY-MM-DD", inclusive; null repeats without end. */
+  untilDate: string | null;
+}
+export interface EventSeries {
+  id: string;
+  rule: RepeatRule;
+  firstDate: string;
+}
+
+export interface InboxItem {
+  id: string;
+  text: string;
+  createdAt: string;
+}
 
 export interface TaskType {
   id: string;
@@ -135,7 +160,10 @@ export interface FocusSession {
   endedAt: string | null;
   eventId: string | null;
 }
-export type FocusInput = Pick<FocusSession, "spaceId" | "activityId" | "taskId" | "title" | "plannedMinutes">;
+export type FocusInput = Pick<FocusSession, "spaceId" | "activityId" | "taskId" | "title" | "plannedMinutes"> & {
+  /** A planned block this session fills; it takes the real times when the session ends. */
+  eventId?: string | null;
+};
 
 export type ReminderKind = "event" | "times" | "interval" | "focus";
 
@@ -257,4 +285,5 @@ export const toInput = (e: CalEvent): EventInput => ({
   allDay: e.allDay,
   notes: e.notes,
   status: e.status,
+  taskId: e.taskId,
 });

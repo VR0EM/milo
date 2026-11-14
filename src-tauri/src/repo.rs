@@ -187,6 +187,8 @@ fn event_from(r: &Row) -> rusqlite::Result<Event> {
         source: r.get("source")?,
         source_id: r.get("source_id")?,
         locally_modified: r.get("locally_modified")?,
+        task_id: r.get("task_id")?,
+        series_id: r.get("series_id")?,
         created_at: r.get("created_at")?,
         updated_at: r.get("updated_at")?,
         deleted_at: r.get("deleted_at")?,
@@ -218,8 +220,8 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
     check_event(&input)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
+        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, task_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
         params![
             id,
             input.space_id,
@@ -231,6 +233,7 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
             input.notes,
             input.status,
             source,
+            input.task_id,
             ts
         ],
     )?;
@@ -241,7 +244,7 @@ pub fn update_event(c: &Connection, id: &str, input: EventInput) -> Result<Event
     check_event(&input)?;
     changed(c.execute(
         "UPDATE events SET space_id = ?2, activity_id = ?3, title = ?4, start_at = ?5, end_at = ?6,
-         all_day = ?7, notes = ?8, status = ?9, updated_at = ?10,
+         all_day = ?7, notes = ?8, status = ?9, updated_at = ?10, task_id = ?11,
          locally_modified = (source = 'import') OR locally_modified WHERE id = ?1",
         params![
             id,
@@ -253,7 +256,8 @@ pub fn update_event(c: &Connection, id: &str, input: EventInput) -> Result<Event
             input.all_day,
             input.notes,
             input.status,
-            now()
+            now(),
+            input.task_id
         ],
     )?)?;
     get_event(c, id)
@@ -627,9 +631,9 @@ pub fn start_focus(c: &Connection, input: FocusInput) -> Result<FocusSession> {
     }
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO focus_sessions (id, space_id, activity_id, task_id, title, planned_minutes, started_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7)",
-        params![id, input.space_id, input.activity_id, input.task_id, input.title.trim(), input.planned_minutes, ts],
+        "INSERT INTO focus_sessions (id, space_id, activity_id, task_id, title, planned_minutes, started_at, event_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7, ?7)",
+        params![id, input.space_id, input.activity_id, input.task_id, input.title.trim(), input.planned_minutes, ts, input.event_id],
     )?;
     Ok(c.query_row("SELECT * FROM focus_sessions WHERE id = ?1", [&id], focus_from)?)
 }
@@ -647,6 +651,18 @@ pub fn finish_focus_at(c: &Connection, id: &str, end: &str) -> Result<Event> {
         focus_from,
     )?;
     let ts = end.to_string();
+    // Started from a planned block: that block becomes the session, with its real times,
+    // so the time is not counted twice.
+    if let Some(planned) = session.event_id.as_deref() {
+        let updated = c.execute(
+            "UPDATE events SET start_at = ?2, end_at = ?3, status = 'planned', updated_at = ?3 WHERE id = ?1 AND deleted_at IS NULL",
+            params![planned, session.started_at, ts],
+        )?;
+        if updated == 1 {
+            c.execute("UPDATE focus_sessions SET ended_at = ?2, updated_at = ?2 WHERE id = ?1", params![id, ts])?;
+            return get_event(c, planned);
+        }
+    }
     let event = create_event(
         c,
         EventInput {
@@ -657,7 +673,7 @@ pub fn finish_focus_at(c: &Connection, id: &str, end: &str) -> Result<Event> {
             end_at: ts.clone(),
             all_day: false,
             notes: String::new(),
-            status: "planned".into(),
+            status: "planned".into(), task_id: session.task_id,
         },
         "focus",
     )?;
@@ -691,6 +707,33 @@ pub fn discard_focus(c: &Connection, id: &str) -> Result<()> {
     changed(c.execute(
         "UPDATE focus_sessions SET ended_at = ?2, deleted_at = ?2, updated_at = ?2 WHERE id = ?1 AND ended_at IS NULL",
         params![id, ts],
+    )?)
+}
+
+// ---------- inbox ----------
+
+/// Quick notes, oldest first, that have not been handled yet.
+pub fn list_inbox(c: &Connection) -> Result<Vec<InboxItem>> {
+    let mut s = c.prepare("SELECT id, text, created_at FROM inbox_items WHERE deleted_at IS NULL ORDER BY created_at")?;
+    let rows = s
+        .query_map([], |r| Ok(InboxItem { id: r.get(0)?, text: r.get(1)?, created_at: r.get(2)? }))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+pub fn add_inbox(c: &Connection, text: &str) -> Result<InboxItem> {
+    let text = non_empty(text, "Note")?;
+    let (id, ts) = (new_id(), now());
+    c.execute("INSERT INTO inbox_items (id, text, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", params![id, text, ts])?;
+    Ok(InboxItem { id, text, created_at: ts })
+}
+
+/// A handled note leaves the inbox. The row stays, like everything in Milo.
+pub fn set_inbox_done(c: &Connection, id: &str, done: bool) -> Result<()> {
+    let ts = now();
+    changed(c.execute(
+        "UPDATE inbox_items SET deleted_at = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, if done { Some(ts.clone()) } else { None }, ts],
     )?)
 }
 
@@ -854,7 +897,7 @@ mod tests {
             end_at: end.into(),
             all_day: false,
             notes: String::new(),
-            status: "planned".into(),
+            status: "planned".into(), task_id: None,
         }
     }
 
@@ -973,12 +1016,67 @@ mod tests {
     }
 
     #[test]
+    fn focus_from_a_planned_block_fills_that_block() {
+        let c = open_in_memory().unwrap();
+        let task = create_task(
+            &c,
+            TaskInput {
+                space_id: "seed-space-personal".into(),
+                type_id: None,
+                title: "Essay".into(),
+                notes: String::new(),
+                deadline_at: None,
+                target_at: None,
+                priority: None,
+            },
+        )
+        .unwrap();
+        let mut planned = input("2020-01-01T10:00:00.000Z", "2020-01-01T12:00:00.000Z");
+        planned.task_id = Some(task.id.clone());
+        let block = create_event(&c, planned, "manual").unwrap();
+        assert_eq!(block.task_id.as_deref(), Some(task.id.as_str()));
+
+        let s = start_focus(
+            &c,
+            FocusInput {
+                space_id: "seed-space-personal".into(),
+                activity_id: None,
+                task_id: Some(task.id.clone()),
+                event_id: Some(block.id.clone()),
+                title: "Essay".into(),
+                planned_minutes: 120,
+            },
+        )
+        .unwrap();
+        c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:10:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
+        let e = finish_focus_at(&c, &s.id, "2020-01-01T11:40:00.000Z").unwrap();
+        assert_eq!(e.id, block.id, "no second event");
+        assert_eq!((e.start_at.as_str(), e.end_at.as_str()), ("2020-01-01T10:10:00.000Z", "2020-01-01T11:40:00.000Z"));
+        let count: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE deleted_at IS NULL", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn inbox_notes_are_handled_not_deleted() {
+        let c = open_in_memory().unwrap();
+        assert!(add_inbox(&c, "   ").is_err());
+        let a = add_inbox(&c, "mail prof about the lab").unwrap();
+        add_inbox(&c, "buy notebook").unwrap();
+        assert_eq!(list_inbox(&c).unwrap().len(), 2);
+        set_inbox_done(&c, &a.id, true).unwrap();
+        assert_eq!(list_inbox(&c).unwrap().len(), 1);
+        let kept: i64 = c.query_row("SELECT COUNT(*) FROM inbox_items", [], |r| r.get(0)).unwrap();
+        assert_eq!(kept, 2);
+    }
+
+    #[test]
     fn focus_session_becomes_an_event() {
         let c = open_in_memory().unwrap();
         let input = || FocusInput {
             space_id: "seed-space-personal".into(),
             activity_id: Some("seed-activity-study".into()),
             task_id: None,
+            event_id: None,
             title: String::new(),
             planned_minutes: 25,
         };

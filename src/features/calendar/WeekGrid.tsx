@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { colorVar } from "../../lib/colors";
-import { useCreateEvent, useUpdateEvent } from "../../lib/queries";
+import { useActivities, useCreateEvent, useUpdateEvent } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import {
   MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes, startOfDay,
@@ -9,6 +9,7 @@ import type { CalEvent, Space, Task } from "../../lib/types";
 import { firstShown, shiftShown, shownDistance } from "./days";
 import { layoutDay } from "./layout";
 import { lanesPerColumn, layoutSpans } from "./spans";
+import { addDropTarget, useTaskDrag } from "./taskDrag";
 
 type Mode = "move" | "start" | "end" | "create";
 interface Draft {
@@ -328,6 +329,48 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
     createNew(start.toISOString(), new Date(start.getTime() + useUi.getState().prefs.eventMinutes * MINUTE).toISOString());
   }
 
+  // ---- a task dragged in from the list beside the calendar --------------------------------
+  const activities = useActivities().data ?? [];
+  const studyId = activities.find((a) => a.category === "self_study" && !a.deletedAt)?.id ?? null;
+  const dragTask = useTaskDrag((s) => s.task);
+  const dragX = useTaskDrag((s) => s.x);
+  const dragY = useTaskDrag((s) => s.y);
+  const blockMinutes = useUi((s) => s.prefs.eventMinutes);
+  // Only the part of the hours that is on screen: below the day headers, inside the scroller.
+  const overHours = (x: number, y: number) => {
+    const r = viewportRef.current?.getBoundingClientRect();
+    const box = scrollerRef.current?.getBoundingClientRect();
+    const head = scrollerRef.current?.querySelector(".grid-header")?.getBoundingClientRect();
+    if (!r || !box) return false;
+    const top = Math.max(r.top, head?.bottom ?? box.top);
+    return x >= r.left && x <= r.right && y >= top && y <= Math.min(r.bottom, box.bottom);
+  };
+  /** The block a task would get if dropped at (x, y): starting where the pointer is. */
+  const blockAt = (x: number, y: number) => {
+    const start = timeAt(x, y, true);
+    return { start, end: new Date(start.getTime() + blockMinutes * MINUTE) };
+  };
+  const dropPreview = dragTask && overHours(dragX, dragY) ? blockAt(dragX, dragY) : null;
+  const dropLive = useRef({ blockAt, overHours, studyId });
+  dropLive.current = { blockAt, overHours, studyId };
+  useEffect(
+    () =>
+      addDropTarget((x, y, task) => {
+        const { blockAt: at, overHours: over, studyId: activityId } = dropLive.current;
+        if (!over(x, y)) return false;
+        const { start, end } = at(x, y);
+        createEvent.mutate(
+          {
+            spaceId: task.spaceId, activityId, title: task.title || "Untitled task", startAt: start.toISOString(),
+            endAt: end.toISOString(), allDay: false, notes: "", status: "planned", taskId: task.id,
+          },
+          { onSuccess: (created) => select(created.id) },
+        );
+        return true;
+      }),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const spans = useMemo(() => layoutSpans(events, days), [events, days]);
   const lanes = useMemo(() => lanesPerColumn(spans, days.length), [spans, days.length]);
   const shown = useMemo<Shown[]>(() => {
@@ -337,8 +380,9 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
         : { id: event.id, start: new Date(event.startAt), end: new Date(event.endAt), event },
     );
     if (draft?.id === "new") list.push({ id: "new", start: draft.start, end: draft.end, event: null });
+    if (dropPreview) list.push({ id: "task-drop", start: dropPreview.start, end: dropPreview.end, event: null });
     return list;
-  }, [events, draft]);
+  }, [events, draft, dropPreview?.start.getTime(), blockMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const px = (minutes: number) => (minutes / 60) * hourHeight;
@@ -466,7 +510,8 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                   ev && ev.id === selectedId ? "selected" : "",
                   ev?.status === "skipped" ? "skipped" : "",
                   seg.item.end < now ? "past" : "",
-                  seg.item.id === draft?.id ? "dragging" : "",
+                  seg.item.id === draft?.id || seg.item.id === "task-drop" ? "dragging" : "",
+                  ev?.taskId ? "task-block" : "",
                 ].join(" ");
                 return (
                   <div
@@ -490,7 +535,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                       if (ev) select(ev.id, true);
                     }}
                   >
-                    <div className="event-title">{ev?.title || (ev ? "Untitled" : "New event")}</div>
+                    <div className="event-title">{ev?.title || (ev ? "Untitled" : seg.item.id === "task-drop" ? dragTask?.title || "Untitled task" : "New event")}</div>
                     {height >= 36 && <div className="event-time">{fmtRange(seg.item.start, seg.item.end)}</div>}
                     {ev && seg.startsHere && (
                       <div className="handle top" onPointerDown={(e) => { e.stopPropagation(); select(ev.id); beginDrag(e, "start", ev); }} />

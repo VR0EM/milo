@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { useArchiveWithUndo, useImportSources, useUpdateEvent } from "../../lib/queries";
+import { useAction, useActiveFocus, useArchiveWithUndo, useImportSources, useTasks, useUpdateEvent } from "../../lib/queries";
+import { beginFocus } from "../../lib/focus";
 import { TimeField } from "../../components/TimeField";
 import { MiniMonth } from "./MiniMonth";
+import { TaskTray } from "./TaskTray";
+import { RepeatField } from "./RepeatField";
 import { useUi } from "../../lib/store";
 import { addDays, fmtDuration, fmtLongDay, fmtTime, fromInputs, sameDay, startOfDay, toDateInput } from "../../lib/time";
 import { type Activity, type CalEvent, type EventInput, type Space } from "../../lib/types";
@@ -25,6 +28,7 @@ export function EventPanel({ event, spaces, activities }: Props) {
           <p className="muted small">
             Select an event to see its details. Double-click the calendar, or press N, to plan a new one.
           </p>
+          <TaskTray />
         </div>
       )}
     </aside>
@@ -86,6 +90,24 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
     if (last) setTimes(start, addDays(last < start ? start : last, 1));
   };
 
+  // A block of time for a task, and starting focus right from it.
+  const task = (useTasks().data ?? []).find((t) => t.id === event.taskId) ?? null;
+  const focusRunning = !!useActiveFocus().data;
+  const focusAct = useAction("focus", "events");
+  const nowMs = Date.now();
+  const canFocus = !event.allDay && event.source !== "import" && end.getTime() > nowMs && !focusRunning;
+  const startFocusHere = () => {
+    const left = start.getTime() > nowMs ? end.getTime() - start.getTime() : end.getTime() - nowMs;
+    focusAct.mutate(
+      () =>
+        beginFocus({
+          spaceId: event.spaceId, activityId: event.activityId, taskId: event.taskId, title: event.title,
+          plannedMinutes: Math.min(600, Math.max(1, Math.round(left / 60_000))), eventId: event.id,
+        }),
+      { onSuccess: () => useUi.getState().notify({ text: "Focus started. This block takes the real times when you stop." }) },
+    );
+  };
+
   const spaceChoices = spaces.filter((s) => !s.deletedAt || s.id === event.spaceId);
   const activityChoices = activities.filter((a) => !a.deletedAt || a.id === event.activityId);
 
@@ -105,6 +127,18 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       <p className="panel-sub">
         {fmtLongDay(start)} · {event.allDay ? (sameDay(start, lastDay) ? "All day" : `until ${fmtLongDay(lastDay)}`) : fmtDuration(end.getTime() - start.getTime())}
       </p>
+
+      {task && (
+        <div className="task-link">
+          <span className="muted">Time for</span>
+          <button type="button" className="link" onClick={() => useUi.getState().selectTask(task.id)}>{task.title || "Untitled task"}</button>
+        </div>
+      )}
+      {canFocus && (
+        <button type="button" className="btn primary" onClick={startFocusHere}>
+          Start focus
+        </button>
+      )}
 
       <label className="check">
         <input type="checkbox" checked={event.allDay} onChange={(e) => setAllDay(e.target.checked)} />
@@ -139,6 +173,8 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       </div>
       </>
       )}
+
+      {event.source !== "import" && <RepeatField key={event.seriesId ?? "none"} event={event} />}
 
       <label className="field">
         <span>Space</span>

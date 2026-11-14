@@ -56,11 +56,11 @@ pub fn list_archived(c: &Connection, query: &str) -> Result<(Vec<ArchivedItem>, 
         c,
         "event",
         "SELECT e.id, e.title, s.name, e.start_at, e.deleted_at, e.removed_by_sync FROM events e JOIN spaces s ON s.id = e.space_id
-         WHERE e.deleted_at IS NOT NULL AND lower(e.title) LIKE ?1 ORDER BY e.deleted_at DESC LIMIT ?2",
+         WHERE e.deleted_at IS NOT NULL AND e.replaced = 0 AND lower(e.title) LIKE ?1 ORDER BY e.deleted_at DESC LIMIT ?2",
         &[&like, &EVENT_LIMIT],
     )?;
     let total: i64 = c.query_row(
-        "SELECT COUNT(*) FROM events WHERE deleted_at IS NOT NULL AND lower(title) LIKE ?1",
+        "SELECT COUNT(*) FROM events WHERE deleted_at IS NOT NULL AND replaced = 0 AND lower(title) LIKE ?1",
         [&like],
         |r| r.get(0),
     )?;
@@ -85,7 +85,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: "Dentist".into(),
                 start_at: "2026-11-11T08:00:00.000Z".into(), end_at: "2026-11-11T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(),
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
             },
             "manual",
         )
@@ -113,7 +113,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: "Lecture".into(),
                 start_at: "2030-01-01T08:00:00.000Z".into(), end_at: "2030-01-01T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(),
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
             },
             "manual",
         )

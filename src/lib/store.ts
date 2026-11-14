@@ -70,6 +70,8 @@ interface UiState {
   calMode: CalMode;
   /** The space whose overview is open (view "space"). */
   spaceViewId: string | null;
+  /** A task to point out in the list beside the calendar ("Plan time"). */
+  planTaskId: string | null;
   openSpace: (id: string) => void;
   setCalMode: (mode: CalMode) => void;
   /** Show the day, week or month (by the current mode) that holds `d`. */
@@ -125,6 +127,7 @@ export const useUi = create<UiState>()(
       viewStart: startOfWeek(new Date()),
       calMode: "week",
       spaceViewId: null,
+      planTaskId: null,
       openSpace: (id) => set({ view: "space", spaceViewId: id, selectedTaskId: null, selectedEventId: null }),
       setCalMode: (mode) =>
         set((s) => {
