@@ -94,8 +94,12 @@ function setRepeat(id: string, rule: Row | null): Row {
   if (e.source === "import") throw "Imported events repeat in the calendar they come from";
   const cut = e.startAt > ts() ? e.startAt : ts();
   if (e.seriesId) {
-    tables.event.filter((r) => r.seriesId === e.seriesId && !r.deletedAt && r.startAt > cut && r.id !== e.id)
-      .forEach((r) => Object.assign(r, { deletedAt: ts(), replaced: true }));
+    // Untouched future occurrences go; edited ones are set aside (as in series.rs).
+    const later = tables.event.filter((r) => r.seriesId === e.seriesId && !r.deletedAt && r.startAt > cut && r.id !== e.id);
+    later.forEach((r) => {
+      if (r.updatedAt === r.createdAt) tables.event.splice(tables.event.indexOf(r), 1);
+      else Object.assign(r, { deletedAt: ts(), replaced: true });
+    });
     const old = tables.series.find((r) => r.id === e.seriesId);
     if (old) old.rule = { ...old.rule, untilDate: dateKey(new Date(cut)) };
   }
@@ -129,6 +133,8 @@ function setRepeat(id: string, rule: Row | null): Row {
 function remember(entity: string, id: string, input: Row) {
   const row = tables[entity].find((r) => r.id === id);
   if (!row) return;
+  // Changing an item right after making it (naming a new event) keeps no version.
+  if (Date.now() - new Date(row.createdAt).getTime() < 120_000) return;
   if (Object.keys(input).every((k) => row[k] === input[k] || (row[k] ?? null) === (input[k] ?? null))) return;
   const last = tables.change.filter((c) => c.entity === entity && c.entityId === id).sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0];
   if (last && Date.now() - new Date(last.createdAt).getTime() < 120_000) return;
@@ -144,7 +150,17 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
     switch (cmd) {
       case "list_groups": return tables.group.map((r) => ({ ...r }));
       case "list_spaces": return tables.space.map((r): Row => ({ icon: null, ...r })).sort((x, y) => x.sortOrder - y.sortOrder);
-      case "reorder_spaces": (a.ids as string[]).forEach((id, i) => { const r = tables.space.find((x) => x.id === id); if (r) r.sortOrder = i; }); return null;
+      case "reorder_spaces": {
+        // Same as repo::reorder_spaces: the named spaces swap among their own places, then all
+        // spaces are numbered again, so lists never collide.
+        const all = [...tables.space].sort((x, y) => x.sortOrder - y.sortOrder || x.name.localeCompare(y.name));
+        const moved = (a.ids as string[]).filter((id) => all.some((r) => r.id === id));
+        const slots = all.map((r, i) => (moved.includes(r.id) ? i : -1)).filter((i) => i >= 0);
+        const order = all.map((r) => r.id);
+        slots.forEach((slot, n) => { order[slot] = moved[n]; });
+        order.forEach((id, i) => { tables.space.find((r) => r.id === id)!.sortOrder = i; });
+        return null;
+      }
       case "list_activities": return tables.activity.map((r) => ({ ...r }));
       case "create_group": return create("group", a.input);
       case "update_group": return update("group", a.id, a.input);

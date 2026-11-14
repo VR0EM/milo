@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { api } from "../../lib/api";
 import { useAction, useInbox, useSpaces } from "../../lib/queries";
 import { useUi } from "../../lib/store";
@@ -33,7 +34,7 @@ export function InboxBlock() {
         useUi.getState().notify({ text: "Note done", undo: () => act.mutate(() => api.setInboxDone(item.id, false)) }),
     });
   const toTask = (item: InboxItem) => {
-    const spaceId = (spaces.find((s) => s.id === lastSpaceId) ?? spaces[0])?.id;
+    const spaceId = pickDefaultSpace(spaces, lastSpaceId)?.id;
     if (!spaceId) return;
     act.mutate(
       () => api.inboxToTask(item.id, spaceId),
@@ -66,7 +67,7 @@ export function InboxBlock() {
               <span className="inbox-text">{item.text}</span>
               <span className="muted small tabular">{when(item.createdAt)}</span>
               <button className="btn small" onClick={() => toTask(item)}>Make task</button>
-              <button className="btn small quiet" onClick={() => done(item)}>Done</button>
+              <button className="link inbox-done" onClick={() => done(item)}>Done</button>
             </li>
           ))}
         </ul>

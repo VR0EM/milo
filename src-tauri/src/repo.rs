@@ -139,11 +139,27 @@ fn icon(value: &Option<String>) -> Result<Option<String>> {
     }
 }
 
-/// Puts spaces in the order given (the order in the sidebar). Spaces not named keep theirs.
+/// Puts the named spaces in the order given (one list of the sidebar), and keeps every other
+/// space where it was. All spaces share one numbering: the named ones swap places among the
+/// positions they already held, and then everything is numbered 0, 1, 2… again, so a list can
+/// never take the place of another (the first space is a default in a few places).
 pub fn reorder_spaces(c: &Connection, ids: &[String]) -> Result<()> {
+    let all: Vec<String> = c
+        .prepare("SELECT id FROM spaces ORDER BY sort_order, name")?
+        .query_map([], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let moved: Vec<&String> = ids.iter().filter(|id| all.contains(id)).collect();
+    let slots: Vec<usize> = all.iter().enumerate().filter(|(_, id)| moved.contains(id)).map(|(i, _)| i).collect();
+    let mut order = all.clone();
+    for (slot, id) in slots.iter().zip(moved) {
+        order[*slot] = id.clone();
+    }
     let ts = now();
-    for (i, id) in ids.iter().enumerate() {
-        c.execute("UPDATE spaces SET sort_order = ?2, updated_at = ?3 WHERE id = ?1", params![id, i as i64, ts])?;
+    for (i, id) in order.iter().enumerate() {
+        c.execute(
+            "UPDATE spaces SET sort_order = ?2, updated_at = ?3 WHERE id = ?1 AND sort_order != ?2",
+            params![id, i as i64, ts],
+        )?;
     }
     Ok(())
 }
@@ -276,7 +292,9 @@ pub fn update_event(c: &Connection, id: &str, input: EventInput) -> Result<Event
     if same {
         return Ok(before);
     }
-    crate::history::remember(c, "event", id, &before, false)?;
+    if !crate::history::just_created(&before.created_at) {
+        crate::history::remember(c, "event", id, &before, false)?;
+    }
     update_event_unlogged(c, id, input)
 }
 
@@ -441,7 +459,9 @@ pub fn update_task(c: &Connection, id: &str, input: TaskInput) -> Result<Task> {
     if same {
         return Ok(before);
     }
-    crate::history::remember(c, "task", id, &before, false)?;
+    if !crate::history::just_created(&before.created_at) {
+        crate::history::remember(c, "task", id, &before, false)?;
+    }
     update_task_unlogged(c, id, input)
 }
 
@@ -1211,9 +1231,14 @@ mod tests {
         assert!(update_space(&c, &s.id, input(Some("<svg>"))).is_err());
         assert_eq!(update_space(&c, &s.id, input(Some(""))).unwrap().icon, None);
 
+        // Chemistry and Personal swap places; Sleep and Transport stay where they are.
+        let before: Vec<String> = list_spaces(&c).unwrap().into_iter().map(|x| x.id).collect();
+        assert_eq!(before, ["seed-space-personal", "seed-space-sleep", "seed-space-transport", s.id.as_str()]);
         reorder_spaces(&c, &[s.id.clone(), "seed-space-personal".into()]).unwrap();
-        let order: Vec<String> = list_spaces(&c).unwrap().into_iter().map(|x| x.id).collect();
-        assert_eq!(order[0], s.id);
-        assert_eq!(order[1], "seed-space-personal");
+        let after = list_spaces(&c).unwrap();
+        let order: Vec<&str> = after.iter().map(|x| x.id.as_str()).collect();
+        assert_eq!(order, [s.id.as_str(), "seed-space-sleep", "seed-space-transport", "seed-space-personal"]);
+        let numbers: Vec<i64> = after.iter().map(|x| x.sort_order).collect();
+        assert_eq!(numbers, [0, 1, 2, 3], "one numbering for all spaces, no ties");
     }
 }

@@ -6,6 +6,7 @@ import { useUi, type InsightsPeriod } from "../../lib/store";
 import { addDays, startOfWeek, toDateInput } from "../../lib/time";
 import type { Insights, Semester, Space } from "../../lib/types";
 import { ColumnChart, DataTable, Legend, fmtMinutes, type Column, type Series } from "./Charts";
+import { DateInput } from "../../components/DateInput";
 
 const STUDY: Series[] = [
   { name: "Class", color: "var(--series-class)" },
@@ -324,8 +325,8 @@ function Semesters({ semesters }: { semesters: Semester[] }) {
         }}
       >
         <label className="field"><span>Name</span><input placeholder="Semester 1, 2026–27" value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <label className="field"><span>First day</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-        <label className="field"><span>Last day</span><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+        <label className="field"><span>First day</span><DateInput value={start} placeholder="Pick a day" onChange={(e) => setStart(e.target.value)} /></label>
+        <label className="field"><span>Last day</span><DateInput value={end} placeholder="Pick a day" onChange={(e) => setEnd(e.target.value)} /></label>
         <button className="btn" type="submit" disabled={!name.trim() || !start || !end}>Add</button>
       </form>
     </section>

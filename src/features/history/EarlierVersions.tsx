@@ -24,7 +24,12 @@ function differences(entity: "event" | "task", was: Record<string, unknown>, now
   if (entity === "event") {
     if (changed("startAt") || changed("endAt") || changed("allDay")) {
       const s = new Date(String(was.startAt));
-      out.push(was.allDay ? `all day ${day.format(s)}` : `${day.format(s)} ${fmtTime(s)} – ${fmtTime(new Date(String(was.endAt)))}`);
+      const last = new Date(new Date(String(was.endAt)).getTime() - 1);
+      out.push(
+        was.allDay
+          ? last.toDateString() === s.toDateString() ? `all day ${day.format(s)}` : `all day ${day.format(s)} – ${day.format(last)}`
+          : `${day.format(s)} ${fmtTime(s)} – ${fmtTime(new Date(String(was.endAt)))}`,
+      );
     }
     if (changed("activityId")) out.push(`activity ${names.activity(was.activityId)}`);
     if (changed("status")) out.push(was.status === "skipped" ? "marked as did not happen" : "not marked as did not happen");

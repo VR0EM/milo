@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { useActivities, useArchiveWithUndo, useCreateEvent, useEvents, useSpaces, useTaskTypes, useTasks } from "../../lib/queries";
 import { useUi, type CalMode } from "../../lib/store";
 import { addDays, atMinutes, fmtLongDay, fmtMonth, isoWeek, minutesIntoDay, startOfDay } from "../../lib/time";
@@ -52,7 +53,7 @@ export function CalendarView() {
   const visible = useMemo(() => events.filter((e) => !hidden.includes(e.spaceId)), [events, hidden]);
   const selected = events.find((e) => e.id === selectedId) ?? null;
   const active = spaces.filter((s) => !s.deletedAt);
-  const defaultSpaceId = (active.find((s) => s.id === lastSpaceId) ?? active[0])?.id ?? null;
+  const defaultSpaceId = pickDefaultSpace(active, lastSpaceId)?.id ?? null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

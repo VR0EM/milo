@@ -13,7 +13,7 @@ import { SetupGate } from "./features/setup/SetupGuide";
 import { useUi } from "./lib/store";
 import { useAppearance } from "./lib/useAppearance";
 import { checkAutomatically } from "./lib/updates";
-import { setClockPrefs } from "./lib/time";
+import { addDays, setClockPrefs, startOfWeek } from "./lib/time";
 
 export default function App() {
   const view = useUi((s) => s.view);
@@ -21,6 +21,11 @@ export default function App() {
   const timeFormat = useUi((s) => s.prefs.timeFormat);
   const weekStart = useUi((s) => s.prefs.weekStart);
   setClockPrefs({ timeFormat, weekStart });
+  // The week on screen follows a new first day of the week at once (also at start, as the
+  // store was set up before the saved choice was read).
+  useEffect(() => {
+    useUi.setState((s) => (s.calMode === "week" ? { viewStart: startOfWeek(addDays(s.viewStart, 3)) } : {}));
+  }, [weekStart]);
   useGlobalShortcuts();
   useAppearance();
   const autoUpdates = useUi((s) => s.prefs.autoUpdates);

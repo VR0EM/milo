@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
+import { DateInput } from "../../components/DateInput";
 import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
 import { useArchiveWithUndo, useEvents, useImportSources, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
@@ -206,7 +207,7 @@ function MomentField({ label, value, onChange }: { label: string; value: string 
     <div className="field-row moment">
       <label className="field">
         <span>{label}</span>
-        <input type="date" value={d ? toDateInput(d) : ""} onChange={(e) => set(e.target.value, d ? toTimeInput(d) : "23:59")} />
+        <DateInput value={d ? toDateInput(d) : ""} onChange={(e) => set(e.target.value, d ? toTimeInput(d) : "23:59")} />
       </label>
       <label className="field time">
         <span>Time</span>
@@ -268,7 +269,7 @@ function PlannedTime({ task }: { task: Task }) {
     <div className="planned-time">
       <div className="planned-head">
         <span className="field-label">Planned time</span>
-        {spent > 0 && <span className="muted small">{fmtDuration(spent)} spent</span>}
+        {spent >= 60_000 && <span className="muted small">{fmtDuration(spent)} spent</span>}
         <span className="spacer" />
         <button type="button" className="btn small" onClick={plan}>Plan time</button>
       </div>

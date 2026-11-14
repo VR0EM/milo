@@ -36,13 +36,17 @@ export function ShortcutsDialog() {
   const open = useUi((s) => s.shortcutsOpen);
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (open) ref.current?.showModal();
+    if (!open || !ref.current) return;
+    ref.current.showModal();
+    // showModal focuses the Close button at the bottom, which scrolls the list to its end.
+    ref.current.focus();
+    ref.current.scrollTop = 0;
   }, [open]);
   if (!open) return null;
   const close = () => useUi.setState({ shortcutsOpen: false });
 
   return (
-    <dialog ref={ref} className="dialog wide" onClose={close}>
+    <dialog ref={ref} className="dialog wide" tabIndex={-1} onClose={close}>
       <h2>Keyboard shortcuts</h2>
       <table className="keys">
         <tbody>
@@ -72,7 +76,7 @@ export function ShortcutsDialog() {
       </table>
       <div className="dialog-foot">
         <span className="spacer" />
-        <button className="btn primary" onClick={close} autoFocus>Close</button>
+        <button className="btn primary" onClick={close}>Close</button>
       </div>
     </dialog>
   );

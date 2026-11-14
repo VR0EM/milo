@@ -384,3 +384,27 @@ The core is ready for it without changes:
   Every step can be skipped; it can be opened again from Settings › Data & app and from the
   "Let Milo fill up" card on Today. Running it again only adds.
 
+## Fixes after the first full test in the real app (debug build, real database)
+
+- **Schema repair after migrating** (`db::repair`): a development build had once marked the
+  developer's database as version 9 after a different, since removed, migration 9, so the real
+  009 was skipped (no Inbox, no repeats). After the migrations Milo now checks the tables and
+  columns every database must have and adds only what is missing. A test reproduces the case.
+- **Guide:** each step has its own footer buttons. With one shared button, WebKit turned the
+  Continue of "Make it yours" into the courses form's submit button during the same click and
+  skipped the courses step (Chrome did not). The main button gets the focus when the guide
+  opens. Both link steps list every linked calendar with how it imports (as events / as tasks).
+- **One numbering for all spaces:** dragging spaces in one list of the sidebar swaps them among
+  the places they held and renumbers all spaces, so lists never tie. New things go to a clear
+  default (`pickDefaultSpace`: the one asked for or used last, else Personal, else the first
+  space outside a group), not to "the first space".
+- **Changing a repeat** removes the future occurrences of the old repeat that nobody touched;
+  edited ones (or with versions or a focus session) are still set aside, as before.
+- **A new screen starts without the previous selection**, so a task picked in Tasks no longer
+  takes the place of the mini month in the calendar.
+- **The week on screen follows a new first day of the week** at once (and at start).
+- Small: naming a new item keeps no "earlier version"; time spent under a minute is not shown;
+  am/pm times never wrap; Done in the Inbox is not red; empty date fields say "No date"
+  (the page is `lang="en-GB"`); earlier versions name all days of a multi-day event; the
+  shortcuts overview opens at its top and long dialogs scroll inside the window.
+

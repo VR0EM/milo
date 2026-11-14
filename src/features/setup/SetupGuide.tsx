@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { api } from "../../lib/api";
 import { PALETTE, colorVar } from "../../lib/colors";
 import { useGroups, useImportSources, useReminderRules, useRoutines, useSpaces, useTasks } from "../../lib/queries";
@@ -57,6 +58,8 @@ function SetupGuide() {
   };
   useEffect(() => {
     ref.current?.showModal();
+    // showModal focuses the first control ("Skip setup"); the main button is the one to press.
+    ref.current?.querySelector<HTMLButtonElement>(".setup-foot .btn.primary")?.focus();
   }, []);
   const next = () => setI((n) => Math.min(STEPS.length - 1, n + 1));
 
@@ -82,15 +85,18 @@ function SetupGuide() {
         {step === "ready" && <Ready />}
       </div>
 
-      <div className="setup-foot">
-        {i > 0 && step !== "ready" && <button className="btn setup-back" onClick={() => setI(i - 1)}>Back</button>}
+      {/* Each step gets its own buttons (keyed by step). With one shared button, WebKit turned
+          the Continue of "Make it yours" into the courses form's submit button during the same
+          click, which submitted the empty form and skipped the courses step. */}
+      <div className="setup-foot" key={`foot-${step}`}>
+        {i > 0 && step !== "ready" && <button type="button" className="btn setup-back" onClick={() => setI(i - 1)}>Back</button>}
         <span className="spacer" />
         {step === "courses" ? (
-          <button className="btn primary" form="setup-courses" type="submit">Continue</button>
+          <button type="submit" className="btn primary" form="setup-courses">Continue</button>
         ) : step === "ready" ? (
-          <button className="btn primary" autoFocus onClick={() => { finish(); useUi.getState().setView("today"); }}>Open Today</button>
+          <button type="button" className="btn primary" autoFocus onClick={() => { finish(); useUi.getState().setView("today"); }}>Open Today</button>
         ) : (
-          <button className="btn primary" autoFocus onClick={next}>{step === "welcome" ? "Get started" : "Continue"}</button>
+          <button type="button" className="btn primary" autoFocus onClick={next}>{step === "welcome" ? "Get started" : "Continue"}</button>
         )}
       </div>
     </dialog>
@@ -274,11 +280,13 @@ const hostOf = (url: string) => {
 function CalendarLink({ kind }: { kind: "events" | "tasks" }) {
   const qc = useQueryClient();
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
-  const sources = (useImportSources().data ?? []).filter((s) => s.importAs === kind);
+  // Every linked calendar, with how it comes in: a deadlines link imported as events would
+  // otherwise be missing from the deadlines step.
+  const sources = useImportSources().data ?? [];
   const [url, setUrl] = useState("");
   const [spaceId, setSpaceId] = useState("");
   const [state, setState] = useState<{ busy?: boolean; error?: string }>({});
-  const space = spaceId || (spaces.find((s) => s.id === "seed-space-personal") ?? spaces[0])?.id || "";
+  const space = spaceId || pickDefaultSpace(spaces)?.id || "";
   const timetable = kind === "events";
 
   const add = async () => {
@@ -311,12 +319,12 @@ function CalendarLink({ kind }: { kind: "events" | "tasks" }) {
       </div>
       {state.error && <p className="error">{state.error}</p>}
       {sources.length > 0 && (
-        <ul className="setup-linked">
+        <ul className="setup-linked" aria-label="Linked calendars">
           {sources.map((s: ImportSource) => (
             <li key={s.id}>
               <Icon name="check" size={14} />
               <span>{s.name}</span>
-              <span className="muted">{hostOf(s.location)}</span>
+              <span className="muted">{[hostOf(s.location), s.importAs === "tasks" ? "as tasks" : "as events"].filter(Boolean).join(" · ")}</span>
             </li>
           ))}
         </ul>

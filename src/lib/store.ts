@@ -211,7 +211,10 @@ export const useUi = create<UiState>()(
       hiddenSpaceIds: [],
       lastSpaceId: null,
 
-      setView: (view) => set({ view }),
+      // A new screen starts without the selection of the previous one (a task picked in Tasks
+      // would otherwise take the place of the mini month in the calendar). Callers that open a
+      // screen on a given item select it right after.
+      setView: (view) => set({ view, selectedTaskId: null, selectedEventId: null }),
       selectTask: (selectedTaskId, focusTitle = false) => set({ selectedTaskId, focusTitle, selectedEventId: null }),
       setShowCompleted: (showCompleted) => set({ showCompleted }),
       setViewStart: (viewStart) => set({ viewStart }),

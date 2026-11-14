@@ -9,9 +9,11 @@ export function useAppearance() {
   const font = useUi((s) => s.prefs.font);
   const textSize = useUi((s) => s.prefs.textSize);
   const strength = useUi((s) => s.prefs.eventStrength);
+  const clock = useUi((s) => s.prefs.timeFormat);
   useEffect(() => {
     document.documentElement.dataset.events = strength;
-  }, [strength]);
+    document.documentElement.dataset.clock = clock;
+  }, [strength, clock]);
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "system") root.removeAttribute("data-theme");

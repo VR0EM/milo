@@ -481,7 +481,7 @@ function RestoreDialog({ backups, onClose }: { backups: BackupFile[]; onClose: (
           <ul className="rows restore-list">
             {backups.map((b) => (
               <li key={b.name} className="row">
-                <span className="row-title">{b.date.startsWith("before-restore") ? `Just before a restore (${b.date.replace("before-restore-", "")})` : b.date}</span>
+                <span className="row-title">{b.date}</span>
                 <span className="muted small">{Math.max(1, Math.round(b.bytes / 1024))} KB</span>
                 <button className="btn small" onClick={() => setPick(b)}>Choose</button>
               </li>

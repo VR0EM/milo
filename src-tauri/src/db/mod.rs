@@ -70,7 +70,76 @@ fn init(mut conn: Connection) -> Result<Connection> {
 
 /// Brings any database (also a restored older backup) up to the current schema.
 pub fn migrate(conn: &mut Connection) -> Result<()> {
-    migrate_to(conn, MIGRATIONS.len())
+    migrate_to(conn, MIGRATIONS.len())?;
+    repair(conn)
+}
+
+/// Tables that every database must have, in the same shape their migrations make them.
+const REPAIR_TABLES: &str = "
+CREATE TABLE IF NOT EXISTS inbox_items (
+  id TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+CREATE TABLE IF NOT EXISTS event_series (
+  id TEXT PRIMARY KEY,
+  freq TEXT NOT NULL,
+  interval INTEGER NOT NULL DEFAULT 1,
+  weekdays TEXT NOT NULL DEFAULT '',
+  first_date TEXT NOT NULL,
+  until_date TEXT,
+  start_time TEXT NOT NULL,
+  minutes INTEGER NOT NULL,
+  all_day INTEGER NOT NULL DEFAULT 0,
+  space_id TEXT NOT NULL REFERENCES spaces(id),
+  activity_id TEXT REFERENCES activities(id),
+  title TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  generated_until TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+CREATE TABLE IF NOT EXISTS change_log (
+  id TEXT PRIMARY KEY,
+  entity TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  snapshot TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS change_log_entity ON change_log(entity, entity_id, created_at);
+";
+
+/// Columns that every database must have: (table, column, how to add it).
+const REPAIR_COLUMNS: &[(&str, &str, &str)] = &[
+    ("events", "task_id", "ALTER TABLE events ADD COLUMN task_id TEXT REFERENCES tasks(id)"),
+    ("events", "series_id", "ALTER TABLE events ADD COLUMN series_id TEXT REFERENCES event_series(id)"),
+    ("events", "replaced", "ALTER TABLE events ADD COLUMN replaced INTEGER NOT NULL DEFAULT 0"),
+    ("spaces", "icon", "ALTER TABLE spaces ADD COLUMN icon TEXT"),
+];
+
+/// Adds what a database lacks although its version says it has it. A development build once
+/// marked a database as version 9 after running a different, since removed, migration 9, so
+/// the real migration 009 was skipped there. Only missing pieces are added: on a database in
+/// order this changes nothing.
+fn repair(conn: &mut Connection) -> Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute_batch(REPAIR_TABLES)?;
+    for (table, column, ddl) in REPAIR_COLUMNS {
+        let present: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            [table, column],
+            |r| r.get(0),
+        )?;
+        if present == 0 {
+            tx.execute_batch(ddl)?;
+        }
+    }
+    tx.execute_batch("CREATE INDEX IF NOT EXISTS events_series ON events(series_id) WHERE series_id IS NOT NULL;")?;
+    tx.commit()?;
+    Ok(())
 }
 
 /// Runs migrations up to and including number `target` (each in its own transaction).
@@ -141,6 +210,31 @@ mod tests {
         conn.execute("INSERT INTO inbox_items (id, text, created_at, updated_at) VALUES ('i1', 'x', ?1, ?1)", params!["2026-11-03T00:00:00.000Z"]).unwrap();
         let fk: i64 = conn.query_row("PRAGMA foreign_key_check", [], |_| Ok(1)).unwrap_or(0);
         assert_eq!(fk, 0, "no broken references");
+    }
+
+    #[test]
+    fn a_database_marked_newer_than_it_is_gets_its_missing_parts() {
+        // Like the developer's database: an old build ran another "migration 9" (one column)
+        // and set the version to 9, so the real migration 009 was skipped.
+        let mut conn = Connection::open_in_memory().unwrap();
+        old_database(&mut conn);
+        conn.execute_batch("ALTER TABLE events ADD COLUMN task_id TEXT; PRAGMA user_version = 9;").unwrap();
+        migrate(&mut conn).unwrap();
+
+        for table in ["inbox_items", "event_series", "change_log"] {
+            let n: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| r.get(0)).unwrap();
+            assert_eq!(n, 1, "{table} is there");
+        }
+        for (table, column, _) in REPAIR_COLUMNS {
+            let n: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2", [table, column], |r| r.get(0)).unwrap();
+            assert_eq!(n, 1, "{table}.{column} is there");
+        }
+        // The data is untouched, and the repaired parts work.
+        let title: String = conn.query_row("SELECT title FROM events WHERE id = 'e1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(title, "Physics - HOC");
+        crate::repo::add_inbox(&conn, "works").unwrap();
+        // Running it again changes nothing.
+        migrate(&mut conn).unwrap();
     }
 
     #[test]

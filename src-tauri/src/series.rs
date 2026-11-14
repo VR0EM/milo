@@ -205,6 +205,17 @@ pub fn list(c: &Connection) -> Result<Vec<EventSeries>> {
 /// series on the local day of `cut`.
 fn end_series(c: &Connection, series: &str, cut: &str, keep: &str) -> Result<()> {
     let ts = now();
+    // Generated occurrences nobody touched never were anyone's data: they go for real, so
+    // changing a repeat does not leave hundreds of unused rows behind. One that was edited,
+    // has earlier versions or holds a focus session is set aside instead, as always.
+    c.execute(
+        "DELETE FROM events
+         WHERE series_id = ?1 AND deleted_at IS NULL AND start_at > ?2 AND id != ?3
+           AND updated_at = created_at
+           AND NOT EXISTS (SELECT 1 FROM change_log WHERE entity = 'event' AND entity_id = events.id)
+           AND NOT EXISTS (SELECT 1 FROM focus_sessions WHERE event_id = events.id)",
+        params![series, cut, keep],
+    )?;
     c.execute(
         "UPDATE events SET deleted_at = ?3, replaced = 1, updated_at = ?3
          WHERE series_id = ?1 AND deleted_at IS NULL AND start_at > ?2 AND id != ?4",
@@ -401,9 +412,9 @@ mod tests {
         let new_series = moved.series_id.unwrap();
         let next: Vec<_> = occurrences(&c, &new_series).iter().take(3).map(|t| t.format("%m-%d").to_string()).collect();
         assert_eq!(next, ["03-05", "03-12", "03-19"]);
-        // Replaced occurrences stay in the database but not in the archive list.
-        let replaced: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE replaced = 1", [], |r| r.get(0)).unwrap();
-        assert!(replaced > 100);
+        // Untouched future occurrences of the old repeat are gone, not piled up.
+        let left: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE series_id = ?1", [&first_series], |r| r.get(0)).unwrap();
+        assert_eq!(left, 3);
         let (archived, _) = crate::archive::list_archived(&c, "").unwrap();
         assert!(archived.iter().all(|i| i.entity != "event"));
 
@@ -415,6 +426,27 @@ mod tests {
         // 12 March stays, on its own; only 5 March is left in the series.
         assert!(stopped.series_id.is_none() && stopped.deleted_at.is_none());
         assert_eq!(occurrences(&c, &new_series).len(), 1);
+    }
+
+    #[test]
+    fn an_edited_future_occurrence_is_kept_when_the_repeat_changes() {
+        let c = open_in_memory().unwrap();
+        let start = Local.with_ymd_and_hms(2026, 3, 2, 18, 0, 0).unwrap();
+        let now = (start - Duration::days(1)).with_timezone(&Utc);
+        let e = set_repeat(&c, &event_at(&c, start, 60).id, Some(rule("weekly", 1, "", None)), now).unwrap();
+        let series = e.series_id.clone().unwrap();
+        // Rename the third occurrence by hand (as if done a while ago).
+        let third: String = c
+            .query_row("SELECT id FROM events WHERE series_id = ?1 ORDER BY start_at LIMIT 1 OFFSET 2", [&series], |r| r.get(0))
+            .unwrap();
+        c.execute("UPDATE events SET title = 'Sport with Lou', updated_at = '2030-01-01T00:00:00.000Z' WHERE id = ?1", [&third]).unwrap();
+        set_repeat(&c, &e.id, Some(rule("daily", 1, "", None)), now).unwrap();
+        // The edited one is set aside (kept, out of the calendar); the untouched ones are gone.
+        let (deleted, replaced): (Option<String>, i64) =
+            c.query_row("SELECT deleted_at, replaced FROM events WHERE id = ?1", [&third], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert!(deleted.is_some() && replaced == 1);
+        let old_rows: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE series_id = ?1", [&series], |r| r.get(0)).unwrap();
+        assert_eq!(old_rows, 1, "only the edited occurrence remains of the old repeat");
     }
 
     #[test]

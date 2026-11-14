@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../../lib/api";
 import { useAction, useActiveFocus, useActivities, useSpaces, useTasks } from "../../lib/queries";
 import { useUi } from "../../lib/store";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { fmtClock, fmtDuration, fmtTime } from "../../lib/time";
 import type { FocusSession } from "../../lib/types";
 import { useNow } from "../../lib/useNow";
@@ -26,11 +27,11 @@ function Setup() {
   const act = useAction("focus");
 
   const [minutes, setMinutes] = useState(25);
-  const [spaceId, setSpaceId] = useState(() => (spaces.find((s) => s.id === lastSpaceId) ?? spaces[0])?.id ?? "");
+  const [spaceId, setSpaceId] = useState(() => pickDefaultSpace(spaces, lastSpaceId)?.id ?? "");
   const [activityId, setActivityId] = useState(() => activities.find((a) => a.category === "self_study")?.id ?? "");
   const [taskId, setTaskId] = useState("");
 
-  const space = spaceId || spaces[0]?.id || "";
+  const space = spaceId || pickDefaultSpace(spaces, lastSpaceId)?.id || "";
   const spaceTasks = tasks.filter((t) => t.spaceId === space);
   const task = spaceTasks.find((t) => t.id === taskId);
   const valid = !!space && minutes >= 1 && minutes <= 600;

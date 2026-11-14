@@ -14,6 +14,15 @@ const BURST_SECONDS: i64 = 120;
 /// How many versions are listed per item. All are kept.
 const LIST_LIMIT: i64 = 20;
 
+/// Whether an item was made so recently that changing it still counts as making it (a new
+/// event gets its title right after it appears). Such changes keep no earlier version.
+pub fn just_created(created_at: &str) -> bool {
+    chrono::DateTime::parse_from_rfc3339(created_at).is_ok_and(|t| {
+        let age = (chrono::Utc::now() - t.with_timezone(&chrono::Utc)).num_seconds();
+        (0..BURST_SECONDS).contains(&age)
+    })
+}
+
 /// Keeps `snapshot` as a version of `entity`/`id`, unless the last version is very recent.
 pub fn remember(c: &Connection, entity: &str, id: &str, snapshot: &impl serde::Serialize, force: bool) -> Result<()> {
     if !force {
@@ -137,10 +146,25 @@ mod tests {
         .unwrap();
     }
 
+    /// An event made a while ago, so edits to it keep versions.
+    fn old_event(c: &Connection) -> crate::models::Event {
+        let e = event(c);
+        c.execute("UPDATE events SET created_at = '2020-01-01T00:00:00.000Z' WHERE id = ?1", [&e.id]).unwrap();
+        repo::get_event(c, &e.id).unwrap()
+    }
+
+    #[test]
+    fn naming_a_new_item_keeps_no_version() {
+        let c = open_in_memory().unwrap();
+        let e = event(&c);
+        edit(&c, &e.id, "Physics, room B1", "2030-01-07T08:00:00.000Z");
+        assert!(list(&c, "event", &e.id).unwrap().is_empty());
+    }
+
     #[test]
     fn an_edit_can_be_undone_and_the_undo_too() {
         let c = open_in_memory().unwrap();
-        let e = event(&c);
+        let e = old_event(&c);
         edit(&c, &e.id, "Physics moved", "2030-01-07T09:00:00.000Z");
         // A second edit right after is part of the same burst: still one version.
         edit(&c, &e.id, "Physics moved again", "2030-01-07T09:30:00.000Z");
@@ -161,7 +185,7 @@ mod tests {
     #[test]
     fn saving_without_a_change_keeps_no_version() {
         let c = open_in_memory().unwrap();
-        let e = event(&c);
+        let e = old_event(&c);
         let same = EventInput {
             space_id: e.space_id.clone(), activity_id: None, title: e.title.clone(), start_at: e.start_at.clone(),
             end_at: e.end_at.clone(), all_day: false, notes: e.notes.clone(), status: e.status.clone(), task_id: None,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useSpaces, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
@@ -58,7 +59,7 @@ export function TasksView() {
   Object.assign(filters, { query, spaceId, due, status, sort });
 
   const active = spaces.filter((s) => !s.deletedAt);
-  const defaultSpaceId = (active.find((s) => s.id === (spaceId || lastSpaceId)) ?? active[0])?.id ?? null;
+  const defaultSpaceId = pickDefaultSpace(active, spaceId || lastSpaceId)?.id ?? null;
   const selected = tasks.find((t) => t.id === selectedId) ?? null;
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const typeById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);

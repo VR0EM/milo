@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { api, files } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { HelpTip } from "../../components/HelpTip";
@@ -80,7 +81,7 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
   const [spaceId, setSpaceId] = useState("");
   const [importAs, setImportAs] = useState<"events" | "tasks">("events");
   const [busy, setBusy] = useState<string | null>(null);
-  const space = spaceId || spaces[0]?.id || "";
+  const space = spaceId || pickDefaultSpace(spaces)?.id || "";
 
   const run = async (key: string, label: string, work: () => Promise<SyncReport>) => {
     setBusy(key);
@@ -192,7 +193,7 @@ function FileImport({ spaces }: { spaces: Space[] }) {
   const refresh = useRefresh();
   const [spaceId, setSpaceId] = useState("");
   const [csv, setCsv] = useState<{ path: string; preview: CsvPreview; title: number; date: number } | null>(null);
-  const space = spaceId || spaces[0]?.id || "";
+  const space = spaceId || pickDefaultSpace(spaces)?.id || "";
 
   const report = async (label: string, work: Promise<SyncReport>) => {
     try {
