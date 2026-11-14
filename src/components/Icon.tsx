@@ -15,6 +15,9 @@ const PATHS = {
   right: <path d="M6 4l4 4-4 4" />,
   focus: <><circle cx="8" cy="8.75" r="5" /><path d="M8 6.25v2.5l1.75 1M6.5 1.75h3" /></>,
   search: <><circle cx="7" cy="7" r="4.25" /><path d="M10.25 10.25l3.5 3.5" /></>,
+  check: <path d="M3.5 8.4l2.9 2.85 6.1-6.5" />,
+  lock: <><rect x="3.25" y="7" width="9.5" height="7" rx="1.75" /><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" /></>,
+  link: <><path d="M6.9 9.1a2.6 2.6 0 0 0 3.7 0l2.1-2.1a2.6 2.6 0 0 0-3.7-3.7l-.9.9" /><path d="M9.1 6.9a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" /></>,
 
   // For spaces: one of these can stand for a space, in its colour.
   book: <><path d="M8 4.25C6.6 3.2 4.6 2.9 2.5 3.25v9c2.1-.35 4.1-.05 5.5 1 1.4-1.05 3.4-1.35 5.5-1v-9c-2.1-.35-4.1-.05-5.5 1z" /><path d="M8 4.25v9" /></>,

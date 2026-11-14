@@ -33,9 +33,9 @@ function FocusIndicator() {
   );
 }
 
-function BrandMark() {
+export function BrandMark({ size = 18 }: { size?: number }) {
   return (
-    <svg className="brand-mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+    <svg className="brand-mark" width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
       <rect width="18" height="18" rx="5" fill="currentColor" />
       <rect x="4" y="4.5" width="10" height="2.2" rx="1.1" fill="var(--sunken)" />
       <rect x="4" y="7.9" width="7" height="2.2" rx="1.1" fill="var(--sunken)" opacity="0.8" />

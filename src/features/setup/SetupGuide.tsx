@@ -3,14 +3,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { PALETTE, colorVar } from "../../lib/colors";
 import { useGroups, useImportSources, useReminderRules, useRoutines, useSpaces, useTasks } from "../../lib/queries";
-import { useUi, type Theme } from "../../lib/store";
-import { fmtHm, parseTime } from "../../lib/time";
+import { useUi } from "../../lib/store";
+import { parseTime } from "../../lib/time";
+import type { ImportSource, ReminderRule } from "../../lib/types";
+import { HelpTip } from "../../components/HelpTip";
+import { Icon, SpaceMark, type IconName } from "../../components/Icon";
 import { TimeField } from "../../components/TimeField";
 import { ACCENTS } from "../settings/SettingsView";
+import { BrandMark } from "../spaces/Sidebar";
 import { CAPTURE_KEY } from "../shortcuts/keys";
 
-const STEPS = ["Welcome", "Look", "Courses", "Timetable", "Deadlines", "Rhythm", "Ready"] as const;
-const THEMES: [Theme, string][] = [["system", "Match the computer"], ["light", "Light"], ["dark", "Dark"]];
+type Step = "welcome" | "look" | "courses" | "timetable" | "deadlines" | "rhythm" | "ready";
+const STEPS: Step[] = ["welcome", "look", "courses", "timetable", "deadlines", "rhythm", "ready"];
+/** The steps that ask something; the progress bar counts only these. */
+const ASKING = STEPS.slice(1, -1);
 
 const addMinutes = (hhmm: string, minutes: number) => {
   const [h, m] = hhmm.split(":").map(Number);
@@ -42,7 +48,9 @@ export function SetupGate() {
 
 function SetupGuide() {
   const ref = useRef<HTMLDialogElement>(null);
-  const [step, setStep] = useState(0);
+  const [i, setI] = useState(0);
+  const step = STEPS[i];
+  const asking = ASKING.indexOf(step);
   const finish = () => {
     useUi.getState().setPrefs({ setupDone: true });
     useUi.setState({ setupOpen: false });
@@ -50,51 +58,99 @@ function SetupGuide() {
   useEffect(() => {
     ref.current?.showModal();
   }, []);
+  const next = () => setI((n) => Math.min(STEPS.length - 1, n + 1));
 
-  const name = STEPS[step];
   return (
-    <dialog ref={ref} className="dialog setup" aria-label="Welcome to Milo" onCancel={(e) => { e.preventDefault(); finish(); }}>
+    <dialog ref={ref} className="setup" aria-label="Set up Milo" onCancel={(e) => { e.preventDefault(); finish(); }}>
       <div className="setup-top">
-        <span className="muted small">{step > 0 && step < STEPS.length - 1 ? `Step ${step} of ${STEPS.length - 2}` : ""}</span>
+        {asking >= 0 && (
+          <div className="setup-progress" role="progressbar" aria-label="Progress" aria-valuemin={1} aria-valuemax={ASKING.length} aria-valuenow={asking + 1}>
+            {ASKING.map((s, n) => <span key={s} className={n <= asking ? "on" : ""} />)}
+          </div>
+        )}
         <span className="spacer" />
-        {step < STEPS.length - 1 && <button className="link" onClick={finish}>Skip the guide</button>}
+        {step !== "ready" && <button className="link setup-skip" onClick={finish}>Skip setup</button>}
       </div>
 
-      {name === "Welcome" && <Welcome />}
-      {name === "Look" && <Look />}
-      {name === "Courses" && <Courses onDone={() => setStep(step + 1)} />}
-      {name === "Timetable" && <Link kind="events" />}
-      {name === "Deadlines" && <Link kind="tasks" />}
-      {name === "Rhythm" && <Rhythm />}
-      {name === "Ready" && <Ready />}
+      <div className="setup-step" key={step}>
+        {step === "welcome" && <Welcome />}
+        {step === "look" && <Look />}
+        {step === "courses" && <Courses onDone={next} />}
+        {step === "timetable" && <CalendarLink kind="events" />}
+        {step === "deadlines" && <CalendarLink kind="tasks" />}
+        {step === "rhythm" && <Rhythm />}
+        {step === "ready" && <Ready />}
+      </div>
 
       <div className="setup-foot">
-        <div className="setup-dots" aria-hidden>
-          {STEPS.map((s, i) => <span key={s} className={i === step ? "on" : i < step ? "done" : ""} />)}
-        </div>
+        {i > 0 && step !== "ready" && <button className="btn setup-back" onClick={() => setI(i - 1)}>Back</button>}
         <span className="spacer" />
-        {step > 0 && step < STEPS.length - 1 && <button className="btn" onClick={() => setStep(step - 1)}>Back</button>}
-        {name === "Courses" ? (
-          <button className="btn primary" form="setup-courses" type="submit">Next</button>
-        ) : step < STEPS.length - 1 ? (
-          <button className="btn primary" onClick={() => setStep(step + 1)} autoFocus>{step === 0 ? "Start" : "Next"}</button>
+        {step === "courses" ? (
+          <button className="btn primary" form="setup-courses" type="submit">Continue</button>
+        ) : step === "ready" ? (
+          <button className="btn primary" autoFocus onClick={() => { finish(); useUi.getState().setView("today"); }}>Open Today</button>
         ) : (
-          <button className="btn primary" onClick={() => { finish(); useUi.getState().setView("today"); }} autoFocus>Open Today</button>
+          <button className="btn primary" autoFocus onClick={next}>{step === "welcome" ? "Get started" : "Continue"}</button>
         )}
       </div>
     </dialog>
   );
 }
 
+function Head({ title, line, help }: { title: string; line: string; help?: React.ReactNode }) {
+  return (
+    <header className="setup-head">
+      <h2>
+        {title}
+        {help && <HelpTip label={`About ${title.toLowerCase()}`}>{help}</HelpTip>}
+      </h2>
+      <p>{line}</p>
+    </header>
+  );
+}
+
+/** A labelled row: the name on the left, the control on the right. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="setup-field">
+      <span>{label}</span>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function Point({ icon, title, children }: { icon: IconName; title: string; children: React.ReactNode }) {
+  return (
+    <li className="setup-point">
+      <span className="setup-point-icon"><Icon name={icon} size={16} /></span>
+      <div>
+        <div className="setup-point-title">{title}</div>
+        <div className="setup-point-text">{children}</div>
+      </div>
+    </li>
+  );
+}
+
 function Welcome() {
   return (
-    <div className="setup-body">
-      <h2>Welcome to Milo</h2>
-      <p>Milo keeps your week in one calm place: the calendar, your tasks, focus time and reminders.</p>
-      <p className="muted">
-        A few short steps set it up for you. Every step can be skipped, and everything can be changed later in Settings.
-        All of it stays on this computer.
-      </p>
+    <>
+      <div className="setup-brand"><BrandMark size={36} /></div>
+      <Head title="Welcome to Milo" line="Your week in one calm place. A few short steps set it up; each can be skipped." />
+      <ul className="setup-points">
+        <Point icon="calendar" title="Calendar">Timetable, deadlines and your own plans together.</Point>
+        <Point icon="focus" title="Focus">A timer that leaves its time in the calendar.</Point>
+        <Point icon="lock" title="On this computer">No account and nothing in the cloud.</Point>
+      </ul>
+    </>
+  );
+}
+
+function Segmented<T extends string>({ value, options, label, onChange }: { value: T; options: [T, string][]; label: string; onChange: (v: T) => void }) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label={label}>
+      {options.map(([v, text]) => (
+        <button key={v} role="radio" aria-checked={value === v} className={value === v ? "on" : ""} onClick={() => onChange(v)}>{text}</button>
+      ))}
     </div>
   );
 }
@@ -103,46 +159,27 @@ function Look() {
   const prefs = useUi((s) => s.prefs);
   const setPrefs = useUi((s) => s.setPrefs);
   return (
-    <div className="setup-body">
-      <h2>How Milo looks</h2>
-      <p className="muted">You see the change right away.</p>
-      <div className="setup-field">
-        <span>Theme</span>
-        <div className="segmented" role="radiogroup" aria-label="Theme">
-          {THEMES.map(([t, label]) => (
-            <button key={t} role="radio" aria-checked={prefs.theme === t} className={prefs.theme === t ? "on" : ""} onClick={() => setPrefs({ theme: t })}>{label}</button>
-          ))}
-        </div>
+    <>
+      <Head title="Make it yours" line="Changes show right away, and stay changeable in Settings." />
+      <div className="setup-fields">
+        <Field label="Theme">
+          <Segmented value={prefs.theme} label="Theme" options={[["system", "Auto"], ["light", "Light"], ["dark", "Dark"]]} onChange={(theme) => setPrefs({ theme })} />
+        </Field>
+        <Field label="Accent">
+          <div className="accent-picker" role="radiogroup" aria-label="Accent colour">
+            {ACCENTS.map(([a, label]) => (
+              <button key={a} role="radio" aria-checked={prefs.accent === a} aria-label={label} title={label} data-accent-swatch={a} className={prefs.accent === a ? "on" : ""} onClick={() => setPrefs({ accent: a })} />
+            ))}
+          </div>
+        </Field>
+        <Field label="Text size">
+          <Segmented value={prefs.textSize} label="Text size" options={[["small", "Small"], ["default", "Default"], ["large", "Large"]]} onChange={(textSize) => setPrefs({ textSize })} />
+        </Field>
+        <Field label="Event colours">
+          <Segmented value={prefs.eventStrength} label="Event colours" options={[["soft", "Soft"], ["normal", "Normal"], ["strong", "Strong"]]} onChange={(eventStrength) => setPrefs({ eventStrength })} />
+        </Field>
       </div>
-      <div className="setup-field">
-        <span>Accent colour</span>
-        <div className="accent-picker" role="radiogroup" aria-label="Accent colour">
-          {ACCENTS.map(([a, label]) => (
-            <button key={a} role="radio" aria-checked={prefs.accent === a} aria-label={label} title={label} data-accent-swatch={a} className={prefs.accent === a ? "on" : ""} onClick={() => setPrefs({ accent: a })} />
-          ))}
-        </div>
-      </div>
-      <div className="setup-field">
-        <span>Text size</span>
-        <div className="segmented" role="radiogroup" aria-label="Text size">
-          {(["small", "default", "large"] as const).map((t) => (
-            <button key={t} role="radio" aria-checked={prefs.textSize === t} className={prefs.textSize === t ? "on" : ""} onClick={() => setPrefs({ textSize: t })}>
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="setup-field">
-        <span>Event colours</span>
-        <div className="segmented" role="radiogroup" aria-label="Event colours">
-          {(["soft", "normal", "strong"] as const).map((t) => (
-            <button key={t} role="radio" aria-checked={prefs.eventStrength === t} className={prefs.eventStrength === t ? "on" : ""} onClick={() => setPrefs({ eventStrength: t })}>
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -155,29 +192,29 @@ function Courses({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const school = groups.find((g) => g.name.toLowerCase() === "school");
-  const inSchool = spaces.filter((s) => school && s.groupId === school.id);
+  const existing = spaces.filter((s) => school && s.groupId === school.id);
+
+  // Each name once, whatever its capitals, and none that exists already; colours in palette
+  // order, skipping grey and the ones in use. Shown as they will be made, while typing.
+  const known = new Set(spaces.map((s) => s.name.trim().toLowerCase()));
+  const names: string[] = [];
+  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    if (known.has(line.toLowerCase())) continue;
+    known.add(line.toLowerCase());
+    names.push(line);
+  }
+  const used = new Set(spaces.map((s) => s.color));
+  const free = PALETTE.filter((c) => c !== "gray" && !used.has(c));
+  const colours = free.length ? free : PALETTE.filter((c) => c !== "gray");
+  const planned = names.map((name, n) => ({ name, color: colours[n % colours.length] }));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const known = new Set(spaces.map((s) => s.name.trim().toLowerCase()));
-    // Each name once, whatever its capitals, and none that exists already.
-    const names: string[] = [];
-    for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
-      if (known.has(line.toLowerCase())) continue;
-      known.add(line.toLowerCase());
-      names.push(line);
-    }
-    if (!names.length) return onDone();
+    if (!planned.length) return onDone();
     setBusy(true);
     try {
       const groupId = school?.id ?? (await api.createGroup({ name: "School" })).id;
-      // Colours in palette order, skipping grey and the ones already used, then round again.
-      const used = new Set(spaces.map((s) => s.color));
-      const free = PALETTE.filter((c) => c !== "gray" && !used.has(c));
-      const colours = free.length ? free : PALETTE.filter((c) => c !== "gray");
-      for (const [i, name] of names.entries()) {
-        await api.createSpace({ name, groupId, color: colours[i % colours.length], role: "normal", icon: "book" });
-      }
+      for (const c of planned) await api.createSpace({ name: c.name, groupId, color: c.color, role: "normal", icon: "book" });
       await Promise.all([qc.invalidateQueries({ queryKey: ["spaces"] }), qc.invalidateQueries({ queryKey: ["groups"] })]);
       onDone();
     } catch (err) {
@@ -188,56 +225,69 @@ function Courses({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <form id="setup-courses" className="setup-body" onSubmit={save}>
-      <h2>Your courses</h2>
-      <p className="muted">
-        Type the courses of this semester, one per line. Each gets its own space with a colour, grouped under School.
-        Later you can give them an icon and change anything.
-      </p>
+    <form id="setup-courses" onSubmit={save}>
+      <Head
+        title="Your courses"
+        line="One course per line. Each gets its own space and colour."
+        help="The courses go into a group called School in the sidebar. Later you can give each one an icon, change its colour, or add more."
+      />
       <textarea
         className="setup-textarea"
-        rows={6}
+        rows={5}
         placeholder={"Analysis 2\nPhysics\nChemistry"}
         value={text}
         onChange={(e) => setText(e.target.value)}
         disabled={busy}
         autoFocus
+        aria-label="Courses, one per line"
       />
-      {inSchool.length > 0 && (
-        <p className="muted small">
-          Already there:{" "}
-          {inSchool.map((s, i) => (
-            <span key={s.id} style={{ ["--c" as string]: colorVar(s.color) }}>
-              {i > 0 && ", "}
+      {(existing.length > 0 || planned.length > 0) && (
+        <ul className="setup-chips" aria-label="Courses">
+          {existing.map((s) => (
+            <li key={s.id} className="setup-chip" style={{ ["--c" as string]: colorVar(s.color) }}>
+              <SpaceMark icon={s.icon} size={12} />
               {s.name}
-            </span>
+            </li>
           ))}
-        </p>
+          {planned.map((c) => (
+            <li key={c.name} className="setup-chip new" style={{ ["--c" as string]: colorVar(c.color) }}>
+              <SpaceMark icon="book" size={12} />
+              {c.name}
+            </li>
+          ))}
+        </ul>
       )}
       {error && <p className="error">{error}</p>}
     </form>
   );
 }
 
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+};
+
 /** A calendar link: the timetable (as events) or the deadlines of the learning platform (as tasks). */
-function Link({ kind }: { kind: "events" | "tasks" }) {
+function CalendarLink({ kind }: { kind: "events" | "tasks" }) {
   const qc = useQueryClient();
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const sources = (useImportSources().data ?? []).filter((s) => s.importAs === kind);
   const [url, setUrl] = useState("");
   const [spaceId, setSpaceId] = useState("");
-  const [state, setState] = useState<{ busy?: boolean; ok?: string; error?: string }>({});
+  const [state, setState] = useState<{ busy?: boolean; error?: string }>({});
   const space = spaceId || (spaces.find((s) => s.id === "seed-space-personal") ?? spaces[0])?.id || "";
+  const timetable = kind === "events";
 
   const add = async () => {
     if (!url.trim()) return;
     setState({ busy: true });
     try {
-      const r = await api.addCalendarLink({
-        name: kind === "events" ? "Timetable" : "Deadlines", location: url.trim(), spaceId: space, enabled: true, importAs: kind,
-      });
+      await api.addCalendarLink({ name: timetable ? "Timetable" : "Deadlines", location: url.trim(), spaceId: space, enabled: true, importAs: kind });
       setUrl("");
-      setState({ ok: `Added: ${r.added} ${kind === "events" ? "events" : "tasks"}.` });
+      setState({});
       qc.invalidateQueries();
     } catch (err) {
       setState({ error: String(err) });
@@ -245,28 +295,40 @@ function Link({ kind }: { kind: "events" | "tasks" }) {
   };
 
   return (
-    <div className="setup-body">
-      <h2>{kind === "events" ? "Your timetable" : "Your deadlines"}</h2>
-      <p className="muted">
-        {kind === "events"
-          ? "Most school timetable sites can share a calendar link. Look for “Export”, “iCal”, “Subscribe” or “Calendar link” and copy the address (it often ends in .ics). Milo then keeps the timetable up to date by itself."
-          : "Learning platforms such as Canvas, Moodle, Toledo or Smartschool have a calendar link with hand-in dates, often under Calendar › Export. Each item becomes a task with that deadline, which you can tick off."}
-      </p>
-      {sources.length > 0 && <p className="small">Already linked: {sources.map((s) => s.name).join(", ")}.</p>}
+    <>
+      <Head
+        title={timetable ? "Your timetable" : "Your deadlines"}
+        line={timetable ? "Paste the calendar link of your school timetable." : "Paste the calendar link of your learning platform."}
+        help={
+          timetable
+            ? "Timetable sites often have “Export”, “iCal”, “Subscribe” or “Calendar link”. Copy that address; it often ends in .ics. Milo then keeps the timetable up to date by itself."
+            : "Canvas, Moodle, Toledo or Smartschool usually have it under Calendar › Export. Each hand-in becomes a task with its deadline, which you can tick off."
+        }
+      />
       <div className="setup-link">
         <input type="url" placeholder="https://…" aria-label="Calendar link" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         <button className="btn" onClick={add} disabled={!url.trim() || state.busy}>{state.busy ? "Adding…" : "Add"}</button>
       </div>
-      <label className="setup-field">
-        <span>{kind === "events" ? "Space for items no course matches" : "Space for the tasks"}</span>
-        <select value={space} onChange={(e) => setSpaceId(e.target.value)}>
-          {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      </label>
-      {state.ok && <p className="small">{state.ok}</p>}
       {state.error && <p className="error">{state.error}</p>}
-      <p className="muted small">No link? Skip this step; it can be added later in Settings › Import &amp; export.</p>
-    </div>
+      {sources.length > 0 && (
+        <ul className="setup-linked">
+          {sources.map((s: ImportSource) => (
+            <li key={s.id}>
+              <Icon name="check" size={14} />
+              <span>{s.name}</span>
+              <span className="muted">{hostOf(s.location)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="setup-fields">
+        <Field label={timetable ? "Unmatched items go to" : "Tasks go to"}>
+          <select value={space} onChange={(e) => setSpaceId(e.target.value)} aria-label="Space">
+            {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </Field>
+      </div>
+    </>
   );
 }
 
@@ -297,69 +359,63 @@ function Rhythm() {
   const setBed = (t: string) => {
     if (evening) save(() => api.updateRoutine(evening.id, { name: evening.name, startTime: addMinutes(t, -90), endTime: t, weekdays: evening.weekdays }));
   };
-  const rule = (r: typeof medication, patch: Partial<NonNullable<typeof medication>>) => {
+  const rule = (r: ReminderRule | undefined, patch: Partial<ReminderRule>) => {
     if (!r) return;
     const { id, ...input } = { ...r, ...patch };
     save(() => api.updateReminderRule(id, input));
   };
 
   return (
-    <div className="setup-body">
-      <h2>Your rhythm</h2>
-      <p className="muted">
-        The morning and evening routines on Today follow these times, and the calendar opens at your wake-up hour.
-      </p>
-      <div className="setup-row">
-        <label className="setup-field">
-          <span>Usually up at</span>
+    <>
+      <Head
+        title="Your rhythm"
+        line="Sets your morning and evening routines on Today."
+        help="The morning routine starts when you get up, the evening routine ends when you go to bed, and the calendar opens at your wake-up hour."
+      />
+      <div className="setup-fields">
+        <Field label="Up at">
           <TimeField value={morning?.startTime ?? "07:00"} onCommit={setWake} />
-        </label>
-        <label className="setup-field">
-          <span>Usually in bed at</span>
+        </Field>
+        <Field label="In bed at">
           <TimeField value={evening?.endTime ?? "23:30"} onCommit={setBed} />
-        </label>
-      </div>
-      {medication && (
-        <div className="setup-check">
-          <label className="check">
-            <input type="checkbox" checked={medication.enabled} onChange={(e) => rule(medication, { enabled: e.target.checked })} />
-            <span>Remind me to take medication, and let me tick it off</span>
-          </label>
-          {medication.enabled && (
-            <label className="setup-field inline">
-              <span>at</span>
-              <TimeField
-                value={(medication.times ?? "08:00").split(",")[0]}
-                onCommit={(t) => parseTime(t) && rule(medication, { times: t })}
-              />
+        </Field>
+        {medication && (
+          <Field label="Medication reminder">
+            <div className="setup-inline">
+              {medication.enabled && (
+                <TimeField value={(medication.times ?? "08:00").split(",")[0]} onCommit={(t) => parseTime(t) && rule(medication, { times: t })} />
+              )}
+              <label className="switch-control">
+                <input type="checkbox" role="switch" aria-label="Medication reminder" checked={medication.enabled} onChange={(e) => rule(medication, { enabled: e.target.checked })} />
+              </label>
+            </div>
+          </Field>
+        )}
+        {water && (
+          <Field label={`Water, every ${water.intervalMinutes ?? 90} min`}>
+            <label className="switch-control">
+              <input type="checkbox" role="switch" aria-label="Water reminder" checked={water.enabled} onChange={(e) => rule(water, { enabled: e.target.checked })} />
             </label>
-          )}
-        </div>
-      )}
-      {water && (
-        <label className="check">
-          <input type="checkbox" checked={water.enabled} onChange={(e) => rule(water, { enabled: e.target.checked })} />
-          <span>
-            Remind me to drink water every {water.intervalMinutes ?? 90} minutes
-            {water.startTime && water.endTime ? `, ${fmtHm(water.startTime)}–${fmtHm(water.endTime)}` : ""}
-          </span>
-        </label>
-      )}
-      <p className="muted small">Reminders can be changed or added under Reminders.</p>
-    </div>
+          </Field>
+        )}
+      </div>
+    </>
   );
 }
 
 function Ready() {
   return (
-    <div className="setup-body">
-      <h2>Milo is ready</h2>
-      <p>Today shows your day: what runs now, what comes next, and one suggestion for free time.</p>
-      <ul className="setup-tips">
-        <li>Drag a task onto the calendar to set time aside for it.</li>
-        <li>Press {CAPTURE_KEY} anywhere, also when Milo is hidden, to write something down.</li>
-        <li>Press ? for all keyboard shortcuts. This guide is in Settings › Data &amp; app.</li>
+    <>
+      <Head title="You're all set" line="Today shows what runs now, what comes next, and a suggestion for free time." />
+      <ul className="setup-points">
+        <Point icon="calendar" title="Plan time for a task">Drag it from the list beside the calendar onto the hours.</Point>
+        <Point icon="pen" title="Write something down">
+          Press <kbd>{CAPTURE_KEY}</kbd> anywhere, also when Milo is hidden.
+        </Point>
+        <Point icon="settings" title="Change anything later">
+          Everything from this guide is in Settings. Press <kbd>?</kbd> for all shortcuts.
+        </Point>
       </ul>
-    </div>
+    </>
   );
 }
