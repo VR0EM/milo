@@ -10,6 +10,7 @@ import { SpaceMark } from "../../components/Icon";
 import { DayPlan } from "./DayPlan";
 import { EndOfDay } from "./EndOfDay";
 import { GettingStarted } from "./GettingStarted";
+import { WhatsNewCard } from "../whatsnew/WhatsNew";
 import { useNow } from "../../lib/useNow";
 import { deadlineLine } from "../tasks/TasksView";
 import { FocusPanel } from "./FocusPanel";
@@ -60,6 +61,7 @@ export function TodayView() {
           </h1>
         </header>
         <div className="page-scroll">
+          <WhatsNewCard />
           <GettingStarted events={events} />
           {order.filter((b) => !hidden.includes(b)).map((b) => <Fragment key={b}>{blocks[b]}</Fragment>)}
         </div>

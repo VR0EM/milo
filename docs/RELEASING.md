@@ -22,8 +22,11 @@ Updates worden ondertekend, zodat Milo alleen updates van jou aanvaardt.
 
 ## Elke keer: een versie uitbrengen
 
-1. Zorg dat alles gecommit is.
-2. Kies een nieuw versienummer, hoger dan het vorige:
+1. Schrijf bovenaan `src/lib/whatsNew.ts` wat de nieuwe versie brengt, in gewone woorden voor
+   haar (Engels, zoals de app). Milo toont dat één keer op Today na de update. Het
+   release-script weigert een versie zonder notities, en `npm test` ook.
+2. Zorg dat alles gecommit is.
+3. Kies een nieuw versienummer, hoger dan het vorige:
 
    ```bash
    npm run release -- 0.3.0
@@ -31,13 +34,13 @@ Updates worden ondertekend, zodat Milo alleen updates van jou aanvaardt.
 
    Dit zet het nummer in `package.json`, `tauri.conf.json` en `Cargo.toml`, commit dat en maakt
    de tag `v0.3.0`.
-3. Push de commit en de tag:
+4. Push de commit en de tag:
 
    ```bash
    git push && git push origin v0.3.0
    ```
 
-4. GitHub Actions (workflow **Release**) bouwt Milo voor Windows en macOS en zet het op de
+5. GitHub Actions (workflow **Release**) bouwt Milo voor Windows en macOS en zet het op de
    Releases-pagina, samen met `latest.json`. Na ongeveer tien minuten ziet Milo de update.
 
 ## De eerste keer op haar laptop

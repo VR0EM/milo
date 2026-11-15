@@ -38,6 +38,9 @@ jobs:
       - name: Check types
         run: npx tsc --noEmit
 
+      - name: Test the screens' logic
+        run: npm test
+
       - name: Test the data layer
         working-directory: src-tauri
         run: cargo test

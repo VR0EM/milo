@@ -1,12 +1,18 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
+import pkg from "./package.json";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react()],
+  // The version from package.json, for "What's new" (the release script sets it).
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // Tests run in one time zone with summer time, so the day-counting is really tested.
+  test: { env: { TZ: "Europe/Brussels" } },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

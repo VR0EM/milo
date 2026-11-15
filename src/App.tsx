@@ -3,6 +3,7 @@ import { CalendarView } from "./features/calendar/CalendarView";
 import { EntityDialog } from "./features/spaces/EntityDialog";
 import { SettingsView } from "./features/settings/SettingsView";
 import { ShortcutsDialog, useGlobalShortcuts } from "./features/shortcuts/Shortcuts";
+import { WhatsNewDialog } from "./features/whatsnew/WhatsNew";
 import { InsightsView } from "./features/insights/InsightsView";
 import { RemindersView } from "./features/reminders/RemindersView";
 import { TodayView } from "./features/today/TodayView";
@@ -39,6 +40,7 @@ export default function App() {
       <EntityDialog />
       <SetupGate />
       <ShortcutsDialog />
+      <WhatsNewDialog />
       <Notice />
     </div>
   );

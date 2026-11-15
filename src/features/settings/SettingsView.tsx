@@ -333,7 +333,10 @@ function Updates() {
   return (
     <>
       <Row title="Version" info="New versions are published on GitHub. Milo shows when one is ready; it is only installed when you click Install.">
-        <span className="muted">{data ? `Milo ${data.version}` : "…"}</span>
+        <div className="inline">
+          <span className="muted">{data ? `Milo ${data.version}` : "…"}</span>
+          <button className="link" onClick={() => useUi.setState({ whatsNewOpen: true })}>What's new</button>
+        </div>
       </Row>
       <Row title="New version">
         <div className="inline">

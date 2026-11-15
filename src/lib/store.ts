@@ -53,6 +53,8 @@ export interface Prefs {
   setupDone: boolean;
   /** The "Getting started" card on Today was put away. */
   startCardHidden: boolean;
+  /** The newest version whose "What's new" was read. Newer notes show once on Today. */
+  lastSeenVersion: string;
 }
 export type TodayBlock = "day" | "whatnow" | "inbox" | "confirm" | "routine" | "deadlines" | "wrapup";
 export const TODAY_BLOCKS: [TodayBlock, string][] = [
@@ -69,6 +71,8 @@ export const DEFAULT_PREFS: Prefs = {
   autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7,
   eventStrength: "normal", timeFormat: "24h", weekStart: 1, startView: "last", hiddenScreens: [],
   todayOrder: TODAY_BLOCKS.map(([b]) => b), todayHidden: [], setupDone: false, startCardHidden: false,
+  // A new install has nothing to catch up on.
+  lastSeenVersion: __APP_VERSION__,
 };
 export type InsightsPeriod = "week" | "month" | "semester";
 
@@ -119,6 +123,8 @@ interface UiState {
   /** Id of the routine being edited, if the routine editor is open. */
   routineEditId: string | null;
   shortcutsOpen: boolean;
+  /** The list of all changes, from Settings. */
+  whatsNewOpen: boolean;
   prefs: Prefs;
   collapsedGroups: string[];
   /** Settings sections that are unfolded. */
@@ -184,6 +190,7 @@ export const useUi = create<UiState>()(
       dialog: null,
       routineEditId: null,
       shortcutsOpen: false,
+      whatsNewOpen: false,
       prefs: DEFAULT_PREFS,
       collapsedGroups: [],
       settingsOpen: ["appearance"],
@@ -237,6 +244,8 @@ export const useUi = create<UiState>()(
       merge: (saved, current) => {
         const s = (saved ?? {}) as Partial<UiState>;
         const merged = { ...current, ...s, prefs: { ...DEFAULT_PREFS, ...(s.prefs ?? {}) } };
+        // Saved before "What's new" existed (0.3.4 and earlier): show what came after 0.3.4.
+        if (s.prefs && !("lastSeenVersion" in s.prefs)) merged.prefs.lastSeenVersion = "0.3.4";
         // The start screen from Settings, unless it is "where I left off".
         if (merged.prefs.startView !== "last") merged.view = merged.prefs.startView;
         // Blocks added to Today in a later version join the saved order at their place.

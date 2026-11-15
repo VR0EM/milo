@@ -11,6 +11,11 @@ if (!/^\d+\.\d+\.\d+$/.test(version ?? "")) {
   process.exit(1);
 }
 const run = (cmd) => execSync(cmd, { stdio: "inherit" });
+// Every update tells what it brings ("What's new" on Today), so the notes come first.
+if (!readFileSync("src/lib/whatsNew.ts", "utf8").includes(`version: "${version}"`)) {
+  console.error(`Write what ${version} brings in src/lib/whatsNew.ts first (newest at the top), then commit it.`);
+  process.exit(1);
+}
 if (execSync("git status --porcelain").toString().trim()) {
   console.error("Commit or stash your changes first, so the release is exactly what is committed.");
   process.exit(1);

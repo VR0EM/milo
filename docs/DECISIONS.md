@@ -426,3 +426,26 @@ From/Until, repeat end, semesters):
   the first day of the week from Settings, marks today and the chosen day, greys out days
   before an earliest day (Until, repeat end), and closes with Esc, a click elsewhere or a scroll.
   It is drawn on top of the page (or the open dialog), so a side panel never cuts it off.
+
+## What's new after an update
+
+An update that changes things without saying so is unsettling, so every version tells what it
+brings, once:
+
+- The notes live in `src/lib/whatsNew.ts`, newest first, in plain words for her. The release
+  script refuses a version without notes, and a test checks that the version in package.json
+  has them.
+- After an update, a card at the top of Today lists what is new since the version she last
+  read (at most two versions; "See all changes" for more). It stays until **Got it**, so it is
+  never gone before it was read. A new install shows nothing: the welcome guide covers that.
+- Settings › Data & app › Version › **What's new** lists every version.
+- `prefs.lastSeenVersion` remembers what was read. Saved settings from before this existed
+  count as 0.3.4. The version comes from package.json at build time (`__APP_VERSION__`).
+
+## Tests for the screens' logic
+
+`npm test` runs Vitest on the logic the screens rely on: reading typed dates and times, the
+clock and week preferences, summer-time-safe day counting, the default space, the layout of
+all-day bars, and the "What's new" notes. The tests run in the Europe/Brussels time zone so the
+change to winter time is really exercised. GitHub runs them on every build and release, next to
+`cargo test`.
