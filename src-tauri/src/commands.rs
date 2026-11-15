@@ -349,8 +349,12 @@ fn mini_size(expanded: bool) -> (f64, f64) {
 }
 
 /// The small always-on-top timer, in the top-right corner of the screen.
+///
+/// Async on purpose: on Windows a window made from a synchronous command stays white, because
+/// WebView2 needs the main thread that the command is holding (a known Tauri limitation). That
+/// was the white block in the corner with no timer in it.
 #[tauri::command]
-pub fn show_focus_mini(app: AppHandle, expanded: bool) -> Result<()> {
+pub async fn show_focus_mini(app: AppHandle, expanded: bool) -> Result<()> {
     if let Some(w) = app.get_webview_window(FOCUS_MINI) {
         let _ = w.show();
         return Ok(());
@@ -406,8 +410,8 @@ pub fn show_main_window(app: AppHandle) -> Result<()> {
     Ok(())
 }
 
-/// Where Milo keeps its data, for the Settings screen.
-#[tauri::command]
+/// Where Milo keeps its data, for the Settings screen. Off the main thread: it reads the disk.
+#[tauri::command(async)]
 pub fn app_info(app: AppHandle) -> Result<AppInfo> {
     let dir = app.path().app_data_dir().map_err(|e| crate::error::AppError::Invalid(e.to_string()))?;
     let backups = dir.join("backups");
@@ -507,8 +511,10 @@ pub fn show_capture(app: &AppHandle) -> Result<()> {
     Ok(())
 }
 
+/// Async for the same reason as show_focus_mini: it may make the window, which on Windows must
+/// not happen inside a synchronous command.
 #[tauri::command]
-pub fn open_capture(app: AppHandle) -> Result<()> {
+pub async fn open_capture(app: AppHandle) -> Result<()> {
     show_capture(&app)
 }
 
@@ -538,6 +544,16 @@ pub fn reorder_spaces(db: State<Db>, ids: Vec<String>) -> Result<()> {
     tx!(db, |c| repo::reorder_spaces(c, &ids))
 }
 
+#[tauri::command(async)]
+pub fn move_space(db: State<Db>, id: String, group_id: Option<String>, ids: Vec<String>) -> Result<()> {
+    tx!(db, |c| repo::move_space(c, &id, group_id.as_deref(), &ids))
+}
+
+#[tauri::command(async)]
+pub fn reorder_groups(db: State<Db>, ids: Vec<String>) -> Result<()> {
+    tx!(db, |c| repo::reorder_groups(c, &ids))
+}
+
 /// Whether the next event shows next to the tray icon.
 #[tauri::command(async)]
 pub fn menubar_setting(db: State<Db>) -> Result<bool> {
@@ -550,4 +566,28 @@ pub fn set_menubar_setting(db: State<Db>, on: bool) -> Result<()> {
     // Show (or clear) it at once instead of at the next half minute.
     FOCUS_STARTED.store(true, std::sync::atomic::Ordering::Relaxed);
     Ok(())
+}
+
+/// Deletes one archived item for good (see archive::delete_forever for what stays).
+#[tauri::command(async)]
+pub fn delete_forever(db: State<Db>, entity: String, id: String) -> Result<()> {
+    tx!(db, |c| crate::archive::delete_forever(c, &entity, &id))
+}
+
+/// Deletes for good everything in the archive that can go. Returns how many items went.
+#[tauri::command(async)]
+pub fn empty_archive(db: State<Db>) -> Result<usize> {
+    tx!(db, |c| crate::archive::delete_archived_before(c, "9999-12-31"))
+}
+
+/// After how many days archived items are deleted for good by themselves; None = never.
+#[tauri::command(async)]
+pub fn archive_keep_setting(db: State<Db>) -> Result<Option<i64>> {
+    Ok(repo::get_setting(conn!(db), crate::archive::KEEP_SETTING)?.and_then(|v| v.parse().ok()))
+}
+
+#[tauri::command(async)]
+pub fn set_archive_keep_setting(db: State<Db>, days: Option<i64>) -> Result<()> {
+    let v = days.filter(|d| *d > 0).map(|d| d.to_string());
+    repo::set_setting(conn!(db), crate::archive::KEEP_SETTING, v.as_deref())
 }

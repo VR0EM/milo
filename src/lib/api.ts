@@ -89,6 +89,11 @@ export const api = {
   createSemester: (input: SemesterInput) => call<Semester>("create_semester", { input }),
   updateSemester: (id: string, input: SemesterInput) => call<Semester>("update_semester", { id, input }),
 
+  /** Only archived items; what is still used elsewhere stays archived (the error says why). */
+  deleteForever: (entity: Entity, id: string) => call<void>("delete_forever", { entity, id }),
+  emptyArchive: () => call<number>("empty_archive"),
+  archiveKeepSetting: () => call<number | null>("archive_keep_setting"),
+  setArchiveKeepSetting: (days: number | null) => call<void>("set_archive_keep_setting", { days }),
   listArchived: (query: string) => call<{ items: ArchivedItem[]; hiddenEvents: number }>("list_archived", { query }),
 
   menubarSetting: () => call<boolean>("menubar_setting"),
@@ -109,6 +114,9 @@ export const api = {
   addInbox: (text: string) => call<InboxItem>("add_inbox", { text }),
   setInboxDone: (id: string, done: boolean) => call<void>("set_inbox_done", { id, done }),
   reorderSpaces: (ids: string[]) => call<void>("reorder_spaces", { ids }),
+  /** Into another group (or none), with that list's new order. */
+  moveSpace: (id: string, groupId: string | null, ids: string[]) => call<void>("move_space", { id, groupId, ids }),
+  reorderGroups: (ids: string[]) => call<void>("reorder_groups", { ids }),
   inboxToTask: (id: string, spaceId: string) => call<Task>("inbox_to_task", { id, spaceId }),
 
   listChanges: (entity: "event" | "task", id: string) => call<Change[]>("list_changes", { entity, id }),

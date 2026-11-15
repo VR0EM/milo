@@ -1,27 +1,28 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { pickDefaultSpace } from "../../lib/spaces";
 import { useActivities, useArchiveWithUndo, useCreateEvent, useEventById, useEvents, useSpaces, useTaskTypes, useTasks } from "../../lib/queries";
-import { useUi, type CalMode } from "../../lib/store";
+import { MAX_DAYS, preferredSpace, useUi, type CalMode } from "../../lib/store";
 import { addDays, atMinutes, fmtLongDay, fmtMonth, isoWeek, minutesIntoDay, startOfDay } from "../../lib/time";
 import { Icon } from "../../components/Icon";
-import { ignoreForShortcut } from "../shortcuts/keys";
+import { MonthPicker } from "../../components/MonthPicker";
+import { IS_MAC, ignoreForShortcut, isTyping } from "../shortcuts/keys";
 import { TaskPanel } from "../tasks/TaskPanel";
 import { EventPanel } from "./EventPanel";
 import { WeekGrid } from "./WeekGrid";
 import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TaskDragGhost } from "./TaskTray";
 
-const MODES: [CalMode, string, string][] = [["day", "Day", "D"], ["three", "3 days", "3"], ["week", "Week", "W"], ["month", "Month", "M"]];
+const MODES: [CalMode, string, string][] = [["day", "Day", "D"], ["week", "Week", "W"], ["month", "Month", "M"]];
 import { BUFFER, firstShown, shiftShown } from "./days";
 
 /** What the arrows move by, in words. */
-const STEP: Record<CalMode, string> = { day: "day", three: "3 days", week: "week", month: "month" };
+const STEP: Record<CalMode, string> = { day: "day", week: "week", month: "month" };
 
 export function CalendarView() {
   const viewStart = useUi((s) => s.viewStart);
   const selectedId = useUi((s) => s.selectedEventId);
   const hidden = useUi((s) => s.hiddenSpaceIds);
-  const lastSpaceId = useUi((s) => s.lastSpaceId);
+  const lastSpaceId = useUi(preferredSpace);
   const archive = useArchiveWithUndo();
   const createEvent = useCreateEvent();
 
@@ -30,8 +31,11 @@ export function CalendarView() {
   const eventMinutes = useUi((s) => s.prefs.eventMinutes);
   // The day and 3-day views always show consecutive days; the week and month follow the
   // weekend setting.
-  const gridWeekends = mode === "day" || mode === "three" || showWeekends;
-  const visibleCount = mode === "day" ? 1 : mode === "three" ? 3 : showWeekends ? 7 : 5;
+  const dayCount = useUi((s) => s.dayCount);
+  const [picking, setPicking] = useState(false);
+  const gridWeekends = mode === "day" || showWeekends;
+  const visibleCount = mode === "day" ? dayCount : showWeekends ? 7 : 5;
+  const stepWord = mode === "day" && dayCount > 1 ? `${dayCount} days` : STEP[mode];
   const start = firstShown(viewStart, gridWeekends);
   // Visible days plus a buffer on both sides, so scrolling sideways never shows an empty column.
   const days = useMemo(
@@ -63,6 +67,40 @@ export function CalendarView() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Copy, cut and paste events: Ctrl on Windows, Cmd on a Mac.
+      if ((IS_MAC ? e.metaKey : e.ctrlKey) && !e.shiftKey && !e.altKey && !isTyping(e) && !e.repeat) {
+        const key = e.key.toLowerCase();
+        const ui = useUi.getState();
+        if ((key === "c" || key === "x") && selected) {
+          e.preventDefault();
+          useUi.setState({ clipboard: selected, pasteAt: null });
+          if (key === "x") {
+            archive("event", selected.id, selected.title || "Event");
+            ui.select(null);
+          } else ui.notify({ text: `Copied "${selected.title || "Untitled"}"` });
+          return;
+        }
+        if (key === "v" && ui.clipboard) {
+          e.preventDefault();
+          const c = ui.clipboard;
+          const s0 = new Date(c.startAt);
+          const length = new Date(c.endAt).getTime() - s0.getTime();
+          let start = s0;
+          if (ui.pasteAt) {
+            start = new Date(ui.pasteAt);
+            // A day in the month view: the copy keeps its own time of day.
+            if (ui.pasteDayOnly || c.allDay) start.setHours(c.allDay ? 0 : s0.getHours(), c.allDay ? 0 : s0.getMinutes(), 0, 0);
+          }
+          createEvent.mutate(
+            {
+              spaceId: c.spaceId, activityId: c.activityId, title: c.title, notes: c.notes, allDay: c.allDay, status: "planned",
+              startAt: start.toISOString(), endAt: new Date(start.getTime() + length).toISOString(),
+            },
+            { onSuccess: (created) => useUi.getState().select(created.id) },
+          );
+          return;
+        }
+      }
       if (ignoreForShortcut(e)) return;
       const ui = useUi.getState();
       if ((e.key === "Delete" || e.key === "Backspace") && selected) {
@@ -75,8 +113,10 @@ export function CalendarView() {
         e.preventDefault();
         useUi.setState({ commandOpen: true });
       }
-      else if (e.key === "d" || e.key === "w" || e.key === "m") ui.setCalMode(e.key === "d" ? "day" : e.key === "w" ? "week" : "month");
-      else if (e.key === "3") ui.setCalMode("three");
+      else if (e.key === "d") ui.setDayCount(1);
+      else if (e.key === "w" || e.key === "m") ui.setCalMode(e.key === "w" ? "week" : "month");
+      // 2 to 9: the day view with that many days.
+      else if (/^[2-9]$/.test(e.key)) ui.setDayCount(Number(e.key));
       else if (e.key === "n" && defaultSpaceId) {
         // Keep the "n" itself out of the new event's title field, which takes the focus.
         e.preventDefault();
@@ -102,24 +142,41 @@ export function CalendarView() {
     <>
       <main className="calendar">
         <header className="toolbar">
-          <h1>
-            {mode === "day" ? fmtLongDay(viewStart) : fmtMonth(mode === "week" ? addDays(viewStart, 3) : viewStart)}
+          <h1 className="cal-title">
+            {/* The name opens a month and year list to jump far at once. */}
+            <button className="month-title" aria-haspopup="dialog" aria-expanded={picking} title="Go to another month" onClick={() => setPicking(!picking)}>
+              {mode === "day" && dayCount === 1 ? fmtLongDay(viewStart) : fmtMonth(mode === "week" ? addDays(viewStart, 3) : viewStart)}
+            </button>
+            {picking && (
+              <MonthPicker
+                value={mode === "week" ? addDays(viewStart, 3) : viewStart}
+                onPick={(d) => {
+                  useUi.getState().showDate(d);
+                  setPicking(false);
+                }}
+                onClose={() => setPicking(false)}
+              />
+            )}
             {mode !== "month" && <span className="h1-note">Week {isoWeek(mode === "week" ? addDays(viewStart, 3) : viewStart)}</span>}
           </h1>
           <div className="toolbar-actions">
             <div className="segmented" role="radiogroup" aria-label="Calendar view">
-              {MODES.map(([m, label, key]) => (
-                <button key={m} role="radio" aria-checked={mode === m} className={mode === m ? "on" : ""} title={`${label} (${key})`} onClick={() => useUi.getState().setCalMode(m)}>
-                  {label}
-                </button>
-              ))}
+              {MODES.map(([m, label, key]) =>
+                m === "day" ? (
+                  <DayButton key={m} on={mode === "day"} count={dayCount} />
+                ) : (
+                  <button key={m} role="radio" aria-checked={mode === m} className={mode === m ? "on" : ""} title={`${label} (${key})`} onClick={() => useUi.getState().setCalMode(m)}>
+                    {label}
+                  </button>
+                ),
+              )}
             </div>
             <button className="btn" onClick={() => useUi.getState().showDate(new Date())}>Today</button>
             <div className="btn-pair">
-              <button className="btn icon-only" aria-label={`Previous ${STEP[mode]}`} title={`Previous ${STEP[mode]} (←)`} onClick={() => useUi.getState().stepCalendar(-1)}>
+              <button className="btn icon-only" aria-label={`Previous ${stepWord}`} title={`Previous ${stepWord} (←)`} onClick={() => useUi.getState().stepCalendar(-1)}>
                 <Icon name="left" />
               </button>
-              <button className="btn icon-only" aria-label={`Next ${STEP[mode]}`} title={`Next ${STEP[mode]} (→)`} onClick={() => useUi.getState().stepCalendar(1)}>
+              <button className="btn icon-only" aria-label={`Next ${stepWord}`} title={`Next ${stepWord} (→)`} onClick={() => useUi.getState().stepCalendar(1)}>
                 <Icon name="right" />
               </button>
             </div>
@@ -138,5 +195,67 @@ export function CalendarView() {
         <EventPanel event={selected} spaces={spaces} activities={activities} />
       )}
     </>
+  );
+}
+
+/**
+ * "Day" with a small menu for how many days side by side (1 to 14), from the day shown.
+ * The button keeps the count chosen last; D always goes back to one day.
+ */
+function DayButton({ on, count }: { on: boolean; count: number }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener("pointerdown", away, true);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("keydown", esc, true);
+    };
+  }, [open]);
+  const label = count === 1 ? "Day" : `${count} days`;
+  return (
+    <div className="day-button" ref={ref}>
+      <button role="radio" aria-checked={on} className={on ? "on" : ""} title="Day (D), or 2 to 9 for that many days" onClick={() => useUi.getState().setDayCount(count)}>
+        {label}
+      </button>
+      <button
+        className={`day-more${open ? " open" : ""}`}
+        aria-label="Number of days"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="chevron" size={11} />
+      </button>
+      {open && (
+        <div className="menu days-menu" role="menu" aria-label="Number of days">
+          <span className="days-menu-title">Number of days</span>
+          <div className="days-grid">
+            {Array.from({ length: MAX_DAYS }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                role="menuitemradio"
+                aria-checked={on && count === n}
+                className={on && count === n ? "on" : ""}
+                onClick={() => {
+                  useUi.getState().setDayCount(n);
+                  setOpen(false);
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

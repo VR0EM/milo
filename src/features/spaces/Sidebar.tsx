@@ -34,13 +34,16 @@ function FocusIndicator() {
   );
 }
 
-export function BrandMark({ size = 18 }: { size?: number }) {
+export function BrandMark({ size = 20 }: { size?: number }) {
   return (
-    <svg className="brand-mark" width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
-      <rect width="18" height="18" rx="5" fill="currentColor" />
-      <rect x="4" y="4.5" width="10" height="2.2" rx="1.1" fill="var(--sunken)" />
-      <rect x="4" y="7.9" width="7" height="2.2" rx="1.1" fill="var(--sunken)" opacity="0.8" />
-      <rect x="4" y="11.3" width="4.6" height="2.2" rx="1.1" fill="var(--sunken)" opacity="0.6" />
+    // Milo's logo (src-tauri/icons/app-icon.svg): three columns of blocks, like a week planned.
+    <svg className="brand-mark" width={size} height={size} viewBox="0 0 256 256" aria-hidden="true">
+      <rect width="256" height="256" rx="54" fill="#1E293B" />
+      <rect x="43" y="43" width="48" height="170" rx="10" fill="#38BDF8" />
+      <rect x="104" y="43" width="48" height="105" rx="10" fill="#A78BFA" />
+      <rect x="104" y="161" width="48" height="52" rx="10" fill="#F472B6" />
+      <rect x="165" y="43" width="48" height="52" rx="10" fill="#FB923C" />
+      <rect x="165" y="108" width="48" height="105" rx="10" fill="#4ADE80" />
     </svg>
   );
 }
@@ -127,6 +130,7 @@ export function Sidebar() {
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const hidden = useUi((s) => s.hiddenSpaceIds);
   const collapsed = useUi((s) => s.collapsedGroups);
+  const defaultSpaceId = useUi((s) => s.prefs.defaultSpaceId);
   const view = useUi((s) => s.view);
   const spaceViewId = useUi((s) => s.spaceViewId);
   const { toggleSpace, toggleGroup, openDialog } = useUi.getState();
@@ -140,8 +144,13 @@ export function Sidebar() {
   const spaceMenu = (e: React.MouseEvent, s: Space) => {
     const group = groups.find((g) => g.id === s.groupId);
     const shown = !hidden.includes(s.id);
+    const isDefault = useUi.getState().prefs.defaultSpaceId === s.id;
     openContextMenu(e, [
       { label: "Open", run: () => useUi.getState().openSpace(s.id) },
+      {
+        label: isDefault ? "Stop using as default" : "Use for new events and tasks",
+        run: () => useUi.getState().setPrefs({ defaultSpaceId: isDefault ? null : s.id }),
+      },
       { label: "Edit…", run: () => openDialog({ kind: "space", item: s }) },
       { label: shown ? "Hide in the calendar" : "Show in the calendar", run: () => toggleSpace(s.id) },
       "separator",
@@ -165,39 +174,94 @@ export function Sidebar() {
   const loose = spaces.filter((s) => !s.groupId || !groupIds.has(s.groupId));
 
   // ---- dragging a space up or down within its list sets the order -------------------------
-  const reorder = useAction("spaces");
-  const [drag, setDrag] = useState<{ id: string; ids: string[]; over: number } | null>(null);
+  const reorder = useAction("spaces", "groups");
+  // Where a dragged space would land: a list (a group's id, or null for the spaces without a
+  // group) and a place in it.
+  type Target = { list: string | null; index: number };
+  const [drag, setDrag] = useState<{ id: string; target: Target | null } | null>(null);
+  const [groupDrag, setGroupDrag] = useState<{ id: string; over: number } | null>(null);
   const justDragged = useRef(false);
-  const pressRow = (e: React.PointerEvent, s: Space, list: Space[]) => {
+  const listOf = (list: string | null) => (list ? spaces.filter((x) => x.groupId === list) : loose).map((x) => x.id);
+  const listKey = (s: Space) => (s.groupId && groupIds.has(s.groupId) ? s.groupId : null);
+
+  /** The place under the pointer, across all lists: before a space, or at the end of a list. */
+  const targetAt = (y: number): Target => {
+    for (const el of document.querySelectorAll<HTMLElement>("[data-space-row], [data-group-head]")) {
+      const r = el.getBoundingClientRect();
+      if (y >= r.top + r.height / 2) continue;
+      if (el.dataset.spaceRow) {
+        const list = el.dataset.list || null;
+        return { list, index: listOf(list).indexOf(el.dataset.spaceRow) };
+      }
+      // Above a group's header: the end of the list just before it.
+      const prev = el.dataset.prevList || null;
+      return { list: prev, index: listOf(prev).length };
+    }
+    const last = groups.length ? groups[groups.length - 1].id : null;
+    return { list: last, index: listOf(last).length };
+  };
+
+  // Drag a space up or down: within its list, into another group, or out of every group.
+  const pressRow = (e: React.PointerEvent, s: Space) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest(".space-toggle, .link")) return;
     const y0 = e.clientY;
-    const ids = list.map((x) => x.id);
     let moving = false;
-    let over = ids.indexOf(s.id);
+    let target: Target | null = null;
     const onMove = (m: PointerEvent) => {
       if (!moving && Math.abs(m.clientY - y0) < 5) return;
       moving = true;
       justDragged.current = true;
-      over = ids.length;
-      for (let i = 0; i < ids.length; i++) {
-        const r = document.querySelector(`[data-space-row="${ids[i]}"]`)?.getBoundingClientRect();
-        if (r && m.clientY < r.top + r.height / 2) {
-          over = i;
-          break;
-        }
-      }
-      setDrag({ id: s.id, ids, over });
+      target = targetAt(m.clientY);
+      setDrag({ id: s.id, target });
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       setDrag(null);
       setTimeout(() => (justDragged.current = false), 0);
+      if (!moving || !target) return;
+      const t: Target = target;
+      const from = listKey(s);
+      const before = listOf(t.list);
+      const ids = before.filter((x) => x !== s.id);
+      let at = t.index;
+      if (t.list === from && at > before.indexOf(s.id)) at--;
+      ids.splice(at, 0, s.id);
+      if (t.list !== from) reorder.mutate(() => api.moveSpace(s.id, t.list, ids));
+      else if (ids.join() !== before.join()) reorder.mutate(() => api.reorderSpaces(ids));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  // Drag a group by its header to put it before or after the other groups.
+  const pressGroup = (e: React.PointerEvent, g: Group) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest(".link")) return;
+    const y0 = e.clientY;
+    const ids = groups.map((x) => x.id);
+    let moving = false;
+    let over = ids.indexOf(g.id);
+    const onMove = (m: PointerEvent) => {
+      if (!moving && Math.abs(m.clientY - y0) < 5) return;
+      moving = true;
+      justDragged.current = true;
+      over = ids.length;
+      for (let i = 0; i < ids.length; i++) {
+        const r = document.querySelector(`[data-group-block="${ids[i]}"]`)?.getBoundingClientRect();
+        if (r && m.clientY < r.top + Math.min(r.height, 60) / 2) { over = i; break; }
+      }
+      setGroupDrag({ id: g.id, over });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setGroupDrag(null);
+      setTimeout(() => (justDragged.current = false), 0);
       if (!moving) return;
-      const from = ids.indexOf(s.id);
-      const next = ids.filter((x) => x !== s.id);
-      next.splice(over > from ? over - 1 : over, 0, s.id);
-      if (next.join() !== ids.join()) reorder.mutate(() => api.reorderSpaces(next));
+      const from = ids.indexOf(g.id);
+      const next = ids.filter((x) => x !== g.id);
+      next.splice(over > from ? over - 1 : over, 0, g.id);
+      if (next.join() !== ids.join()) reorder.mutate(() => api.reorderGroups(next));
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -205,16 +269,20 @@ export function Sidebar() {
 
   // The coloured square shows or hides the space in the calendar; the name opens its overview.
   const row = (s: Space, list: Space[]) => {
+    const key = listKey(s);
     const shown = !hidden.includes(s.id);
+    const isDefault = defaultSpaceId === s.id;
     const current = view === "space" && spaceViewId === s.id;
     const i = list.indexOf(s);
-    const dropHere = drag && drag.ids.includes(s.id) && drag.over === i && drag.id !== s.id;
-    const dropAfter = drag && drag.ids.includes(s.id) && drag.over === list.length && i === list.length - 1;
+    const t = drag?.target;
+    const dropHere = !!t && t.list === key && t.index === i && drag!.id !== s.id;
+    const dropAfter = !!t && t.list === key && t.index === list.length && i === list.length - 1 && drag!.id !== s.id;
     return (
       <li
         key={s.id}
         data-space-row={s.id}
-        onPointerDown={(e) => pressRow(e, s, list)}
+        data-list={key ?? ""}
+        onPointerDown={(e) => pressRow(e, s)}
         onContextMenu={(e) => spaceMenu(e, s)}
         className={[
           "side-row space-row-side",
@@ -229,8 +297,9 @@ export function Sidebar() {
           <input type="checkbox" aria-label={`Show ${s.name} in the calendar`} checked={shown} onChange={() => toggleSpace(s.id)} />
           <SpaceMark icon={s.icon} filled={false} />
         </label>
-        <button className="space-open" aria-current={current ? "page" : undefined} title="Open, or drag to reorder" onClick={() => !justDragged.current && useUi.getState().openSpace(s.id)}>
+        <button className="space-open" aria-current={current ? "page" : undefined} title="Open, or drag to move" onClick={() => !justDragged.current && useUi.getState().openSpace(s.id)}>
           <span className="side-name">{s.name}</span>
+          {isDefault && <span className="side-default" title="New events and tasks go here (right-click to change)">default</span>}
         </button>
         <button className="link" onClick={() => openDialog({ kind: "space", item: s })}>Edit</button>
       </li>
@@ -260,13 +329,31 @@ export function Sidebar() {
           <AddMenu />
         </div>
         <ul>{loose.map((s) => row(s, loose))}</ul>
-        {groups.map((g) => {
+        {groups.map((g, gi) => {
           const members = spaces.filter((s) => s.groupId === g.id);
           const open = !collapsed.includes(g.id);
+          // A space dropped on a folded or empty group goes into it: the header lights up.
+          const into = drag?.target?.list === g.id && (!open || members.length === 0);
+          const gd = groupDrag;
           return (
-            <div key={g.id} className="side-group">
-              <div className="side-row group-row" onContextMenu={(e) => groupMenu(e, g, open)}>
-                <button className="group-toggle" aria-expanded={open} onClick={() => toggleGroup(g.id)}>
+            <div
+              key={g.id}
+              data-group-block={g.id}
+              className={[
+                "side-group",
+                gd?.id === g.id ? "dragging" : "",
+                gd && gd.over === gi && gd.id !== g.id ? "drop-before" : "",
+                gd && gd.over === groups.length && gi === groups.length - 1 ? "drop-after" : "",
+              ].join(" ")}
+            >
+              <div
+                className={`side-row group-row${into ? " drop-into" : ""}`}
+                data-group-head={g.id}
+                data-prev-list={gi === 0 ? "" : groups[gi - 1].id}
+                onPointerDown={(e) => pressGroup(e, g)}
+                onContextMenu={(e) => groupMenu(e, g, open)}
+              >
+                <button className="group-toggle" aria-expanded={open} title="Fold, or drag to move" onClick={() => !justDragged.current && toggleGroup(g.id)}>
                   <span className={`chev${open ? " open" : ""}`}><Icon name="chevron" size={12} /></span>
                   <span className="side-name">{g.name}</span>
                   {!open && <span className="count">{members.length}</span>}

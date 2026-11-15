@@ -3,7 +3,7 @@ import { pickDefaultSpace } from "../../lib/spaces";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useSpaces, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
-import { useUi } from "../../lib/store";
+import { preferredSpace, useUi } from "../../lib/store";
 import { daysFromToday, fmtMoment, fmtRelativeDays } from "../../lib/time";
 import { taskProgress, type Space, type Task, type TaskType } from "../../lib/types";
 import { ignoreForShortcut } from "../shortcuts/keys";
@@ -41,7 +41,7 @@ export function TasksView() {
   const spaces = useSpaces().data ?? [];
   const types = useTaskTypes().data ?? [];
   const tasks = useTasks().data ?? [];
-  const lastSpaceId = useUi((s) => s.lastSpaceId);
+  const lastSpaceId = useUi(preferredSpace);
   const selectedId = useUi((s) => s.selectedTaskId);
   const act = useTaskAction();
 

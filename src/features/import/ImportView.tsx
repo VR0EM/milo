@@ -464,7 +464,6 @@ function Export() {
       <div className="block-head">
         <h2>
           Export
-          <HelpTip>One JSON file with everything in Milo, archived items included. Daily backups are made automatically as well.</HelpTip>
         </h2>
         <span className="spacer" />
         <button className="btn small" disabled={!files.available || busy} onClick={run}>{busy ? "Exporting…" : "Export all data…"}</button>

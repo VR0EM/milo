@@ -235,7 +235,6 @@ function Courses({ onDone }: { onDone: () => void }) {
       <Head
         title="Your courses"
         line="One course per line. Each gets its own space and colour."
-        help="The courses go into a group called School in the sidebar. Later you can give each one an icon, change its colour, or add more."
       />
       <textarea
         className="setup-textarea"

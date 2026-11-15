@@ -132,6 +132,19 @@ pub fn run() {
                     let conn = db.lock();
                     if let Err(e) = backup::run_if_due(&conn, &backups) {
                         eprintln!("backup failed: {e}");
+                    } else {
+                        // Only after a good backup: archived items older than the chosen time go for good.
+                        match conn.unchecked_transaction().map_err(Into::into).and_then(|t| {
+                            let n = archive::clean_up(&t, chrono::Utc::now())?;
+                            t.commit()?;
+                            Ok::<_, error::AppError>(n)
+                        }) {
+                            Ok(n) if n > 0 => {
+                                let _ = handle.emit("data-changed", ());
+                            }
+                            Ok(_) => {}
+                            Err(e) => eprintln!("archive clean-up failed: {e}"),
+                        }
                     }
                     // The optional second folder (Settings > Your data) gets a copy as well.
                     if let Ok(Some(to)) = repo::get_setting(&conn, "backup_mirror_dir") {
@@ -274,6 +287,10 @@ pub fn run() {
             commands::create_activity,
             commands::update_activity,
             commands::list_events,
+            commands::delete_forever,
+            commands::empty_archive,
+            commands::archive_keep_setting,
+            commands::set_archive_keep_setting,
             commands::event_by_id,
             commands::create_event,
             commands::update_event,
@@ -340,6 +357,8 @@ pub fn run() {
             commands::list_changes,
             commands::restore_change,
             commands::reorder_spaces,
+            commands::move_space,
+            commands::reorder_groups,
             commands::open_capture,
             commands::hide_capture,
             commands::menubar_setting,

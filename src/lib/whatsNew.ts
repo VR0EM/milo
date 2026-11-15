@@ -12,6 +12,27 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.3.6",
+    date: "2026-11-15",
+    items: [
+      "The small focus timer works on Windows again (it was a white block in the corner).",
+      "Day can show 1 to 14 days side by side: open the menu next to Day, or press 2 to 9 in the calendar.",
+      "Click the month name, above the calendar or in the small month, to jump to any month and year.",
+      "Times can be picked from a list; for the end it shows how long that makes it.",
+      "Copy, cut and paste events with Ctrl+C, X and V (Cmd on a Mac). Click a spot first to paste it there.",
+      "Pull the top or bottom of an event into another day for an event of several days.",
+      "Drag the left edge of the panel on the right to make it wider or narrower.",
+      "Drag a space into or out of a group, and drag groups to put them in order.",
+      "Right-click a space to use it for new events and tasks.",
+      "Zoomed out all the way, the calendar shows the whole day from 00 to 24.",
+      "Scroll anywhere next to the content; the scrollbar sits at the right edge of the window.",
+      "Focus lengths are now 15, 30, 45 and 60 minutes, or your own. Insights also shows a whole year.",
+      "Reorder Today's blocks by dragging them in Settings.",
+      "The archive can delete things for good, by hand or by itself after a time you choose.",
+      "A new logo, and fewer question marks: only where something can be unclear.",
+    ],
+  },
+  {
     version: "0.3.5",
     date: "2026-11-15",
     items: [

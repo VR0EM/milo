@@ -70,11 +70,13 @@ export function ShortcutsDialog() {
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>
           <tr><td colSpan={2}><h3>Calendar</h3></td></tr>
           <tr><td>{k("N")}</td><td>New event at the next half hour</td></tr>
-          <tr><td>{k("D")} {k("3")} {k("W")} {k("M")}</td><td>Day, 3 days (from today), week or month view</td></tr>
+          <tr><td>{k("D")} {k("W")} {k("M")}</td><td>Day, week or month view</td></tr>
+          <tr><td>{k("2")} … {k("9")}</td><td>That many days side by side (up to 14 with the menu next to Day)</td></tr>
           <tr><td>{k("T")}</td><td>Go to today</td></tr>
           <tr><td>{k("G")}</td><td>Go to a date: type it, like "19 nov" or "fri"</td></tr>
           <tr><td>{k("←")} {k("→")}</td><td>Back or forward by what is on screen</td></tr>
           <tr><td>{k("Delete")}</td><td>Archive the selected event (with Undo)</td></tr>
+          <tr><td>{k(`${MOD_LABEL}C`)} {k(`${MOD_LABEL}X`)} {k(`${MOD_LABEL}V`)}</td><td>Copy or cut the selected event; paste puts it where you clicked last, or at the same time</td></tr>
           <tr><td>Double-click</td><td>New event (in the All day row or the month: an all-day event)</td></tr>
           <tr><td>Drag on empty space</td><td>Draw a new event</td></tr>
           <tr><td>Drag in the month</td><td>Move an event to another day</td></tr>

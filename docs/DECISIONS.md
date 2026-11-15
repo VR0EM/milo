@@ -495,3 +495,55 @@ another week (arrows, swiping, the mini month) put the mini month back, and edit
 that was not on screen failed with "Not found". The selected event is now also loaded by itself
 (`event_by_id`, `useEventById`), as a list of one inside the same "events" cache: quick updates,
 archiving and refreshing reach it like any other list. Esc still closes it.
+
+## A "?" only where something can confuse
+
+Every setting with its own "?" was clutter again. The rule now: a "?" only when the name alone
+can be misread, or when knowing it takes a worry away. Kept: hiding screens from the sidebar,
+Today's blocks, hiding weekends, the archive, running the guide again, activities (how time
+counts), the next event in the menu bar, the update check (nothing is sent), the second backup
+folder, restoring a backup, repeating events, the inbox, planning a task, calendar links,
+importing a file, title links, and the timetable and rhythm steps of the guide. Self-evident
+ones (theme, colours, typeface, text size, clock, first day of the week, start screen, lengths,
+version, folders, export, shortcuts) have none.
+
+## New logo
+
+Three columns of coloured blocks on a dark tile, like a planned week (`src-tauri/icons/app-icon.svg`).
+The app icons are made from it with `npx tauri icon`; the macOS `.icns` comes from
+`app-icon-macos.svg`, the same mark with the usual margin of macOS icons, so it is not larger
+than the icons around it in the Dock. The sidebar, the welcome guide and the browser tab use the
+same mark.
+
+## First feedback round from the real user (0.3.6)
+
+- **The small focus timer on Windows** was a white block: a window made inside a synchronous
+  Tauri command never gets its WebView2 content on Windows. `show_focus_mini` and `open_capture`
+  are async now; `app_info` runs off the main thread, and Settings shows the version built into
+  the app, so it can never be "…".
+- **Scrolling** areas fill the screen to its right edge (the content keeps its reading width on
+  the left, through `--content` padding), so the wheel works next to the content too.
+- **Zooming out** stops when 00–24 fills the height exactly (`fit` in WeekGrid), minus the room
+  kept under 24:00.
+- **Rounded** is left out on Windows, which has no rounded system font.
+- **Day with 1–14 days** replaces the separate 3-day view (`dayCount`; saved 0.3.5 state with
+  "three" becomes Day with 3). D is one day, 2–9 that many days.
+- **Month picker** under the month name (calendar title and small month): a year first stays
+  open, a month goes there.
+- **Time lists** under every time field (quarter hours); the end field lists from the start on,
+  with the length. Typing still works.
+- **Side panel width** is dragged at its edge, shared by all panels and remembered (260–560 px).
+- **Copy, cut, paste** of events with Ctrl/Cmd+C/X/V. Paste goes to the last empty spot clicked
+  after copying (a day in the month view keeps the event's own time), else to the same time.
+  Cut archives with Undo.
+- **Several days**: pulling the top or bottom edge of an event may cross days; drawing a new one
+  still stays in one day so a slip of the hand cannot stretch it.
+- **Spaces and groups**: one drag finds its place across all lists (`move_space`), and groups
+  are dragged by their header (`reorder_groups`). Right-click a space to make it the default
+  for new things (`prefs.defaultSpaceId`, before "the one used last"), shown as "default".
+- **Settings**: Today's blocks are dragged by a grip (arrow keys still work on it); the list of
+  groups left Settings (the sidebar does that now).
+- **Archive**: "Delete…" per item asks in its own row; "Empty the archive…" asks too. A space
+  or group still in use, and imported events (a sync would add them again), stay. An optional
+  clean-up after 30 days, 3 months or a year runs right after the daily backup.
+- **Insights** got Year (weekly bars, a label every fourth week); focus lengths are 15/30/45/60.

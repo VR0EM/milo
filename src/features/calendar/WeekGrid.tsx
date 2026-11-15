@@ -48,7 +48,12 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 
 export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, spaces, defaultSpaceId }: Props) {
   const selectedTaskId = useUi((s) => s.selectedTaskId);
-  const hourHeight = useUi((s) => s.hourHeight);
+  const storedHour = useUi((s) => s.hourHeight);
+  // Zoomed out all the way, the whole day from 00 to 24 fills the height exactly: never smaller.
+  const [fit, setFit] = useState(0);
+  const fitRef = useRef(0);
+  fitRef.current = fit;
+  const hourHeight = Math.max(storedHour, fit);
   const selectedId = useUi((s) => s.selectedEventId);
   const select = useUi((s) => s.select);
   const createEvent = useCreateEvent();
@@ -168,6 +173,24 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
     return () => clearInterval(t);
   }, []);
 
+  // The hour height at which 00:00 to 24:00 just fits under the day headers.
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    const body = el?.querySelector<HTMLElement>(".grid-body");
+    if (!el || !body) return;
+    const measure = () => {
+      // The day headers stay on top while scrolling; the hours get the rest of the height.
+      const head = body.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+      // Less the room kept under 24:00 (.grid-body's bottom margin).
+      const room = parseFloat(getComputedStyle(body).marginBottom) || 0;
+      setFit(Math.max(0, (el.clientHeight - head - room) / 24));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Open on the morning rather than at midnight.
   useLayoutEffect(() => {
     const ui = useUi.getState();
@@ -197,10 +220,11 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const ui = useUi.getState();
-        const old = ui.hourHeight;
-        // Capped per step, so one notch of a mouse wheel does not jump several zoom levels.
-        ui.setHourHeight(old * Math.exp(-clamp(e.deltaY, -30, 30) * 0.01));
-        const next = useUi.getState().hourHeight;
+        const old = live.current.hourHeight;
+        // Capped per step, so one notch of a mouse wheel does not jump several zoom levels;
+        // never further out than the whole day on screen.
+        ui.setHourHeight(Math.max(fitRef.current, old * Math.exp(-clamp(e.deltaY, -30, 30) * 0.01)));
+        const next = Math.max(fitRef.current, useUi.getState().hourHeight);
         if (next !== old) {
           const y = e.clientY - cols.top;
           pendingScroll.current = el.scrollTop + y * (next / old) - y;
@@ -253,10 +277,10 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
     const anchor = timeAt(origin.x, origin.y, true).getTime();
     const s0 = ev ? new Date(ev.startAt).getTime() : 0;
     const e0 = ev ? new Date(ev.endAt).getTime() : 0;
-    // Drawing and resizing stay inside the day where the drag started, so a sideways
-    // slip of the hand cannot stretch an event across days. Only moving crosses days.
-    // (An overnight event is made by typing an end time earlier than the start.)
-    const lockDay = mode === "move" ? undefined : dayIndexAt(origin.x);
+    // Drawing a new event stays inside the day where it started, so a sideways slip of the
+    // hand cannot make one of several days. Moving, and pulling the top or bottom edge of an
+    // event, may cross days: that is how an event gets longer than one day.
+    const lockDay = mode === "create" ? dayIndexAt(origin.x) : undefined;
     let latest: Draft | null = null;
 
     const onMove = (m: PointerEvent) => {
@@ -502,6 +526,8 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
           style={stripStyle}
           onPointerDown={(e) => {
             if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("day-col")) return;
+            // Ctrl/Cmd+V after this puts a copied event here.
+            if (e.button === 0) useUi.setState({ pasteAt: timeAt(e.clientX, e.clientY, true), pasteDayOnly: false });
             select(null);
             beginDrag(e, "create");
           }}

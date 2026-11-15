@@ -2,7 +2,7 @@ import { useState } from "react";
 import { pickDefaultSpace } from "../../lib/spaces";
 import { api } from "../../lib/api";
 import { useAction, useInbox, useSpaces } from "../../lib/queries";
-import { useUi } from "../../lib/store";
+import { preferredSpace, useUi } from "../../lib/store";
 import { daysFromToday, fmtTime } from "../../lib/time";
 import type { InboxItem, Task } from "../../lib/types";
 import { HelpTip } from "../../components/HelpTip";
@@ -18,7 +18,7 @@ const when = (iso: string) => {
 export function InboxBlock() {
   const items = useInbox().data ?? [];
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
-  const lastSpaceId = useUi((s) => s.lastSpaceId);
+  const lastSpaceId = useUi(preferredSpace);
   const act = useAction("inbox", "tasks");
   const [text, setText] = useState("");
 

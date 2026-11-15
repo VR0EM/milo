@@ -37,6 +37,10 @@ function periodFor(kind: InsightsPeriod, anchor: Date, semester: Semester | null
     const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
     return { from, to: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1), label: monthYear.format(from) };
   }
+  if (kind === "year") {
+    const from = new Date(anchor.getFullYear(), 0, 1);
+    return { from, to: new Date(anchor.getFullYear() + 1, 0, 1), label: String(anchor.getFullYear()) };
+  }
   if (!semester) return null;
   const from = parse(semester.startDate);
   const last = parse(semester.endDate);
@@ -58,7 +62,10 @@ export function InsightsView() {
 
   const move = (dir: number) => {
     useUi.setState({
-      insightsAnchor: kind === "week" ? addDays(anchor, 7 * dir) : new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1),
+      insightsAnchor:
+        kind === "week" ? addDays(anchor, 7 * dir)
+        : kind === "year" ? new Date(anchor.getFullYear() + dir, 0, 1)
+        : new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1),
     });
   };
 
@@ -68,7 +75,7 @@ export function InsightsView() {
         <h1>Insights</h1>
         <div className="toolbar-actions">
           <div className="segmented" role="tablist" aria-label="Period">
-            {(["week", "month", "semester"] as const).map((k) => (
+            {(["week", "month", "year", "semester"] as const).map((k) => (
               <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? "on" : ""} onClick={() => useUi.setState({ insightsPeriod: k })}>
                 {k[0].toUpperCase() + k.slice(1)}
               </button>
@@ -94,7 +101,7 @@ export function InsightsView() {
               <button className="btn" aria-label={`Previous ${kind}`} onClick={() => move(-1)}>‹</button>
               <button className="btn" aria-label={`Next ${kind}`} onClick={() => move(1)}>›</button>
               <button className="btn" onClick={() => useUi.setState({ insightsAnchor: new Date() })}>
-                {kind === "week" ? "This week" : "This month"}
+                {kind === "week" ? "This week" : kind === "year" ? "This year" : "This month"}
               </button>
             </>
           )}
@@ -104,7 +111,10 @@ export function InsightsView() {
         {period ? (
           <Report
             period={period}
-            previous={kind === "semester" ? null : periodFor(kind, kind === "week" ? addDays(anchor, -7) : new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1), null)}
+            previous={
+              kind === "semester" ? null
+              : periodFor(kind, kind === "week" ? addDays(anchor, -7) : kind === "year" ? new Date(anchor.getFullYear() - 1, 0, 1) : new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1), null)
+            }
             kind={kind}
           />
         ) : (
@@ -164,7 +174,7 @@ function Block({ title, legend, table, children, className = "" }: {
 /** "2 h 24 more than last week". Plain words, no colours: information, not a score. */
 function compare(now: number, then: number | undefined, kind: InsightsPeriod, fmt: (n: number) => string) {
   if (then === undefined || kind === "semester") return "\u00a0";
-  const last = kind === "week" ? "last week" : "last month";
+  const last = kind === "week" ? "last week" : kind === "year" ? "last year" : "last month";
   const diff = now - then;
   if (Math.abs(diff) < 1) return `Same as ${last}`;
   return `${fmt(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than ${last}`;
@@ -181,7 +191,8 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
 
   const columns = useMemo<Column[]>(() => {
     const n = data.buckets.length;
-    const every = n <= 7 ? 1 : data.bucket === "day" ? 7 : n > 12 ? 2 : 1;
+    // A year has 52 weeks: a label every fourth one is enough.
+    const every = n <= 7 ? 1 : data.bucket === "day" ? 7 : n > 30 ? 4 : n > 12 ? 2 : 1;
     return data.buckets.map((b, i) => {
       const d = parse(b.start);
       const title = data.bucket === "day" ? longDay.format(d) : `Week of ${dayMonth.format(d)}`;
@@ -197,7 +208,8 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
         const start = parse(b.start);
         const list = Array.from({ length: 7 }, (_, k) => byDate.get(toDateInput(addDays(start, k)))).filter((x): x is number => x !== undefined);
         const avg = list.length ? list.reduce((a, c) => a + c, 0) / list.length : 0;
-        return { key: b.start, label: data.buckets.length > 12 && i % 2 ? "" : dayMonth.format(start), title: `Week of ${dayMonth.format(start)}, average per night`, values: [avg] };
+        const step = data.buckets.length > 30 ? 4 : data.buckets.length > 12 ? 2 : 1;
+        return { key: b.start, label: i % step ? "" : dayMonth.format(start), title: `Week of ${dayMonth.format(start)}, average per night`, values: [avg] };
       });
     }
     return data.buckets.map((b, i) => ({ key: b.start, label: columns[i]?.label ?? "", title: `Night to ${longDay.format(parse(b.start))}`, values: [byDate.get(b.start) ?? 0] }));

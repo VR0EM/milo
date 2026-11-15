@@ -1,9 +1,23 @@
 //! The archive: everything that was ever archived, in one list, so it can be found and
 //! restored. Restoring is `repo::set_archived(.., false)`.
 
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use crate::models::ArchivedItem;
-use rusqlite::Connection;
+use crate::repo;
+use rusqlite::{Connection, OptionalExtension};
+
+/// Settings key: after how many days archived items go for good (absent = never).
+pub const KEEP_SETTING: &str = "archive_keep_days";
+
+/// The daily clean-up, right after the daily backup: what was archived longer ago than the
+/// chosen number of days goes for good. Returns how many items went.
+pub fn clean_up(c: &Connection, now: chrono::DateTime<chrono::Utc>) -> Result<usize> {
+    let Some(days) = repo::get_setting(c, KEEP_SETTING)?.and_then(|v| v.parse::<i64>().ok()).filter(|d| *d > 0) else {
+        return Ok(0);
+    };
+    let before = (now - chrono::Duration::days(days)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    delete_archived_before(c, &before)
+}
 
 /// Archived events can be many; the newest are listed and the rest counted.
 const EVENT_LIMIT: i64 = 300;
@@ -70,6 +84,100 @@ pub fn list_archived(c: &Connection, query: &str) -> Result<(Vec<ArchivedItem>, 
     Ok((items, hidden))
 }
 
+/// Removes an archived item for good, with what only belonged to it (a task's parts, a routine's
+/// items, earlier versions). Something still used elsewhere (a space with events, an activity
+/// events are counted under) stays archived, and an imported event too, so the calendar link
+/// does not bring it back. Nothing that is not archived can be deleted.
+pub fn delete_forever(c: &Connection, entity: &str, id: &str) -> Result<()> {
+    let table = repo::table_of(entity)?;
+    let archived: Option<Option<String>> = c
+        .query_row(&format!("SELECT deleted_at FROM {table} WHERE id = ?1"), [id], |r| r.get(0))
+        .optional()?;
+    match archived {
+        None => return Err(AppError::Invalid("It is already gone".into())),
+        Some(None) => return Err(AppError::Invalid("Only archived items can be deleted for good".into())),
+        Some(Some(_)) => {}
+    }
+    // All or nothing for this one item.
+    c.execute_batch("SAVEPOINT forever")?;
+    let done = (|| -> Result<()> {
+        match entity {
+            "event" => {
+                let imported: bool = c.query_row("SELECT source_id IS NOT NULL FROM events WHERE id = ?1", [id], |r| r.get(0))?;
+                if imported {
+                    return Err(AppError::Invalid("An imported event stays archived, so its calendar link does not add it again".into()));
+                }
+                c.execute("UPDATE focus_sessions SET event_id = NULL WHERE event_id = ?1", [id])?;
+            }
+            "task" => {
+                c.execute("DELETE FROM change_log WHERE entity_id IN (SELECT id FROM task_parts WHERE task_id = ?1)", [id])?;
+                c.execute("DELETE FROM task_parts WHERE task_id = ?1", [id])?;
+                c.execute("UPDATE events SET task_id = NULL WHERE task_id = ?1", [id])?;
+                c.execute("UPDATE focus_sessions SET task_id = NULL WHERE task_id = ?1", [id])?;
+                // An older trial table some databases still have.
+                if has_table(c, "proposals")? {
+                    c.execute("DELETE FROM proposals WHERE task_id = ?1", [id])?;
+                }
+            }
+            "routine" => {
+                c.execute("DELETE FROM routine_checks WHERE item_id IN (SELECT id FROM routine_items WHERE routine_id = ?1)", [id])?;
+                c.execute("DELETE FROM routine_items WHERE routine_id = ?1", [id])?;
+            }
+            "routine_item" => {
+                c.execute("DELETE FROM routine_checks WHERE item_id = ?1", [id])?;
+            }
+            "reminder_rule" => {
+                c.execute("DELETE FROM reminder_log WHERE rule_id = ?1", [id])?;
+            }
+            _ => {}
+        }
+        c.execute("DELETE FROM change_log WHERE entity_id = ?1", [id])?;
+        match c.execute(&format!("DELETE FROM {table} WHERE id = ?1"), [id]) {
+            Ok(_) => Ok(()),
+            Err(rusqlite::Error::SqliteFailure(e, _)) if e.code == rusqlite::ErrorCode::ConstraintViolation => {
+                Err(AppError::Invalid("It is still used by other things in Milo, so it stays archived".into()))
+            }
+            Err(e) => Err(e.into()),
+        }
+    })();
+    match done {
+        Ok(()) => c.execute_batch("RELEASE forever")?,
+        Err(e) => {
+            c.execute_batch("ROLLBACK TO forever; RELEASE forever")?;
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+fn has_table(c: &Connection, name: &str) -> Result<bool> {
+    Ok(c.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)", [name], |r| r.get(0))?)
+}
+
+/// Deletes for good everything that was archived before `before` (ISO time) and can go.
+/// Returns how many items went; what must stay archived is left without complaint.
+pub fn delete_archived_before(c: &Connection, before: &str) -> Result<usize> {
+    let (items, _) = list_archived(c, "")?;
+    let mut gone = 0;
+    // Events beyond the listing limit are counted too.
+    let mut ids: Vec<(String, String)> = items.into_iter().filter(|i| i.archived_at.as_str() < before).map(|i| (i.entity, i.id)).collect();
+    let extra: Vec<String> = c
+        .prepare("SELECT id FROM events WHERE deleted_at IS NOT NULL AND deleted_at < ?1 AND source_id IS NULL")?
+        .query_map([before], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in extra {
+        if !ids.iter().any(|(_, x)| *x == id) {
+            ids.push(("event".into(), id));
+        }
+    }
+    for (entity, id) in ids {
+        if delete_forever(c, &entity, &id).is_ok() {
+            gone += 1;
+        }
+    }
+    Ok(gone)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +231,76 @@ mod tests {
         repo::set_archived(&c, "event", &e.id, false).unwrap();
         let back = repo::get_event(&c, &e.id).unwrap();
         assert!(back.locally_modified, "a restored event is the user's choice, so syncs leave it");
+    }
+
+    fn event(c: &Connection, title: &str) -> String {
+        repo::create_event(
+            c,
+            EventInput {
+                space_id: "seed-space-personal".into(), activity_id: None, title: title.into(),
+                start_at: "2026-11-11T08:00:00.000Z".into(), end_at: "2026-11-11T09:00:00.000Z".into(),
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
+            },
+            "manual",
+        )
+        .unwrap()
+        .id
+    }
+
+    #[test]
+    fn deletes_for_good_only_what_is_archived_and_free() {
+        let c = open_in_memory().unwrap();
+        let e = event(&c, "Old plan");
+        assert!(delete_forever(&c, "event", &e).is_err(), "not archived yet");
+        repo::set_archived(&c, "event", &e, true).unwrap();
+        delete_forever(&c, "event", &e).unwrap();
+        let left: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE id = ?1", [&e], |r| r.get(0)).unwrap();
+        assert_eq!(left, 0);
+
+        // A space with an event in it stays, also when archived.
+        repo::set_archived(&c, "space", "seed-space-transport", true).unwrap();
+        let busy = event(&c, "Train");
+        c.execute("UPDATE events SET space_id = 'seed-space-transport' WHERE id = ?1", [&busy]).unwrap();
+        assert!(delete_forever(&c, "space", "seed-space-transport").is_err());
+        let still: i64 = c.query_row("SELECT COUNT(*) FROM spaces WHERE id = 'seed-space-transport'", [], |r| r.get(0)).unwrap();
+        assert_eq!(still, 1, "nothing half-deleted");
+
+        // An imported event stays archived, so a sync does not bring it back.
+        let imp = event(&c, "Lecture");
+        c.execute("INSERT INTO import_sources (id, kind, name, location, space_id, enabled, created_at, updated_at) VALUES ('src', 'ics_url', 'School', 'https://x', 'seed-space-personal', 1, '2026-01-01', '2026-01-01')", []).unwrap();
+        c.execute("UPDATE events SET source_id = 'src' WHERE id = ?1", [&imp]).unwrap();
+        repo::set_archived(&c, "event", &imp, true).unwrap();
+        assert!(delete_forever(&c, "event", &imp).is_err());
+    }
+
+    #[test]
+    fn a_task_goes_with_its_parts() {
+        let c = open_in_memory().unwrap();
+        let t = repo::create_task(
+            &c,
+            TaskInput { space_id: "seed-space-personal".into(), type_id: None, title: "Essay".into(), notes: String::new(), deadline_at: None, target_at: None, priority: None },
+        )
+        .unwrap();
+        repo::create_task_part(&c, &t.id, TaskPartInput { title: "Intro".into(), weight: 1.0 }).unwrap();
+        repo::set_archived(&c, "task", &t.id, true).unwrap();
+        assert_eq!(delete_archived_before(&c, "2999-01-01").unwrap(), 1);
+        let parts: i64 = c.query_row("SELECT COUNT(*) FROM task_parts WHERE task_id = ?1", [&t.id], |r| r.get(0)).unwrap();
+        assert_eq!(parts, 0);
+        assert_eq!(delete_archived_before(&c, "2000-01-01").unwrap(), 0, "nothing archived that long ago");
+    }
+
+    #[test]
+    fn the_daily_clean_up_follows_the_setting() {
+        let c = open_in_memory().unwrap();
+        let old = event(&c, "Long ago");
+        let recent = event(&c, "Last week");
+        c.execute("UPDATE events SET deleted_at = '2026-01-01T00:00:00.000Z' WHERE id = ?1", [&old]).unwrap();
+        c.execute("UPDATE events SET deleted_at = '2026-11-10T00:00:00.000Z' WHERE id = ?1", [&recent]).unwrap();
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-15T12:00:00Z").unwrap().with_timezone(&chrono::Utc);
+        assert_eq!(clean_up(&c, now).unwrap(), 0, "never, unless chosen");
+        repo::set_setting(&c, KEEP_SETTING, Some("30")).unwrap();
+        assert_eq!(clean_up(&c, now).unwrap(), 1);
+        let left: Vec<String> = c.prepare("SELECT id FROM events").unwrap().query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect();
+        assert!(left.contains(&recent) && !left.contains(&old));
     }
 }

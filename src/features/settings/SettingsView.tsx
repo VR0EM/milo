@@ -4,22 +4,24 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, autostart, files } from "../../lib/api";
 import type { BackupFile } from "../../lib/types";
 import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
-import { useActivities, useGroups, useTaskTypes } from "../../lib/queries";
+import { useActivities, useTaskTypes } from "../../lib/queries";
 import { TODAY_BLOCKS, useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { NAV } from "../spaces/Sidebar";
-import { IS_MAC, MOD_LABEL } from "../shortcuts/keys";
+import { IS_MAC } from "../shortcuts/keys";
 import { Icon } from "../../components/Icon";
 import { HelpTip } from "../../components/HelpTip";
 import { ImportSettings } from "../import/ImportView";
 import { ArchiveSettings } from "../archive/ArchiveView";
 
 export const ACCENTS: [Accent, string][] = [["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["plum", "Violet"], ["clay", "Coral"]];
+// Rounded uses the Mac's rounded system font; Windows has none, so there it looked exactly
+// like Standard and is left out.
 const FONTS: [Font, string, string][] = [
   ["system", "Standard", "The computer's own typeface"],
-  ["rounded", "Rounded", "Softer letter ends (rounded on Mac)"],
+  ["rounded", "Rounded", "Softer, rounded letter ends"],
   ["humanist", "Humanist", "Open, slightly warmer shapes"],
   ["serif", "Serif", "Like a printed book"],
-];
+].filter(([f]) => IS_MAC || f !== "rounded") as [Font, string, string][];
 const SIZES: [TextSize, string][] = [["small", "Small"], ["default", "Default"], ["large", "Large"]];
 const THEMES: [Theme, string][] = [["system", "Match the computer"], ["light", "Light"], ["dark", "Dark"]];
 const CATEGORY: Record<string, string> = { class: "Class", self_study: "Self-study", other: "Not productive" };
@@ -53,20 +55,73 @@ function Choice<T extends string>({ value, label, options, onChange }: { value: 
 }
 
 /** Today's blocks: a tick to show each, and arrows to move it up or down. */
+/** Today's blocks: tick to show, drag the grip to reorder (or focus it and use the arrow keys). */
 function TodayBlocks() {
   const order = useUi((s) => s.prefs.todayOrder);
   const hidden = useUi((s) => s.prefs.todayHidden);
   const setPrefs = useUi((s) => s.setPrefs);
   const label = new Map(TODAY_BLOCKS);
-  const move = (i: number, d: number) => {
+  const listRef = useRef<HTMLUListElement>(null);
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
+
+  const moveTo = (from: number, to: number) => {
+    if (to === from || to === from + 1) return;
     const next = [...order];
-    [next[i], next[i + d]] = [next[i + d], next[i]];
+    const [b] = next.splice(from, 1);
+    next.splice(to > from ? to - 1 : to, 0, b);
     setPrefs({ todayOrder: next });
   };
+
+  const press = (e: React.PointerEvent, from: number) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const rows = [...(listRef.current?.children ?? [])] as HTMLElement[];
+    const slot = (y: number) => {
+      const i = rows.findIndex((r) => y < r.getBoundingClientRect().top + r.offsetHeight / 2);
+      return i < 0 ? rows.length : i;
+    };
+    let over = from;
+    setDrag({ from, over });
+    const onMove = (m: PointerEvent) => {
+      over = slot(m.clientY);
+      setDrag({ from, over });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDrag(null);
+      moveTo(from, over);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
-    <ul className="order-list">
+    <ul className="order-list" ref={listRef}>
       {order.map((b, i) => (
-        <li key={b}>
+        <li
+          key={b}
+          className={[
+            drag?.from === i ? "dragging" : "",
+            drag && drag.over === i && drag.over !== drag.from && drag.over !== drag.from + 1 ? "drop-before" : "",
+            drag && drag.over === order.length && i === order.length - 1 ? "drop-after" : "",
+          ].join(" ")}
+        >
+          <button
+            type="button"
+            className="grip"
+            aria-label={`Move ${label.get(b)}: drag, or use the arrow keys`}
+            title="Drag to move"
+            onPointerDown={(e) => press(e, i)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowUp" && i > 0) { e.preventDefault(); moveTo(i, i - 1); }
+              if (e.key === "ArrowDown" && i < order.length - 1) { e.preventDefault(); moveTo(i, i + 2); }
+            }}
+          >
+            <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true">
+              {[2, 7, 12].flatMap((y) => [<circle key={`a${y}`} cx="2.5" cy={y} r="1.3" />, <circle key={`b${y}`} cx="7.5" cy={y} r="1.3" />])}
+            </svg>
+          </button>
           <label className="check">
             <input
               type="checkbox"
@@ -75,13 +130,6 @@ function TodayBlocks() {
             />
             <span>{label.get(b)}</span>
           </label>
-          <span className="spacer" />
-          <button className="icon-btn" aria-label={`Move ${label.get(b)} up`} disabled={i === 0} onClick={() => move(i, -1)}>
-            <span className="arrow up" aria-hidden><Icon name="chevron" size={12} /></span>
-          </button>
-          <button className="icon-btn" aria-label={`Move ${label.get(b)} down`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
-            <span className="arrow down" aria-hidden><Icon name="chevron" size={12} /></span>
-          </button>
         </li>
       ))}
     </ul>
@@ -132,7 +180,7 @@ export function SettingsView() {
       </header>
       <div className="page-scroll settings">
         <Section id="appearance" title="Appearance">
-          <Row title="Theme" info="Match the computer follows the light or dark setting of Windows or macOS.">
+          <Row title="Theme">
             <div className="segmented" role="radiogroup" aria-label="Theme">
               {THEMES.map(([t, label]) => (
                 <button key={t} role="radio" aria-checked={prefs.theme === t} className={prefs.theme === t ? "on" : ""} onClick={() => setPrefs({ theme: t })}>
@@ -141,7 +189,7 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
-          <Row title="Accent colour" info="Marks today in the calendar, the selected item, buttons and checkboxes. The last circle lets you pick any colour.">
+          <Row title="Accent colour">
             <div className="accent-picker" role="radiogroup" aria-label="Accent colour">
               {ACCENTS.map(([a, label]) => (
                 <button
@@ -166,25 +214,29 @@ export function SettingsView() {
               </label>
             </div>
           </Row>
-          <Row title="Typeface" info="Only typefaces already on the computer are used. Rounded is rounded on a Mac and looks like Standard on Windows.">
+          <Row title="Typeface">
             <div className="font-picker" role="radiogroup" aria-label="Typeface">
-              {FONTS.map(([f, label, hint]) => (
+              {FONTS.map(([f, label, hint]) => {
+                // Rounded chosen earlier on Windows looks like Standard, so it shows as Standard.
+                const on = prefs.font === f || (f === "system" && prefs.font === "rounded" && !IS_MAC);
+                return (
                 <button
                   key={f}
                   role="radio"
-                  aria-checked={prefs.font === f}
+                  aria-checked={on}
                   title={hint}
-                  className={prefs.font === f ? "on" : ""}
+                  className={on ? "on" : ""}
                   data-font-sample={f}
                   onClick={() => setPrefs({ font: f })}
                 >
                   <span className="font-sample">Aa</span>
                   <span>{label}</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </Row>
-          <Row title="Text size" info="Makes all text in Milo smaller or larger.">
+          <Row title="Text size">
             <div className="segmented" role="radiogroup" aria-label="Text size">
               {SIZES.map(([t, label]) => (
                 <button key={t} role="radio" aria-checked={prefs.textSize === t} className={prefs.textSize === t ? "on" : ""} onClick={() => setPrefs({ textSize: t })}>
@@ -193,16 +245,16 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
-          <Row title="Event colours" info="How strongly events are filled with the colour of their space. Soft is calmer, strong is easier to tell apart.">
+          <Row title="Event colours">
             <Choice value={prefs.eventStrength} label="Event colours" options={[["soft", "Soft"], ["normal", "Normal"], ["strong", "Strong"]]} onChange={(eventStrength) => setPrefs({ eventStrength })} />
           </Row>
-          <Row title="Clock" info="How times are shown everywhere in Milo. Typing a time works both ways: 14:30 or 2:30 pm.">
+          <Row title="Clock">
             <Choice value={prefs.timeFormat} label="Clock" options={[["24h", "14:30"], ["12h", "2:30 pm"]]} onChange={(timeFormat) => setPrefs({ timeFormat })} />
           </Row>
-          <Row title="Week starts on" info="The first day of the week in the calendar, the small month and Insights.">
+          <Row title="Week starts on">
             <Choice value={String(prefs.weekStart)} label="Week starts on" options={[["1", "Monday"], ["0", "Sunday"]]} onChange={(v) => setPrefs({ weekStart: v === "0" ? 0 : 1 })} />
           </Row>
-          <Row title="Open Milo on" info="The screen Milo shows when it starts.">
+          <Row title="Open Milo on">
             <select value={prefs.startView} onChange={(e) => setPrefs({ startView: e.target.value as typeof prefs.startView })}>
               <option value="last">Where I left off</option>
               <option value="today">Today</option>
@@ -238,12 +290,12 @@ export function SettingsView() {
               <span>{prefs.showWeekends ? "On" : "Off"}</span>
             </label>
           </Row>
-          <Row title="New events last" info="The length of an event made by double-clicking or pressing N. Dragging on the calendar draws any length.">
+          <Row title="New events last">
             <select value={prefs.eventMinutes} onChange={(e) => setPrefs({ eventMinutes: Number(e.target.value) })}>
               {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? "s" : ""}`}</option>)}
             </select>
           </Row>
-          <Row title="Open the calendar at" info="The hour shown at the top when the calendar opens. Earlier hours are a scroll away.">
+          <Row title="Open the calendar at">
             <select value={prefs.dayStartHour} onChange={(e) => setPrefs({ dayStartHour: Number(e.target.value) })}>
               {Array.from({ length: 13 }, (_, h) => h).map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}
             </select>
@@ -255,7 +307,7 @@ export function SettingsView() {
         <Section id="import" title="Import &amp; export">
           <ImportSettings />
         </Section>
-        <Section id="archive" title="Archive" info="Nothing in Milo is ever deleted. Everything you archive stays here, and can be brought back.">
+        <Section id="archive" title="Archive" info="Everything you archive stays here and can be brought back, until you delete it for good. Spaces and groups something still belongs to, and events from an imported calendar, always stay. Deleting happens after the daily backup, so a mistake can still be undone with Restore a backup.">
           <ArchiveSettings />
         </Section>
         <Section id="data" title="Data &amp; app">
@@ -266,7 +318,7 @@ export function SettingsView() {
           <Row title="Welcome guide" info="The short guide from the first start: look, courses, timetable, deadlines and rhythm. Running it again adds; it removes nothing.">
             <button className="btn" onClick={() => useUi.setState({ setupOpen: true })}>Open the guide</button>
           </Row>
-          <Row title="Keyboard shortcuts" info={`Press ? anywhere for the list. ${MOD_LABEL}, opens Settings.`}>
+          <Row title="Keyboard shortcuts">
             <button className="btn" onClick={() => useUi.setState({ shortcutsOpen: true })}>Show shortcuts</button>
           </Row>
         </Section>
@@ -275,11 +327,11 @@ export function SettingsView() {
   );
 }
 
-function ListBox({ title, info, add, children }: { title: string; info: string; add: () => void; children: React.ReactNode }) {
+function ListBox({ title, info, add, children }: { title: string; info?: string; add: () => void; children: React.ReactNode }) {
   return (
     <div className="list-box">
       <div className="list-box-head">
-        <h3>{title}<HelpTip label={`About ${title.toLowerCase()}`}>{info}</HelpTip></h3>
+        <h3>{title}{info && <HelpTip label={`About ${title.toLowerCase()}`}>{info}</HelpTip>}</h3>
         <button className="btn small" onClick={add}><Icon name="plus" size={12} />Add</button>
       </div>
       <ul>{children}</ul>
@@ -300,7 +352,6 @@ function ListItem({ name, meta, onEdit }: { name: string; meta?: string; onEdit:
 function Lists() {
   const activities = (useActivities().data ?? []).filter((a) => !a.deletedAt);
   const types = (useTaskTypes().data ?? []).filter((t) => !t.deletedAt);
-  const groups = (useGroups().data ?? []).filter((g) => !g.deletedAt);
   const open = useUi((s) => s.openDialog);
 
   return (
@@ -309,11 +360,8 @@ function Lists() {
       <ListBox title="Activities" info="What kind of time an event was: class, self-study, lab, exam and so on. Each one counts as class, self-study or not productive, which is what Insights adds up." add={() => open({ kind: "activity" })}>
         {activities.map((a) => <ListItem key={a.id} name={a.name} meta={CATEGORY[a.category]} onEdit={() => open({ kind: "activity", item: a })} />)}
       </ListBox>
-      <ListBox title="Task types" info="Kinds of tasks, such as an assignment, theory to study, or a lab. Shown on every task." add={() => open({ kind: "task_type" })}>
+      <ListBox title="Task types" add={() => open({ kind: "task_type" })}>
         {types.map((t) => <ListItem key={t.id} name={t.name} onEdit={() => open({ kind: "task_type", item: t })} />)}
-      </ListBox>
-      <ListBox title="Groups of spaces" info="Groups bundle spaces in the sidebar, for example School with one space per course. A group can be folded away." add={() => open({ kind: "group" })}>
-        {groups.map((g) => <ListItem key={g.id} name={g.name} onEdit={() => open({ kind: "group", item: g })} />)}
       </ListBox>
     </>
   );
@@ -355,7 +403,6 @@ function MenuBarNext() {
 function Updates() {
   const { available, status, progress, error } = useUpdates();
   const auto = useUi((s) => s.prefs.autoUpdates);
-  const { data } = useQuery({ queryKey: ["appInfo"], queryFn: api.appInfo, staleTime: 0 });
   const busy = status === "checking" || status === "installing";
   const line =
     status === "checking" ? "Checking…"
@@ -366,9 +413,10 @@ function Updates() {
     : "";
   return (
     <>
-      <Row title="Version" info="New versions are published on GitHub. Milo shows when one is ready; it is only installed when you click Install.">
+      <Row title="Version">
         <div className="inline">
-          <span className="muted">{data ? `Milo ${data.version}` : "…"}</span>
+          {/* Built into this copy of Milo, so it is always there (asking the app for it sometimes failed on Windows). */}
+          <span className="muted">Milo {__APP_VERSION__}</span>
           <button className="link" onClick={() => useUi.setState({ whatsNewOpen: true })}>What's new</button>
         </div>
       </Row>
@@ -404,7 +452,6 @@ function Startup() {
     <>
       <Row
         title="Start Milo when the computer starts"
-        info="Milo then waits quietly in the tray, so reminders arrive without opening it yourself. Only in the desktop app."
       >
         <label className="switch-control">
           <input
@@ -452,10 +499,10 @@ function Data() {
 
   return (
     <>
-      <Row title="Stored on this computer" info="Everything is in one database file in this folder. No account, nothing in the cloud.">
+      <Row title="Stored on this computer">
         <code className="path" title={data?.dataDir}>{data?.dataDir ?? "…"}</code>
       </Row>
-      <Row title="Daily backups" info="Once a day Milo saves a full copy of the database in a backups folder next to it. Old copies are kept.">
+      <Row title="Daily backups">
         <span className="muted">
           {backups ? (backups.backups.length ? `${backups.backups.length} kept · newest ${backups.backups[0].date}` : "None yet") : "…"}
         </span>
@@ -478,7 +525,7 @@ function Data() {
       >
         <button className="btn small" disabled={!files.available || !backups?.backups.length} onClick={() => setRestoring(true)}>Choose a backup…</button>
       </Row>
-      <Row title="Export everything" info="One JSON file with all your data, archived items included, to keep or move elsewhere.">
+      <Row title="Export everything">
         <button className="btn small" onClick={() => useUi.getState().openSettings("import")}>Go to Import &amp; export</button>
       </Row>
       {restoring && backups && <RestoreDialog backups={backups.backups} onClose={() => { setRestoring(false); refresh(); }} />}

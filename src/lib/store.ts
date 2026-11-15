@@ -4,9 +4,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { addDays, startOfDay, startOfWeek } from "./time";
-import type { Activity, Group, Space, TaskType } from "./types";
+import type { Activity, CalEvent, Group, Space, TaskType } from "./types";
 
-export const MIN_HOUR_HEIGHT = 24;
+/** The calendar never zooms out further than all 24 hours on screen (see WeekGrid); this is only a floor. */
+export const MIN_HOUR_HEIGHT = 8;
 export const MAX_HOUR_HEIGHT = 160;
 
 export type Dialog =
@@ -55,6 +56,8 @@ export interface Prefs {
   startCardHidden: boolean;
   /** The newest version whose "What's new" was read. Newer notes show once on Today. */
   lastSeenVersion: string;
+  /** The space new events, tasks and notes go to (right-click a space). Without it: the one used last. */
+  defaultSpaceId: string | null;
 }
 export type TodayBlock = "day" | "whatnow" | "inbox" | "confirm" | "routine" | "deadlines" | "wrapup";
 export const TODAY_BLOCKS: [TodayBlock, string][] = [
@@ -73,8 +76,12 @@ export const DEFAULT_PREFS: Prefs = {
   todayOrder: TODAY_BLOCKS.map(([b]) => b), todayHidden: [], setupDone: false, startCardHidden: false,
   // A new install has nothing to catch up on.
   lastSeenVersion: __APP_VERSION__,
+  defaultSpaceId: null,
 };
-export type InsightsPeriod = "week" | "month" | "semester";
+/** The space new things go to: the one chosen as default, else the one used last. */
+export const preferredSpace = (s: { prefs: Prefs; lastSpaceId: string | null }) => s.prefs.defaultSpaceId ?? s.lastSpaceId;
+
+export type InsightsPeriod = "week" | "month" | "year" | "semester";
 
 interface Notice {
   text: string;
@@ -82,21 +89,24 @@ interface Notice {
   undo?: () => void;
 }
 
-/** How much of the calendar is on screen. */
-/** "three" is three days from the day shown (usually today), whatever the weekday. */
-export type CalMode = "day" | "three" | "week" | "month";
+/**
+ * How much of the calendar is on screen. "day" shows `dayCount` days (1 to 14) from the day
+ * shown, whatever the weekday.
+ */
+export type CalMode = "day" | "week" | "month";
+export const MAX_DAYS = 14;
 
 const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 
 /** The first day after the range that `mode` shows from `start`. */
-export function rangeEnd(mode: CalMode, start: Date): Date {
+export function rangeEnd(mode: CalMode, start: Date, dayCount = 1): Date {
   if (mode === "month") return new Date(start.getFullYear(), start.getMonth() + 1, 1);
-  return addDays(start, mode === "day" ? 1 : mode === "three" ? 3 : 7);
+  return addDays(start, mode === "day" ? dayCount : 7);
 }
 
 /** Where the calendar starts when it shows `d` in `mode`. */
 export function startFor(mode: CalMode, d: Date): Date {
-  return mode === "day" || mode === "three" ? startOfDay(d) : mode === "week" ? startOfWeek(d) : firstOfMonth(d);
+  return mode === "day" ? startOfDay(d) : mode === "week" ? startOfWeek(d) : firstOfMonth(d);
 }
 
 interface UiState {
@@ -104,6 +114,18 @@ interface UiState {
   /** The first day on screen: the day, the first day of the week strip, or the 1st of the month. */
   viewStart: Date;
   calMode: CalMode;
+  /** An event copied or cut with Ctrl/Cmd+C or X, for pasting. */
+  clipboard: CalEvent | null;
+  /** Where Ctrl/Cmd+V puts it: the last empty spot clicked in the calendar after copying. */
+  pasteAt: Date | null;
+  /** pasteAt is a day in the month view: keep the copied event's own time. */
+  pasteDayOnly: boolean;
+  /** Width of the panel on the right, dragged by its edge. */
+  panelWidth: number;
+  /** How many days the day view shows (1 to 14). */
+  dayCount: number;
+  /** The day view with this many days. */
+  setDayCount: (n: number) => void;
   /** The space whose overview is open (view "space"). */
   spaceViewId: string | null;
   /** A task to point out in the list beside the calendar ("Plan time"). */
@@ -168,6 +190,17 @@ export const useUi = create<UiState>()(
       showCompleted: false,
       viewStart: startOfWeek(new Date()),
       calMode: "week",
+      dayCount: 1,
+      panelWidth: 300,
+      clipboard: null,
+      pasteAt: null,
+      pasteDayOnly: false,
+      setDayCount: (n) =>
+        set((s) => {
+          const today = new Date();
+          const focus = today >= s.viewStart && today < rangeEnd(s.calMode, s.viewStart, s.dayCount) ? today : s.viewStart;
+          return { calMode: "day", dayCount: Math.min(MAX_DAYS, Math.max(1, Math.round(n))), viewStart: startFor("day", focus) };
+        }),
       spaceViewId: null,
       planTaskId: null,
       setupOpen: false,
@@ -177,7 +210,7 @@ export const useUi = create<UiState>()(
           if (mode === s.calMode) return {};
           // Keep today in view when it is on screen; otherwise keep the first day shown.
           const today = new Date();
-          const focus = today >= s.viewStart && today < rangeEnd(s.calMode, s.viewStart) ? today : s.viewStart;
+          const focus = today >= s.viewStart && today < rangeEnd(s.calMode, s.viewStart, s.dayCount) ? today : s.viewStart;
           return { calMode: mode, viewStart: startFor(mode, focus) };
         }),
       showDate: (d) => set((s) => ({ viewStart: startFor(s.calMode, d) })),
@@ -186,7 +219,7 @@ export const useUi = create<UiState>()(
           viewStart:
             s.calMode === "month"
               ? new Date(s.viewStart.getFullYear(), s.viewStart.getMonth() + n, 1)
-              : addDays(s.viewStart, (s.calMode === "day" ? 1 : s.calMode === "three" ? 3 : 7) * n),
+              : addDays(s.viewStart, (s.calMode === "day" ? s.dayCount : 7) * n),
         })),
       selectedEventId: null,
       focusTitle: false,
@@ -256,6 +289,11 @@ export const useUi = create<UiState>()(
         const known = new Set(merged.prefs.todayOrder);
         merged.prefs.todayOrder = [...merged.prefs.todayOrder, ...TODAY_BLOCKS.map(([b]) => b).filter((b) => !known.has(b))];
         // The calendar opens on today, in the day, week or month view that was used last.
+        // The 3-day view of 0.3.5 is now the day view with three days.
+        if ((merged.calMode as string) === "three") {
+          merged.calMode = "day";
+          merged.dayCount = 3;
+        }
         merged.viewStart = startFor(merged.calMode ?? "week", new Date());
         // Import & export and Archive used to be pages of their own; they now live in Settings.
         const old = s.view as string | undefined;
@@ -265,7 +303,7 @@ export const useUi = create<UiState>()(
         }
         return merged;
       },
-      partialize: (s) => ({ prefs: s.prefs, calMode: s.calMode, spaceViewId: s.spaceViewId, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
+      partialize: (s) => ({ prefs: s.prefs, calMode: s.calMode, dayCount: s.dayCount, panelWidth: s.panelWidth, spaceViewId: s.spaceViewId, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
     },
   ),
 );

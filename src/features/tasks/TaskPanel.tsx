@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SidePanel } from "../../components/SidePanel";
 import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
 import { DateInput } from "../../components/DateInput";
@@ -18,13 +19,13 @@ interface Props {
 
 export function TaskPanel({ task, spaces, types }: Props) {
   return (
-    <aside className="panel" aria-label="Task details">
+    <SidePanel label="Task details">
       {task ? (
         <TaskForm key={task.id} task={task} spaces={spaces} types={types} />
       ) : (
         <p className="panel-empty">Select a task to see its details.</p>
       )}
-    </aside>
+    </SidePanel>
   );
 }
 

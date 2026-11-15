@@ -9,6 +9,8 @@ const base = (id: string, sortOrder: number) => ({ id, sortOrder, createdAt: ts(
 
 /** Settings › Next event in the menu bar (kept in memory, like everything here). */
 let menubarOn = true;
+/** Settings › Archive: delete archived items for good after this many days (null = never). */
+let archiveKeep: number | null = null;
 const tables: Record<string, Row[]> = {
   group: [{ ...base("seed-group-school", 0), name: "School" }],
   space: [
@@ -150,7 +152,18 @@ function checkEvent(input: Row) {
 export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
   const out = ((): unknown => {
     switch (cmd) {
-      case "list_groups": return tables.group.map((r) => ({ ...r }));
+      case "list_groups": return tables.group.map((r) => ({ ...r })).sort((x, y) => x.sortOrder - y.sortOrder);
+      case "reorder_groups": {
+        const ids = (a.ids as string[]).filter((id) => tables.group.some((r) => r.id === id));
+        const order = [...ids, ...tables.group.map((r) => r.id).filter((id) => !ids.includes(id))];
+        order.forEach((id, i) => { tables.group.find((r) => r.id === id)!.sortOrder = i; });
+        return null;
+      }
+      case "move_space": {
+        if (a.groupId && !tables.group.some((r) => r.id === a.groupId && !r.deletedAt)) throw "That group does not exist";
+        tables.space.find((r) => r.id === a.id)!.groupId = a.groupId ?? null;
+        return mockInvoke("reorder_spaces", { ids: a.ids });
+      }
       case "list_spaces": return tables.space.map((r): Row => ({ icon: null, ...r })).sort((x, y) => x.sortOrder - y.sortOrder);
       case "reorder_spaces": {
         // Same as repo::reorder_spaces: the named spaces swap among their own places, then all
@@ -330,6 +343,26 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "set_backup_mirror": case "restore_backup": throw "Backups can only be managed in the desktop app";
       case "update_import_source": return update("import_source", a.id, a.input);
       case "show_focus_mini": case "size_focus_mini": case "close_focus_mini": case "show_main_window": return null;
+      case "archive_keep_setting": return archiveKeep;
+      case "set_archive_keep_setting": archiveKeep = a.days ?? null; return null;
+      case "delete_forever": {
+        const table = (tables as Record<string, Row[]>)[a.entity];
+        const i = table?.findIndex((r) => r.id === a.id) ?? -1;
+        if (i < 0) throw "It is already gone";
+        if (!table[i].deletedAt) throw "Only archived items can be deleted for good";
+        if (a.entity === "event" && table[i].sourceId) throw "An imported event stays archived, so its calendar link does not add it again";
+        table.splice(i, 1);
+        return null;
+      }
+      case "empty_archive": {
+        let n = 0;
+        for (const [name, table] of Object.entries(tables as Record<string, Row[]>)) {
+          for (let i = table.length - 1; i >= 0; i--) {
+            if (table[i].deletedAt && !(name === "event" && table[i].sourceId) && name !== "space" && name !== "group") { table.splice(i, 1); n++; }
+          }
+        }
+        return n;
+      }
       case "menubar_setting": return menubarOn;
       case "set_menubar_setting": menubarOn = a.on; return null;
       case "app_info":

@@ -57,6 +57,33 @@ export function ArchiveSettings() {
   const kinds = [...new Set(items.map((i) => i.entity))];
   const shown = kind ? items.filter((i) => i.entity === kind) : items;
 
+  // One row at a time asks "Delete for good?" in place; nothing goes on the first click.
+  const [asking, setAsking] = useState<string | null>(null);
+  const [emptying, setEmptying] = useState(false);
+  const keep = useQuery({ queryKey: ["archiveKeep"], queryFn: api.archiveKeepSetting });
+
+  const forget = async (item: ArchivedItem) => {
+    setAsking(null);
+    try {
+      await api.deleteForever(item.entity, item.id);
+      await qc.invalidateQueries({ queryKey: ["archive"] });
+      useUi.getState().notify({ text: `${item.label || KIND[item.entity]} deleted for good` });
+    } catch (e) {
+      useUi.getState().notify({ text: String(e), error: true });
+    }
+  };
+
+  const emptyAll = async () => {
+    setEmptying(false);
+    try {
+      const n = await api.emptyArchive();
+      await qc.invalidateQueries({ queryKey: ["archive"] });
+      useUi.getState().notify({ text: n === 1 ? "1 item deleted for good" : `${n} items deleted for good` });
+    } catch (e) {
+      useUi.getState().notify({ text: String(e), error: true });
+    }
+  };
+
   const restore = async (item: ArchivedItem) => {
     try {
       await api.setArchived(item.entity, item.id, false);
@@ -70,6 +97,34 @@ export function ArchiveSettings() {
 
   return (
     <div className="sub-blocks">
+        <div className="archive-keep">
+          <label className="inline">
+            <span>Delete archived items for good after</span>
+            <select
+              aria-label="Delete archived items for good after"
+              value={keep.data ?? ""}
+              onChange={async (e) => {
+                await api.setArchiveKeepSetting(e.target.value ? Number(e.target.value) : null);
+                qc.invalidateQueries({ queryKey: ["archiveKeep"] });
+              }}
+            >
+              <option value="">Never</option>
+              <option value="30">30 days</option>
+              <option value="90">3 months</option>
+              <option value="365">1 year</option>
+            </select>
+          </label>
+          <span className="spacer" />
+          {emptying ? (
+            <span className="inline confirm">
+              <span>Delete everything here for good? A backup of today stays.</span>
+              <button className="btn small danger" onClick={emptyAll}>Delete</button>
+              <button className="btn small" onClick={() => setEmptying(false)}>Keep</button>
+            </span>
+          ) : (
+            <button className="link" disabled={items.length === 0} onClick={() => setEmptying(true)}>Empty the archive…</button>
+          )}
+        </div>
         <div className="inline">
           <input className="search" type="search" placeholder="Search by name" aria-label="Search the archive" value={text} onChange={(e) => setText(e.target.value)} />
           <select aria-label="Show" value={kind} onChange={(e) => setKind(e.target.value as Entity | "")}>
@@ -96,7 +151,18 @@ export function ArchiveSettings() {
                     .join(" · ")}
                 </div>
               </div>
-              <button className="btn" onClick={() => restore(item)}>Restore</button>
+              {asking === `${item.entity}-${item.id}` ? (
+                <span className="inline confirm">
+                  <span className="small">Delete for good?</span>
+                  <button className="btn small danger" onClick={() => forget(item)}>Delete</button>
+                  <button className="btn small" onClick={() => setAsking(null)}>Keep</button>
+                </span>
+              ) : (
+                <>
+                  <button className="link" onClick={() => setAsking(`${item.entity}-${item.id}`)}>Delete…</button>
+                  <button className="btn" onClick={() => restore(item)}>Restore</button>
+                </>
+              )}
             </div>
           ))}
           {data && data.hiddenEvents > 0 && (

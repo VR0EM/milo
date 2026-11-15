@@ -233,12 +233,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .handle.bottom { bottom: 0; }
 
 /* ---------- detail panel ---------- */
-.panel { width: 300px; border-left: 1px solid var(--line); background: var(--bg); padding: 16px; overflow-y: auto; overflow-x: hidden; }
+.panel { width: 300px; flex: none; position: relative; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--bg); }
+.panel-scroll { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; overflow-x: hidden; }
+/* The left edge: drag to resize the panel. */
+.panel-edge { position: absolute; top: 0; bottom: 0; left: -3px; width: 7px; cursor: col-resize; z-index: 5; touch-action: none; }
+.panel-edge:hover, .resizing-panel .panel-edge { background: linear-gradient(to right, transparent 2px, var(--accent) 2px, var(--accent) 4px, transparent 4px); }
+.resizing-panel { cursor: col-resize; user-select: none; }
 .panel-empty { color: var(--muted); margin-top: 40px; text-align: center; line-height: 1.7; }
 .panel-idle { display: flex; flex-direction: column; gap: 16px; }
 .mini-month { display: flex; flex-direction: column; gap: 6px; }
-.mini-head { display: flex; align-items: center; gap: 2px; }
-.mini-title { flex: 1; font-weight: 600; font-size: calc(14px * var(--text-scale)); }
+.mini-head { display: flex; align-items: center; gap: 2px; position: relative; }
+.mini-title { flex: 1; font-weight: 600; font-size: calc(14px * var(--text-scale)); text-align: center; }
 .mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
 .mini-wd { text-align: center; font-size: calc(11px * var(--text-scale)); color: var(--muted); padding-bottom: 4px; }
 .mini-day { height: 30px; border: 0; background: none; border-radius: 0; cursor: pointer; font-size: calc(12px * var(--text-scale)); font-variant-numeric: tabular-nums; position: relative; }
@@ -339,7 +344,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 /* ---------- today ---------- */
 .page { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); }
-.page-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; max-width: 760px; width: 100%; }
+.page-scroll { --content: 760px; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; width: 100%;
+  /* The scroll area fills the screen to its right edge, so the scrollbar sits there and the wheel
+     works anywhere; the content keeps its reading width on the left. */
+  padding: 24px max(24px, calc(100% - var(--content) + 24px)) 24px 24px; }
 /* Blocks keep their natural height; the page scrolls instead of squeezing them. */
 .page-scroll > * { flex-shrink: 0; }
 .block { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--raised); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
@@ -426,7 +434,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .segmented button { border-radius: 6px; }
 .segmented button.on { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
 .period-label { font-weight: 600; min-width: 0; }
-.insights-scroll { max-width: 900px; }
+.insights-scroll { --content: 900px; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .stat { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--raised); box-shadow: var(--shadow); }
 .stat .stat-label { font-size: calc(12px * var(--text-scale)); color: var(--muted); font-weight: 500; }
@@ -479,7 +487,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sunken); }
 
 /* ---------- settings ---------- */
-.settings { max-width: 820px; }
+.settings { --content: 820px; }
 /* Folding settings blocks: the whole title row opens and closes it. Hover only darkens the
    border and the chevron, so nothing jumps or turns into a grey slab. */
 .block.fold { gap: 0; padding: 0; scroll-margin-top: 16px; transition: border-color 150ms ease-out; }
@@ -618,7 +626,7 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
 .mapping-row .muted { flex: none; }
 
 /* ---------- insights layout ---------- */
-.insights-scroll { max-width: 1040px; }
+.insights-scroll { --content: 1040px; }
 .insight-pair { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
 .stat .stat-value { font-size: calc(24px * var(--text-scale)); }
 .hbars { display: flex; flex-direction: column; gap: 10px; }
@@ -1016,3 +1024,67 @@ html.capture-window body { overflow: hidden; }
 .context-menu button.danger { color: var(--danger); }
 .context-menu button:disabled { color: var(--muted); cursor: default; background: none; }
 .menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+
+/* ---------- drag to reorder (Today's blocks) ---------- */
+.order-list li { position: relative; gap: 8px; }
+.grip { display: grid; place-items: center; width: 22px; height: 26px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); cursor: grab; touch-action: none; flex: none; }
+.grip svg { fill: currentColor; }
+.grip:hover, .grip:focus-visible { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.order-list li.dragging { opacity: 0.45; }
+.order-list li.drop-before::before, .order-list li.drop-after::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; border-radius: 1px; background: var(--accent); }
+.order-list li.drop-before::before { top: -1px; }
+.order-list li.drop-after::after { bottom: -1px; }
+body:has(.order-list li.dragging) { cursor: grabbing; user-select: none; }
+
+/* The space new things go to, chosen with a right-click. */
+.side-default { margin-left: 6px; font-size: calc(10.5px * var(--text-scale)); color: var(--muted); letter-spacing: 0.02em; }
+
+/* Dragging groups, and a space onto a folded or empty group. */
+.side-group.dragging { opacity: 0.45; }
+.side-group.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.side-group.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.group-row.drop-into { background: var(--accent-soft); border-radius: 7px; }
+.group-row { cursor: default; }
+
+/* ---------- Day with a number of days ---------- */
+.day-button { position: relative; display: inline-flex; }
+.segmented .day-button > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 6px; }
+.segmented .day-more { padding: 4px 6px 4px 2px; min-height: 26px; background: none; border: 0; color: var(--muted); cursor: pointer; border-radius: 0 6px 6px 0; display: grid; place-items: center; }
+.day-more .icon { transform: rotate(90deg); transition: transform 150ms ease-out; }
+.day-more.open .icon { transform: rotate(-90deg); }
+.segmented .day-button > button.on + .day-more { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.day-more:hover { color: var(--text); }
+.menu.days-menu { left: 0; right: auto; top: calc(100% + 6px); min-width: 0; padding: 8px; gap: 6px; }
+.days-menu-title { font-size: calc(11.5px * var(--text-scale)); color: var(--muted); padding: 0 4px; white-space: nowrap; }
+.days-grid { display: grid; grid-template-columns: repeat(7, 30px); gap: 2px; }
+.days-grid button { padding: 5px 0 !important; text-align: center !important; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.days-grid button.on { background: var(--accent); color: var(--on-accent); }
+.segmented:has(.day-button) { overflow: visible; }
+
+/* ---------- the month name opens a month and year list ---------- */
+.month-title { background: none; border: 0; border-radius: 6px; padding: 3px 6px; cursor: pointer; color: var(--text); font: inherit; font-weight: 600; }
+.month-title:hover, .month-title[aria-expanded="true"] { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.month-picker { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 40; display: grid; grid-template-columns: 1fr 72px; gap: 4px;
+  padding: 6px; width: 220px; height: 232px; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-lift); }
+.mp-col { overflow-y: auto; display: flex; flex-direction: column; gap: 1px; scrollbar-width: thin; }
+.mp-col button { background: none; border: 0; border-radius: 6px; padding: 6px 8px; text-align: left; cursor: pointer; color: var(--text); font-variant-numeric: tabular-nums; flex: none; }
+.mp-col button:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.mp-col button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.cal-title { position: relative; }
+.cal-title .month-title { font-size: inherit; letter-spacing: inherit; padding: 2px 6px; margin-left: -6px; }
+.cal-title .month-picker { left: 0; transform: none; font-size: calc(13px * var(--text-scale)); font-weight: 400; letter-spacing: 0; }
+
+/* ---------- time list under a time field ---------- */
+.time-list { position: fixed; z-index: 80; max-height: 240px; overflow-y: auto; padding: 4px; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-lift); display: flex; flex-direction: column; scrollbar-width: thin; }
+.time-list button { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.time-list button:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.time-list button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.time-note { color: var(--muted); font-size: calc(12px * var(--text-scale)); }
+
+/* ---------- archive: delete for good ---------- */
+.archive-keep { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.archive-keep select { width: auto; }
+.confirm { gap: 8px; }
+.btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.archive-row .link { margin-right: 4px; }

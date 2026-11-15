@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SidePanel } from "../../components/SidePanel";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAction, useActiveFocus, useArchiveWithUndo, useImportSources, useTasks, useUpdateEvent } from "../../lib/queries";
@@ -22,7 +23,7 @@ interface Props {
 
 export function EventPanel({ event, spaces, activities }: Props) {
   return (
-    <aside className="panel" aria-label="Event details">
+    <SidePanel label="Event details">
       {event ? (
         <EventForm key={event.id} event={event} spaces={spaces} activities={activities} />
       ) : (
@@ -32,7 +33,7 @@ export function EventPanel({ event, spaces, activities }: Props) {
           <TaskTray />
         </div>
       )}
-    </aside>
+    </SidePanel>
   );
 }
 
@@ -172,7 +173,7 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
         </label>
         <label className="field">
           <span>End{!sameDay(start, end) ? " (next day)" : ""}</span>
-          <TimeField value={toTimeInput(end)} onCommit={onEnd} />
+          <TimeField value={toTimeInput(end)} from={toTimeInput(start)} onCommit={onEnd} />
         </label>
       </div>
       </>

@@ -164,6 +164,34 @@ pub fn reorder_spaces(c: &Connection, ids: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Drags a space into another group (or out of every group with `None`) and puts that list in
+/// the given order, which includes the moved space.
+pub fn move_space(c: &Connection, id: &str, group_id: Option<&str>, order: &[String]) -> Result<()> {
+    if let Some(g) = group_id {
+        let exists: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?1 AND deleted_at IS NULL)", [g], |r| r.get(0))?;
+        if !exists {
+            return Err(crate::error::AppError::Invalid("That group does not exist".into()));
+        }
+    }
+    changed(c.execute("UPDATE spaces SET group_id = ?2, updated_at = ?3 WHERE id = ?1", params![id, group_id, now()])?)?;
+    reorder_spaces(c, order)
+}
+
+/// Puts the groups in the order given; groups not named keep their place after them.
+pub fn reorder_groups(c: &Connection, ids: &[String]) -> Result<()> {
+    let all: Vec<String> = c
+        .prepare("SELECT id FROM groups ORDER BY sort_order, name")?
+        .query_map([], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut order: Vec<&String> = ids.iter().filter(|id| all.contains(id)).collect();
+    order.extend(all.iter().filter(|id| !ids.contains(id)));
+    let ts = now();
+    for (i, id) in order.iter().enumerate() {
+        c.execute("UPDATE groups SET sort_order = ?2, updated_at = ?3 WHERE id = ?1 AND sort_order != ?2", params![id, i as i64, ts])?;
+    }
+    Ok(())
+}
+
 // ---------- activities ----------
 
 fn activity_from(r: &Row) -> rusqlite::Result<Activity> {
@@ -946,8 +974,9 @@ pub fn set_setting(c: &Connection, key: &str, value: Option<&str>) -> Result<()>
 // ---------- archive (soft delete) ----------
 
 /// The only way anything "disappears". Sets or clears deleted_at; no row is ever removed.
-pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> Result<()> {
-    let table = match entity {
+/// The table that holds an entity, for archiving and deleting.
+pub fn table_of(entity: &str) -> Result<&'static str> {
+    Ok(match entity {
         "group" => "groups",
         "space" => "spaces",
         "activity" => "activities",
@@ -962,7 +991,11 @@ pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> R
         "title_mapping" => "title_mappings",
         "semester" => "semesters",
         other => return Err(AppError::Invalid(format!("Unknown entity: {other}"))),
-    };
+    })
+}
+
+pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> Result<()> {
+    let table = table_of(entity)?;
     let ts = now();
     let deleted_at = if archived { Some(ts.as_str()) } else { None };
     changed(c.execute(
@@ -1255,5 +1288,31 @@ mod tests {
         assert_eq!(order, [s.id.as_str(), "seed-space-sleep", "seed-space-transport", "seed-space-personal"]);
         let numbers: Vec<i64> = after.iter().map(|x| x.sort_order).collect();
         assert_eq!(numbers, [0, 1, 2, 3], "one numbering for all spaces, no ties");
+    }
+
+    #[test]
+    fn spaces_move_between_groups_and_groups_reorder() {
+        let c = open_in_memory().unwrap();
+        let school = list_groups(&c).unwrap()[0].clone();
+        let other = create_group(&c, GroupInput { name: "Life".into() }).unwrap();
+        let input = |g: Option<&str>, n: &str| SpaceInput { group_id: g.map(Into::into), name: n.into(), color: "teal".into(), role: "normal".into(), icon: None };
+        let chem = create_space(&c, input(Some(&school.id), "Chemistry")).unwrap();
+
+        // Out of School, in front of Personal among the spaces without a group.
+        move_space(&c, &chem.id, None, &[chem.id.clone(), "seed-space-personal".into()]).unwrap();
+        let spaces = list_spaces(&c).unwrap();
+        assert_eq!(spaces.iter().find(|s| s.id == chem.id).unwrap().group_id, None);
+        let loose: Vec<&str> = spaces.iter().filter(|s| s.group_id.is_none()).map(|s| s.id.as_str()).collect();
+        assert_eq!(loose[0], chem.id, "it lands where it was dropped");
+
+        // Into Life; a group that does not exist is refused.
+        move_space(&c, &chem.id, Some(&other.id), &[chem.id.clone()]).unwrap();
+        assert_eq!(get_space(&c, &chem.id).unwrap().group_id.as_deref(), Some(other.id.as_str()));
+        assert!(move_space(&c, &chem.id, Some("nope"), &[chem.id.clone()]).is_err());
+
+        // Life before School.
+        reorder_groups(&c, &[other.id.clone(), school.id.clone()]).unwrap();
+        let groups: Vec<String> = list_groups(&c).unwrap().into_iter().map(|g| g.id).collect();
+        assert_eq!(groups, [other.id.clone(), school.id.clone()]);
     }
 }

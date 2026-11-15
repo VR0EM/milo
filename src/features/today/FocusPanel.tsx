@@ -1,21 +1,22 @@
 import { useState } from "react";
+import { SidePanel } from "../../components/SidePanel";
 import { api } from "../../lib/api";
 import { useAction, useActiveFocus, useActivities, useSpaces, useTasks } from "../../lib/queries";
-import { useUi } from "../../lib/store";
+import { preferredSpace, useUi } from "../../lib/store";
 import { pickDefaultSpace } from "../../lib/spaces";
 import { fmtClock, fmtDuration, fmtTime } from "../../lib/time";
 import type { FocusSession } from "../../lib/types";
 import { useNow } from "../../lib/useNow";
 
-const PRESETS = [25, 45, 60, 90];
+const PRESETS = [15, 30, 45, 60];
 
 /** Right-hand panel of Today: set up a focus session, or watch the one that is running. */
 export function FocusPanel() {
   const session = useActiveFocus().data ?? null;
   return (
-    <aside className="panel" aria-label="Focus timer">
+    <SidePanel label="Focus timer">
       {session ? <Running session={session} /> : <Setup />}
-    </aside>
+    </SidePanel>
   );
 }
 
@@ -23,10 +24,10 @@ function Setup() {
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const activities = (useActivities().data ?? []).filter((a) => !a.deletedAt);
   const tasks = (useTasks().data ?? []).filter((t) => !t.completedAt);
-  const lastSpaceId = useUi((s) => s.lastSpaceId);
+  const lastSpaceId = useUi(preferredSpace);
   const act = useAction("focus");
 
-  const [minutes, setMinutes] = useState(25);
+  const [minutes, setMinutes] = useState(30);
   const [spaceId, setSpaceId] = useState(() => pickDefaultSpace(spaces, lastSpaceId)?.id ?? "");
   const [activityId, setActivityId] = useState(() => activities.find((a) => a.category === "self_study")?.id ?? "");
   const [taskId, setTaskId] = useState("");

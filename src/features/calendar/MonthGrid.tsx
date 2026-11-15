@@ -188,6 +188,10 @@ export function MonthGrid({ month, weekends, events, tasks, spaces, defaultSpace
                     onDoubleClick={(e) => {
                       if (!(e.target as HTMLElement).closest("button")) newAllDay(d);
                     }}
+                    // Ctrl/Cmd+V after this puts a copied event on this day (at its own time).
+                    onPointerDown={(e) => {
+                      if (e.button === 0 && !(e.target as HTMLElement).closest("button")) useUi.setState({ pasteAt: d, pasteDayOnly: true });
+                    }}
                   >
                     <button className="month-daynum" title={`Open ${fmtLongDay(d)}`} aria-label={`Open ${fmtLongDay(d)}`} onClick={() => openDay(d)}>
                       {d.getDate() === 1 ? `1 ${d.toLocaleString("en-GB", { month: "short" })}` : d.getDate()}

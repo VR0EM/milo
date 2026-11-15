@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { useAction, useCreateEvent, useEvents, useSpaces, useTasks } from "../../lib/queries";
 import { pickDefaultSpace } from "../../lib/spaces";
-import { useUi, type View } from "../../lib/store";
+import { preferredSpace, useUi, type View } from "../../lib/store";
 import {
   addDays,
   atMinutes,
@@ -56,7 +56,7 @@ function Menu() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const hiddenScreens = useUi((s) => s.prefs.hiddenScreens);
-  const lastSpaceId = useUi((s) => s.lastSpaceId);
+  const lastSpaceId = useUi(preferredSpace);
   const eventMinutes = useUi((s) => s.prefs.eventMinutes);
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
   const tasks = useTasks().data ?? [];
@@ -110,7 +110,13 @@ function Menu() {
         id: "cal-today", group: "Calendar", label: "Go to today", words: "now", icon: "calendar", keys: "T",
         run: () => { go("calendar"); useUi.getState().showDate(new Date()); },
       },
-      ...([["day", "Day view", "D"], ["three", "3-day view", "3"], ["week", "Week view", "W"], ["month", "Month view", "M"]] as const).map(
+      ...([["1", "Day view", "D"], ["3", "3 days", "3"], ["7", "7 days from today", "7"]] as const).map(
+        ([n, label, keys]): Item => ({
+          id: `cal-days-${n}`, group: "Calendar", label, words: "show calendar day days", icon: "calendar", keys,
+          run: () => { go("calendar"); useUi.getState().setDayCount(Number(n)); },
+        }),
+      ),
+      ...([["week", "Week view", "W"], ["month", "Month view", "M"]] as const).map(
         ([mode, label, keys]): Item => ({
           id: `cal-${mode}`, group: "Calendar", label, words: "show calendar", icon: "calendar", keys,
           run: () => { go("calendar"); useUi.getState().setCalMode(mode); },
