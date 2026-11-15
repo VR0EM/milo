@@ -121,3 +121,66 @@ export function isoWeek(d: Date) {
   const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
   return Math.ceil(((t.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
+
+const dateFieldFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+/** "Thu 19 Nov 2026": a date in a field. Written out, so day and month can never be swapped. */
+export const fmtDateField = (d: Date) => dateFieldFmt.format(d).replace(",", "");
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/**
+ * Lenient date input, day before month: "19/11/2026", "19-11-26", "19.11", "19 11",
+ * "19 nov", "19 November 2026", "2026-11-19", "today", "tomorrow", "fri" (the next Friday).
+ * Without a year it is this year, or next year when that day is more than half a year ago.
+ * Returns YYYY-MM-DD or null.
+ */
+export function parseDate(text: string, now = new Date()): string | null {
+  const t = text.trim().toLowerCase().replace(/,/g, " ").replace(/\s+/g, " ");
+  if (!t) return null;
+  const today = startOfDay(now);
+  if (t === "today" || t === "tod") return toDateInput(today);
+  if (t === "tomorrow" || t === "tom") return toDateInput(addDays(today, 1));
+  if (t === "yesterday") return toDateInput(addDays(today, -1));
+  const wd = t.length >= 3 ? DAYS.findIndex((d) => d.startsWith(t)) : -1;
+  if (wd >= 0) return toDateInput(addDays(today, ((wd - today.getDay() + 7) % 7) || 7));
+
+  let day: number;
+  let month: number;
+  let year: number | null = null;
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  // Leave out a weekday the person typed in front ("thu 19 nov 2026", as the field shows it).
+  const lead = /^([a-z]+) (?=\d)/.exec(t)?.[1];
+  const s = lead && lead.length >= 2 && DAYS.some((d) => d.startsWith(lead)) ? t.slice(lead.length + 1) : t;
+  const num = /^(\d{1,2})[/.\- ](\d{1,2})(?:[/.\- ](\d{2}|\d{4}))?$/.exec(s);
+  const named = /^(\d{1,2}) ?([a-z]+)\.?(?: (\d{2}|\d{4}))?$/.exec(s) ?? null;
+  const namedFirst = /^([a-z]+)\.? (\d{1,2})(?: (\d{2}|\d{4}))?$/.exec(s) ?? null;
+  if (iso) {
+    [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  } else if (num) {
+    [day, month] = [Number(num[1]), Number(num[2])];
+    if (num[3]) year = Number(num[3]);
+  } else if (named || namedFirst) {
+    const [d, name, y] = named ? [named[1], named[2], named[3]] : [namedFirst![2], namedFirst![1], namedFirst![3]];
+    const m = MONTHS.findIndex((mo) => name.length >= 3 && name.startsWith(mo));
+    if (m < 0) return null;
+    [day, month] = [Number(d), m + 1];
+    if (y) year = Number(y);
+  } else return null;
+
+  if (year !== null && year < 100) year += 2000;
+  if (year === null) {
+    year = today.getFullYear();
+    const guess = new Date(year, month - 1, day);
+    if (today.getTime() - guess.getTime() > 183 * 86_400_000) year += 1;
+  }
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  return toDateInput(d);
+}
+
+/** A YYYY-MM-DD value as a local date. */
+export const fromDateInput = (v: string) => {
+  const [y, m, d] = v.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};

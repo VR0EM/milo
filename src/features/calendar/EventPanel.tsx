@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAction, useActiveFocus, useArchiveWithUndo, useImportSources, useTasks, useUpdateEvent } from "../../lib/queries";
 import { beginFocus } from "../../lib/focus";
+import { DateInput } from "../../components/DateInput";
 import { TimeField } from "../../components/TimeField";
 import { MiniMonth } from "./MiniMonth";
 import { TaskTray } from "./TaskTray";
@@ -152,18 +153,18 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       <div className="field-row">
         <label className="field">
           <span>From</span>
-          <input type="date" value={toDateInput(start)} onChange={(e) => onAllDayStart(e.target.value)} />
+          <DateInput value={toDateInput(start)} onChange={onAllDayStart} />
         </label>
         <label className="field">
           <span>Until</span>
-          <input type="date" value={toDateInput(lastDay)} min={toDateInput(start)} onChange={(e) => onUntil(e.target.value)} />
+          <DateInput value={toDateInput(lastDay)} min={toDateInput(start)} onChange={onUntil} />
         </label>
       </div>
       ) : (
       <>
       <label className="field">
         <span>Date</span>
-        <input type="date" value={toDateInput(start)} onChange={(e) => onStart(e.target.value, toTimeInput(start))} />
+        <DateInput value={toDateInput(start)} onChange={(v) => onStart(v, toTimeInput(start))} />
       </label>
       <div className="field-row">
         <label className="field">

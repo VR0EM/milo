@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
+import { DateInput } from "../../components/DateInput";
 import { DayToggles } from "../../components/DayToggles";
 import { HelpTip } from "../../components/HelpTip";
 import { useAction, useSeries } from "../../lib/queries";
@@ -152,12 +153,11 @@ export function RepeatField({ event }: { event: CalEvent }) {
                 <option value="on">On a date</option>
               </select>
               {rule.untilDate && (
-                <input
-                  type="date"
+<DateInput
                   aria-label="Last day"
                   value={rule.untilDate}
                   min={toDateInput(start)}
-                  onChange={(e) => e.target.value && apply({ ...rule, untilDate: e.target.value })}
+                  onChange={(v) => v && apply({ ...rule, untilDate: v })}
                 />
               )}
             </div>

@@ -408,3 +408,21 @@ The core is ready for it without changes:
   (the page is `lang="en-GB"`); earlier versions name all days of a multi-day event; the
   shortcuts overview opens at its top and long dialogs scroll inside the window.
 
+
+## Milo's own date field
+
+The browser's date field follows the computer's language, not the page: on a Mac set to US
+English it showed 11/19/2026, which a European reader takes for the 11th of month 19 or simply
+misreads. `components/DateInput` replaces it everywhere (deadlines, aims, event dates, all-day
+From/Until, repeat end, semesters):
+
+- It always reads **"Thu 19 Nov 2026"**: written out, with the weekday, so day and month can
+  never be swapped and the day of the week is clear without opening a calendar.
+- **Typing** is day first and lenient (`parseDate`): "19/11", "19-11-26", "19.11.2026",
+  "19 nov", "nov 19", "today", "tomorrow", "fri" (the next Friday). Without a year it is this
+  year, or next year when that day is more than half a year ago. Anything it cannot read puts
+  the old date back, like the time field.
+- **Picking** happens in a small month behind the calendar button (also Alt+Down). It follows
+  the first day of the week from Settings, marks today and the chosen day, greys out days
+  before an earliest day (Until, repeat end), and closes with Esc, a click elsewhere or a scroll.
+  It is drawn on top of the page (or the open dialog), so a side panel never cuts it off.

@@ -207,7 +207,7 @@ function MomentField({ label, value, onChange }: { label: string; value: string 
     <div className="field-row moment">
       <label className="field">
         <span>{label}</span>
-        <DateInput value={d ? toDateInput(d) : ""} onChange={(e) => set(e.target.value, d ? toTimeInput(d) : "23:59")} />
+        <DateInput value={d ? toDateInput(d) : ""} placeholder="No date" onChange={(v) => set(v, d ? toTimeInput(d) : "23:59")} />
       </label>
       <label className="field time">
         <span>Time</span>

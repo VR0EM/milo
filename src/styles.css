@@ -819,7 +819,7 @@ html.capture-window body { overflow: hidden; }
 .repeat-field .field > span { display: inline-flex; align-items: center; }
 .repeat-custom { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--sunken); }
 .repeat-custom input[type="number"] { width: 56px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 28px; }
-.repeat-custom select, .repeat-field .inline select, .repeat-field .inline input[type="date"] { background-color: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 28px; }
+.repeat-custom select, .repeat-field .inline select, .repeat-field .inline .date-input input { background-color: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 28px; }
 .repeat-copy { align-self: flex-start; text-align: left; font-size: calc(12px * var(--text-scale)); }
 
 /* ---------- earlier versions ---------- */
@@ -938,10 +938,19 @@ html.capture-window body { overflow: hidden; }
 
 /* ---------- small fixes after the real-app test ---------- */
 /* An empty date field says "No date" instead of showing today's date in grey. */
-.date-input { position: relative; display: block; }
-.date-input.empty input:not(:focus)::-webkit-datetime-edit { color: transparent; }
-.date-placeholder { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
-.date-input:focus-within .date-placeholder { display: none; }
+/* Milo's own date field: always "Thu 19 Nov 2026", with a small month behind the button. */
+.date-input { position: relative; display: block; min-width: 0; }
+.date-input input { width: 100%; padding-right: 30px; text-overflow: ellipsis; }
+.date-input input::placeholder { color: var(--muted); }
+.date-btn { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); cursor: pointer; }
+.date-btn:hover, .date-btn[aria-expanded="true"] { color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); }
+.date-pop { position: fixed; z-index: 60; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); box-shadow: 0 10px 28px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.06); }
+.date-pop .mini-day { border-radius: 7px; }
+.date-pop .mini-day:disabled { color: color-mix(in srgb, var(--muted) 45%, transparent); cursor: default; background: none; }
+.date-pop .mini-day.is-today { color: var(--accent); font-weight: 650; }
+.date-pop .mini-day.picked { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.date-pop-foot { display: flex; justify-content: flex-end; padding-top: 2px; }
+.date-pop-foot .link { font-size: calc(12px * var(--text-scale)); }
 /* Times never break over two lines; am/pm needs a little more room. */
 .day-time, .space-time { white-space: nowrap; }
 :root[data-clock="12h"] .day-time { width: 104px; }
