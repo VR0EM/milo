@@ -1,3 +1,4 @@
+import { HelpTip } from "../../components/HelpTip";
 import { useEffect, useMemo, useRef } from "react";
 import { colorVar } from "../../lib/colors";
 import { useSpaces, useTasks } from "../../lib/queries";
@@ -41,10 +42,14 @@ export function TaskTray() {
   if (open.length === 0) return null;
   return (
     <section className="task-tray" aria-label="Plan time for a task">
-      <h3>Plan a task</h3>
-      <p className="muted small">
-        {mode === "month" ? "Switch to the day or week view, then drag a task onto the hours." : "Drag a task onto the hours to set time aside for it."}
-      </p>
+      <h3>
+        Plan a task
+        <HelpTip label="About planning a task">
+          {mode === "month"
+            ? "Switch to the day or week view, then drag a task onto the hours to set time aside for it."
+            : "Drag a task onto the hours to set time aside for it. Starting focus from that block fills it in."}
+        </HelpTip>
+      </h3>
       <ul ref={listRef}>
         {open.map((t) => {
           const days = t.deadlineAt ? daysFromToday(new Date(t.deadlineAt)) : null;

@@ -1,23 +1,226 @@
+<div align="center">
+
+<img src="docs/screenshots/icon.png" width="96" height="96" alt="Milo icon">
+
 # Milo
 
-A calm, local-only personal cockpit: calendar, tasks, focus and insights in one place.
-Tauri + React + TypeScript, all data in one SQLite file on this machine.
+**A calm desktop cockpit for your week: calendar, tasks, focus and insights in one quiet place.**
 
-    npm install
-    npm run tauri dev      # run the app
-    npm run dev            # UI only, in a browser, on in-memory data
-    cd src-tauri && cargo test
+Everything stays on your computer. No account, no cloud, no noise.
 
-Design and data decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+[![Latest release](https://img.shields.io/github/v/release/VR0EM/milo?label=download&color=3fa7d6)](https://github.com/VR0EM/milo/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/VR0EM/milo/build.yml?label=build)](https://github.com/VR0EM/milo/actions/workflows/build.yml)
+![macOS and Windows](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
+![Local only](https://img.shields.io/badge/data-local%20only-6a9f5b)
 
-Data lives in one SQLite file with daily backups next to it:
-macOS `~/Library/Application Support/app.milo.desktop`, Windows `%APPDATA%\app.milo.desktop`.
+<br>
 
-Press `?` in the app for keyboard shortcuts.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/today-dark.png">
+  <img src="docs/screenshots/today-light.png" alt="Milo's Today screen: the day's timeline with a now line, a suggestion for what to do next, the inbox and the focus timer" width="100%">
+</picture>
 
-## Builds
+</div>
 
-Every push builds Milo on Windows and macOS in GitHub Actions (`.github/workflows/build.yml`),
-runs the tests there, and keeps the installers as artifacts. Testing on Windows:
-[docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md). Publishing a version that installed copies update to:
-[docs/RELEASING.md](docs/RELEASING.md).
+## Why Milo
+
+Most planners compete for attention with badges, streaks, sounds and colour everywhere. Milo
+does the opposite. It shows **what matters now**, keeps everything else one click away, and
+stays predictable: nothing moves, beeps or celebrates on its own.
+
+- **Calm by design.** Low visual noise, light and dark mode, no gamification, no sounds.
+- **Yours, on your machine.** All data lives in one SQLite file, with a backup every day.
+- **Made for a student's week.** Courses as spaces, the school timetable imported, deadlines
+  and study time side by side.
+
+## Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### Today
+Your day as one timeline with a *now* line, **What now?** suggesting a single next step,
+an inbox for loose thoughts, routines, deadlines and a short look back at the end of the day.
+
+</td>
+<td width="50%" valign="top">
+
+### Calendar
+Day, 3-day, week and month views. Drag to create, move and resize; all-day events as one bar;
+repeating events; events from school calendar links (iCal). Drag a task onto the hours to set
+time aside for it.
+
+</td>
+</tr>
+<tr>
+<td colspan="2">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/calendar-dark.png">
+  <img src="docs/screenshots/calendar-light.png" alt="The week view with classes, study blocks and a shift, the mini month and the tasks to plan" width="100%">
+</picture>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Tasks
+Deadlines and an aim to finish by, priorities, parts with progress, filters by space and
+time. Earlier versions of a task can be brought back.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tasks-dark.png">
+  <img src="docs/screenshots/tasks-light.png" alt="The task list with priorities, progress and deadlines, and one task open beside it" width="100%">
+</picture>
+
+</td>
+<td width="50%" valign="top">
+
+### Insights
+Productive time per day, time per space, class against self-study, and sleep. By week, month
+or semester, each chart with a table view.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/insights-dark.png">
+  <img src="docs/screenshots/insights-light.png" alt="Insights for a week: productive time per day, time per space, and sleep" width="100%">
+</picture>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Command menu
+Press <kbd>⌘</kbd> <kbd>K</kbd> (<kbd>Ctrl</kbd> <kbd>K</kbd> on Windows) to go anywhere,
+find a task, event or space, or type a date like *19 nov* or *fri* to jump there.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/command-dark.png">
+  <img src="docs/screenshots/command-light.png" alt="The command menu finding a task and events for the word lab" width="100%">
+</picture>
+
+</td>
+<td width="50%" valign="top">
+
+### Spaces
+Courses, work and the rest of life as spaces, grouped and colour-coded. Each space has an
+overview of its time, tasks and what is coming up.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/space-dark.png">
+  <img src="docs/screenshots/space-light.png" alt="The overview of the Chemistry space" width="100%">
+</picture>
+
+</td>
+</tr>
+</table>
+
+### And also
+
+- **Focus sessions** with a small always-on-top timer; a session fills in the calendar by itself.
+- **Next event in the menu bar**, like *Chemistry lab in 25 min*, so time stays visible
+  (on Windows: in the tray icon's tooltip).
+- **Quick notes from any app** with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd>; they wait in the inbox.
+- **Reminders** before events, at set times, or every so often (water, a break), and checks
+  like medication taken.
+- **Welcome guide** on the first start: courses, timetable link, rhythm.
+- **Make it yours:** theme, accent colour, typeface, text size, 12 or 24-hour clock, first day
+  of the week, which screens and Today blocks to show.
+- **Updates inside the app**, only installed when you click.
+- **Nothing is ever deleted:** archived items stay in the archive and can be brought back.
+
+## Download
+
+Get the latest version from **[Releases](https://github.com/VR0EM/milo/releases/latest)**.
+
+| System | File |
+| --- | --- |
+| macOS (Apple silicon) | `Milo_x.y.z_aarch64.dmg` |
+| Windows 10 and 11 | `Milo_x.y.z_x64-setup.exe` |
+
+Milo is not signed with an Apple or Microsoft certificate yet, so the first start needs one
+extra step:
+
+- **macOS:** open the app once, then go to *System Settings › Privacy & Security* and choose
+  **Open Anyway**.
+- **Windows:** when SmartScreen appears, choose **More info › Run anyway**.
+
+After that, Milo offers new versions itself (*Settings › Data & app*).
+
+## Privacy
+
+Milo has no account and no server. It never sends your data anywhere. It only goes online for
+two things you can see and switch off:
+
+- the **calendar links** you add (to fetch your timetable or deadlines), and
+- the **update check**, which asks GitHub for the newest version number.
+
+Your data is one SQLite file with daily backups next to it (and optionally a second folder):
+
+| System | Folder |
+| --- | --- |
+| macOS | `~/Library/Application Support/app.milo.desktop` |
+| Windows | `%APPDATA%\app.milo.desktop` |
+
+Everything can also be exported from *Settings › Import & export*.
+
+## Keyboard
+
+| Keys | Does |
+| --- | --- |
+| <kbd>⌘</kbd> <kbd>K</kbd> | Command menu |
+| <kbd>⌘</kbd> <kbd>1</kbd> … <kbd>5</kbd> | Today, Calendar, Tasks, Insights, Reminders |
+| <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd> | Write something down, from any app |
+| <kbd>N</kbd> | New event or task |
+| <kbd>D</kbd> <kbd>3</kbd> <kbd>W</kbd> <kbd>M</kbd> | Day, 3 days, week, month |
+| <kbd>T</kbd> · <kbd>G</kbd> | Today · go to a date |
+| <kbd>?</kbd> | All shortcuts |
+
+On Windows, use <kbd>Ctrl</kbd> where this says <kbd>⌘</kbd>.
+
+## Development
+
+Milo is a [Tauri 2](https://tauri.app) app: a Rust backend with SQLite, and a React 19 +
+TypeScript interface.
+
+**Needs:** Node 22, the Rust toolchain, and the
+[Tauri prerequisites](https://tauri.app/start/prerequisites/) for your system.
+
+```bash
+npm install
+npm run tauri dev   # the desktop app, on your real data folder
+npm run dev         # the interface only, in a browser, on in-memory data
+```
+
+Open the browser version with `?demo` (<http://localhost:1420/?demo>) for a sample student week.
+
+```bash
+npm test                      # the interface's logic (Vitest)
+cd src-tauri && cargo test    # the data layer (Rust)
+npx tsc --noEmit              # types
+```
+
+Every push builds Milo for macOS and Windows in GitHub Actions and runs all tests there.
+
+### Project layout
+
+```
+src/                  React interface
+  features/           one folder per screen (today, calendar, tasks, insights, ...)
+  components/         shared pieces (date and time fields, menus, icons)
+  lib/                data access, state, time helpers, and the browser stand-in backend
+src-tauri/src/        Rust backend
+  db/                 SQLite schema, migrations and repair
+  repo.rs             reading and writing everything
+  series.rs           repeating events
+  importer.rs, ics.rs calendar links
+  reminders.rs        reminders and checks
+  menubar.rs          the next event by the tray icon
+docs/                 decisions, releasing, Windows test notes, screenshots
+```
+
+### Documentation
+
+- [docs/DECISIONS.md](docs/DECISIONS.md): why things work the way they do
+- [docs/RELEASING.md](docs/RELEASING.md): publishing a version that installed copies update to
+- [docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md): testing on Windows

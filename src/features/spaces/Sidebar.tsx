@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, SpaceMark, type IconName } from "../../components/Icon";
 import { colorVar } from "../../lib/colors";
-import { useAction, useActiveFocus, useGroups, useInbox, useSpaces } from "../../lib/queries";
+import { useAction, useActiveFocus, useArchiveWithUndo, useGroups, useInbox, useSpaces } from "../../lib/queries";
 import { api } from "../../lib/api";
 import { useUi, type View } from "../../lib/store";
 import { fmtClock } from "../../lib/time";
-import type { Space } from "../../lib/types";
+import type { Group, Space } from "../../lib/types";
+import { openContextMenu, type MenuItem } from "../../components/ContextMenu";
 import { useNow } from "../../lib/useNow";
 import { installUpdate, useUpdates } from "../../lib/updates";
 import { MOD_ARIA, MOD_LABEL } from "../shortcuts/keys";
@@ -129,6 +130,36 @@ export function Sidebar() {
   const view = useUi((s) => s.view);
   const spaceViewId = useUi((s) => s.spaceViewId);
   const { toggleSpace, toggleGroup, openDialog } = useUi.getState();
+  const archive = useArchiveWithUndo();
+
+  // Right-click: the things to do with a space or group, and making new ones, in one place.
+  const newItems = (groupId: string | null, groupName?: string): MenuItem[] => [
+    { label: groupName ? `New space in ${groupName}` : "New space", run: () => openDialog({ kind: "space", groupId }) },
+    { label: "New group", run: () => openDialog({ kind: "group" }) },
+  ];
+  const spaceMenu = (e: React.MouseEvent, s: Space) => {
+    const group = groups.find((g) => g.id === s.groupId);
+    const shown = !hidden.includes(s.id);
+    openContextMenu(e, [
+      { label: "Open", run: () => useUi.getState().openSpace(s.id) },
+      { label: "Edit…", run: () => openDialog({ kind: "space", item: s }) },
+      { label: shown ? "Hide in the calendar" : "Show in the calendar", run: () => toggleSpace(s.id) },
+      "separator",
+      ...newItems(group?.id ?? null, group?.name),
+      "separator",
+      // At least one space is needed, as in the Edit dialog.
+      { label: "Archive", danger: true, disabled: spaces.length <= 1, run: () => archive("space", s.id, s.name) },
+    ]);
+  };
+  const groupMenu = (e: React.MouseEvent, g: Group, open: boolean) =>
+    openContextMenu(e, [
+      { label: open ? "Fold" : "Unfold", run: () => toggleGroup(g.id) },
+      { label: "Edit…", run: () => openDialog({ kind: "group", item: g }) },
+      "separator",
+      ...newItems(g.id, g.name),
+      "separator",
+      { label: "Archive", danger: true, run: () => archive("group", g.id, g.name) },
+    ]);
 
   const groupIds = new Set(groups.map((g) => g.id));
   const loose = spaces.filter((s) => !s.groupId || !groupIds.has(s.groupId));
@@ -184,6 +215,7 @@ export function Sidebar() {
         key={s.id}
         data-space-row={s.id}
         onPointerDown={(e) => pressRow(e, s, list)}
+        onContextMenu={(e) => spaceMenu(e, s)}
         className={[
           "side-row space-row-side",
           current ? "current" : "",
@@ -206,7 +238,8 @@ export function Sidebar() {
   };
 
   return (
-    <nav className="sidebar" aria-label="Main">
+    // Right-click anywhere else in the sidebar: make a new space or group.
+    <nav className="sidebar" aria-label="Main" onContextMenu={(e) => openContextMenu(e, newItems(null))}>
       <div className="brand">
         <BrandMark />
         <span>Milo</span>
@@ -232,7 +265,7 @@ export function Sidebar() {
           const open = !collapsed.includes(g.id);
           return (
             <div key={g.id} className="side-group">
-              <div className="side-row group-row">
+              <div className="side-row group-row" onContextMenu={(e) => groupMenu(e, g, open)}>
                 <button className="group-toggle" aria-expanded={open} onClick={() => toggleGroup(g.id)}>
                   <span className={`chev${open ? " open" : ""}`}><Icon name="chevron" size={12} /></span>
                   <span className="side-name">{g.name}</span>

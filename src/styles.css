@@ -770,7 +770,7 @@ body.month-dragging, body.month-dragging * { cursor: grabbing !important; }
 
 /* ---------- planning tasks into the calendar ---------- */
 .task-tray { display: flex; flex-direction: column; gap: 6px; min-height: 0; border-top: 1px solid var(--line-soft); padding-top: 12px; }
-.task-tray h3 { font-size: calc(13px * var(--text-scale)); font-weight: 600; }
+.task-tray h3 { font-size: calc(13px * var(--text-scale)); font-weight: 600; display: flex; align-items: center; gap: 2px; }
 .task-tray ul { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 40vh; margin: 0 -6px; padding: 0 6px; }
 .tray-task { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: grab; touch-action: none; user-select: none; }
 .tray-task:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
@@ -1002,3 +1002,11 @@ html.capture-window body { overflow: hidden; }
 .next-up-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .next-up-when { color: var(--muted); font-size: calc(12px * var(--text-scale)); font-variant-numeric: tabular-nums; }
 .next-up-until { flex: none; align-self: center; color: var(--muted); font-size: calc(12px * var(--text-scale)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- right-click menu ---------- */
+.menu.context-menu { position: fixed; right: auto; z-index: 70; min-width: 180px; }
+.context-menu button { color: var(--text); }
+.context-menu button:focus { outline: none; background: var(--accent-soft); }
+.context-menu button.danger { color: var(--danger); }
+.context-menu button:disabled { color: var(--muted); cursor: default; background: none; }
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }

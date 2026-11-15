@@ -280,7 +280,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         // Browser demo only: a calendar link with a few imported deadlines.
         tables.import_source = [{ ...base("demo-source", 0), kind: "ics_url", name: "Deadlines", location: "https://learning.example.edu/calendar/export.php?userid=1&authtoken=secret", spaceId: "seed-space-personal", enabled: true, lastSyncedAt: ts(), lastError: null, importAs: "events" }];
         const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(23, 59, 0, 0); return d; };
-        ["01 M365 intro labo moet worden ingeleverd", "02 Entra ID labo moet worden ingeleverd", "03 Intune labo moet worden ingeleverd", "Bedrijfsbezoek Umicore"].forEach((title, i) => {
+        ["Lab 1 due: cloud basics", "Lab 2 due: user accounts", "Lab 3 due: device setup", "Company visit"].forEach((title, i) => {
           const start = day(i * 3 + 1);
           create("event", { spaceId: "seed-space-personal", activityId: null, title, startAt: new Date(start.getTime() - 3600000).toISOString(), endAt: start.toISOString(), allDay: false, notes: "", status: "planned" }, { source: "import", sourceId: "demo-source", locallyModified: false });
         });

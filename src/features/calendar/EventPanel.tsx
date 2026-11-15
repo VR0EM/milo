@@ -29,9 +29,6 @@ export function EventPanel({ event, spaces, activities }: Props) {
         <div className="panel-idle">
           <MiniMonth />
           <NextUp />
-          <p className="muted small">
-            Select an event to see its details. Double-click the calendar, or press N, to plan a new one.
-          </p>
           <TaskTray />
         </div>
       )}

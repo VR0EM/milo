@@ -22,6 +22,7 @@ export const RELEASES: Release[] = [
       "Press Cmd+K (Ctrl+K on Windows) to go anywhere, find a task, event or space, or type a date to open the calendar there.",
       "A 3-day view in the calendar: press 3, or pick it next to Day, Week and Month.",
       "Beside the calendar, \"Next up\" shows what comes next. One click shows it.",
+      "Right-click a space or group in the sidebar for a menu: open, edit, hide in the calendar, a new space or group, or archive.",
     ],
   },
   {
