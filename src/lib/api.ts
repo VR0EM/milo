@@ -89,6 +89,8 @@ export const api = {
 
   listArchived: (query: string) => call<{ items: ArchivedItem[]; hiddenEvents: number }>("list_archived", { query }),
 
+  menubarSetting: () => call<boolean>("menubar_setting"),
+  setMenubarSetting: (on: boolean) => call<void>("set_menubar_setting", { on }),
   appInfo: () =>
     call<{ dataDir: string; backupDir: string; backupCount: number; lastBackup: string | null; version: string }>("app_info"),
 

@@ -449,3 +449,26 @@ clock and week preferences, summer-time-safe day counting, the default space, th
 all-day bars, and the "What's new" notes. The tests run in the Europe/Brussels time zone so the
 change to winter time is really exercised. GitHub runs them on every build and release, next to
 `cargo test`.
+
+## Ideas taken from Notion Calendar
+
+Looked at Notion Calendar for what would help her; left out what does not fit Milo (meeting
+links, conferencing, time zones, sounds).
+
+- **Next event by the tray icon** (`src-tauri/src/menubar.rs`): "Chemistry lab in 25 min", or
+  "Shift · 40 min left" while it runs. It shows from three hours before, and hands over to the
+  next event a quarter of an hour before that one starts, to help with the switch. Sleep,
+  all-day, skipped events and focus sessions are left out; a running focus session shows its
+  own time there instead. Long titles are cut at a word. On Windows the text is in the tooltip.
+  It is checked every 30 seconds, so a change in the calendar shows within half a minute.
+  Settings › Calendar & lists turns it off (`settings.menubar_next`).
+- **Cmd+K command menu** (`features/command/CommandMenu.tsx`): screens, calendar views, new
+  event, new task, a note, help; each with its own shortcut beside it, so shortcuts are learned
+  by using the menu. Typing a date ("19 nov", "fri") offers the calendar on that day; typing a
+  word finds spaces, tasks and events (a month back to four months ahead). In the calendar, G
+  opens it to go to a date.
+- **3-day view**: three consecutive days from the day shown (today after T), also when weekends
+  are hidden in the week; the arrows move by three days. Key 3.
+- **Next up** beside the calendar while nothing is selected: the event running or the next one,
+  by the same rule as the menu bar (`lib/nextUp.ts`), with a countdown only within three hours.
+- Found while testing: N in the calendar could type its "n" into the new event's title.

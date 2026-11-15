@@ -15,6 +15,15 @@ export function useGlobalShortcuts() {
         useUi.getState().setView(nav[n - 1][0]);
         return;
       }
+      // Cmd+K opens (or closes) the command menu, also from inside a text field.
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        const s = useUi.getState();
+        // Not over another dialog: one thing at a time.
+        if (!s.commandOpen && document.querySelector("dialog[open]")) return;
+        e.preventDefault();
+        useUi.setState({ commandOpen: !s.commandOpen });
+        return;
+      }
       if (mod && e.key === ",") {
         e.preventDefault();
         useUi.getState().setView("settings");
@@ -56,13 +65,15 @@ export function ShortcutsDialog() {
           ))}
           <tr><td>{k(`${MOD_LABEL},`)}</td><td>Settings</td></tr>
           <tr><td>{k(CAPTURE_KEY)}</td><td>Write something down, from any app (lands in the Inbox on Today)</td></tr>
+          <tr><td>{k(`${MOD_LABEL}K`)}</td><td>Commands: go anywhere, find a task, event or space, or type a date</td></tr>
           <tr><td>{k("?")}</td><td>This overview</td></tr>
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>
           <tr><td colSpan={2}><h3>Calendar</h3></td></tr>
           <tr><td>{k("N")}</td><td>New event at the next half hour</td></tr>
-          <tr><td>{k("D")} {k("W")} {k("M")}</td><td>Day, week or month view</td></tr>
+          <tr><td>{k("D")} {k("3")} {k("W")} {k("M")}</td><td>Day, 3 days (from today), week or month view</td></tr>
           <tr><td>{k("T")}</td><td>Go to today</td></tr>
-          <tr><td>{k("←")} {k("→")}</td><td>Previous or next day, week or month</td></tr>
+          <tr><td>{k("G")}</td><td>Go to a date: type it, like "19 nov" or "fri"</td></tr>
+          <tr><td>{k("←")} {k("→")}</td><td>Back or forward by what is on screen</td></tr>
           <tr><td>{k("Delete")}</td><td>Archive the selected event (with Undo)</td></tr>
           <tr><td>Double-click</td><td>New event (in the All day row or the month: an all-day event)</td></tr>
           <tr><td>Drag on empty space</td><td>Draw a new event</td></tr>

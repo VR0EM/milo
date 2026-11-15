@@ -6,6 +6,7 @@ import { beginFocus } from "../../lib/focus";
 import { DateInput } from "../../components/DateInput";
 import { TimeField } from "../../components/TimeField";
 import { MiniMonth } from "./MiniMonth";
+import { NextUp } from "./NextUp";
 import { TaskTray } from "./TaskTray";
 import { RepeatField } from "./RepeatField";
 import { EarlierVersions } from "../history/EarlierVersions";
@@ -27,6 +28,7 @@ export function EventPanel({ event, spaces, activities }: Props) {
       ) : (
         <div className="panel-idle">
           <MiniMonth />
+          <NextUp />
           <p className="muted small">
             Select an event to see its details. Double-click the calendar, or press N, to plan a new one.
           </p>

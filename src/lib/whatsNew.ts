@@ -18,6 +18,10 @@ export const RELEASES: Release[] = [
       "Dates are written out, like Thu 19 Nov 2026, so day and month can never be mixed up.",
       "Type a date day first (19/11, 19 nov, tomorrow, fri), or pick one from the small calendar next to the field.",
       "After an update, Milo tells you once what changed, here on Today. Every change is listed in Settings, under Data & app.",
+      "Your next event shows next to Milo's icon in the menu bar, with how long until it starts (\"Lab in 25 min\") or how long is left. It can be turned off in Settings, under Calendar & lists.",
+      "Press Cmd+K (Ctrl+K on Windows) to go anywhere, find a task, event or space, or type a date to open the calendar there.",
+      "A 3-day view in the calendar: press 3, or pick it next to Day, Week and Month.",
+      "Beside the calendar, \"Next up\" shows what comes next. One click shows it.",
     ],
   },
   {

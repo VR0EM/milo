@@ -83,19 +83,20 @@ interface Notice {
 }
 
 /** How much of the calendar is on screen. */
-export type CalMode = "day" | "week" | "month";
+/** "three" is three days from the day shown (usually today), whatever the weekday. */
+export type CalMode = "day" | "three" | "week" | "month";
 
 const firstOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 
 /** The first day after the range that `mode` shows from `start`. */
 export function rangeEnd(mode: CalMode, start: Date): Date {
   if (mode === "month") return new Date(start.getFullYear(), start.getMonth() + 1, 1);
-  return addDays(start, mode === "day" ? 1 : 7);
+  return addDays(start, mode === "day" ? 1 : mode === "three" ? 3 : 7);
 }
 
 /** Where the calendar starts when it shows `d` in `mode`. */
 export function startFor(mode: CalMode, d: Date): Date {
-  return mode === "day" ? startOfDay(d) : mode === "week" ? startOfWeek(d) : firstOfMonth(d);
+  return mode === "day" || mode === "three" ? startOfDay(d) : mode === "week" ? startOfWeek(d) : firstOfMonth(d);
 }
 
 interface UiState {
@@ -125,6 +126,8 @@ interface UiState {
   shortcutsOpen: boolean;
   /** The list of all changes, from Settings. */
   whatsNewOpen: boolean;
+  /** The Cmd+K menu. */
+  commandOpen: boolean;
   prefs: Prefs;
   collapsedGroups: string[];
   /** Settings sections that are unfolded. */
@@ -183,7 +186,7 @@ export const useUi = create<UiState>()(
           viewStart:
             s.calMode === "month"
               ? new Date(s.viewStart.getFullYear(), s.viewStart.getMonth() + n, 1)
-              : addDays(s.viewStart, s.calMode === "day" ? n : 7 * n),
+              : addDays(s.viewStart, (s.calMode === "day" ? 1 : s.calMode === "three" ? 3 : 7) * n),
         })),
       selectedEventId: null,
       focusTitle: false,
@@ -191,6 +194,7 @@ export const useUi = create<UiState>()(
       routineEditId: null,
       shortcutsOpen: false,
       whatsNewOpen: false,
+      commandOpen: false,
       prefs: DEFAULT_PREFS,
       collapsedGroups: [],
       settingsOpen: ["appearance"],

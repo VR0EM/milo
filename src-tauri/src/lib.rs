@@ -8,6 +8,7 @@ mod history;
 mod ics;
 mod importer;
 mod insights;
+mod menubar;
 mod models;
 mod reminders;
 mod repo;
@@ -147,12 +148,15 @@ pub fn run() {
             // Focus: once a second while a session runs, the time left shows next to the tray
             // icon (macOS menu bar) and in its tooltip (Windows). A session forgotten an hour past
             // its plan is saved by itself, so it always leaves an event in the calendar.
-            // Without a session the database is asked only every 30 seconds; starting one from
-            // Milo wakes this up at once (FOCUS_STARTED).
+            // Without a session the next event shows there instead ("Lab in 25 min"), and the
+            // database is asked only every 30 seconds; starting a session or changing the menu
+            // bar setting wakes this up at once (FOCUS_STARTED).
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut showing = false;
-                let mut tick: u64 = 0;
+                let mut next_up: Option<String> = None;
+                // The first look comes after a second, not after half a minute.
+                let mut tick: u64 = 29;
                 loop {
                     std::thread::sleep(Duration::from_secs(1));
                     tick += 1;
@@ -160,7 +164,7 @@ pub fn run() {
                     if !showing && !started && !tick.is_multiple_of(30) {
                         continue;
                     }
-                    let (left, forgotten) = {
+                    let (left, forgotten, coming) = {
                         let db = handle.state::<Db>();
                         let conn = db.lock();
                         let forgotten = repo::close_forgotten_focus(&conn, chrono::Utc::now()).ok().flatten();
@@ -168,7 +172,8 @@ pub fn run() {
                             let start = chrono::DateTime::parse_from_rfc3339(&s.started_at).ok()?;
                             Some(start.timestamp() + s.planned_minutes * 60 - chrono::Utc::now().timestamp())
                         });
-                        (left, forgotten)
+                        let coming = if left.is_none() { menubar::text(&conn, chrono::Utc::now()).ok().flatten() } else { None };
+                        (left, forgotten, coming)
                     };
                     if let Some(e) = forgotten {
                         notify(&handle, "Focus session saved", &format!("\"{}\" was still running, so it was saved with its planned length.", e.title));
@@ -182,16 +187,24 @@ pub fn run() {
                             let _ = tray.set_title(Some(&text));
                             let _ = tray.set_tooltip(Some(&format!("Milo · focus {text}")));
                             showing = true;
+                            // Put the next event back as soon as the session ends.
+                            next_up = None;
                         }
-                        None if showing => {
-                            let _ = tray.set_title(None::<&str>);
-                            let _ = tray.set_tooltip(Some("Milo"));
-                            if let Some(w) = handle.get_webview_window(commands::FOCUS_MINI) {
-                                let _ = w.close();
+                        None => {
+                            if showing {
+                                if let Some(w) = handle.get_webview_window(commands::FOCUS_MINI) {
+                                    let _ = w.close();
+                                }
+                                showing = false;
+                                let _ = tray.set_title(None::<&str>);
+                                let _ = tray.set_tooltip(Some("Milo"));
                             }
-                            showing = false;
+                            if coming != next_up {
+                                let _ = tray.set_title(coming.as_deref());
+                                let _ = tray.set_tooltip(Some(&coming.as_ref().map_or("Milo".to_string(), |t| format!("Milo · {t}"))));
+                                next_up = coming;
+                            }
                         }
-                        None => {}
                     }
                 }
             });
@@ -328,6 +341,8 @@ pub fn run() {
             commands::reorder_spaces,
             commands::open_capture,
             commands::hide_capture,
+            commands::menubar_setting,
+            commands::set_menubar_setting,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Milo")

@@ -7,7 +7,7 @@ import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
 import { useActivities, useGroups, useTaskTypes } from "../../lib/queries";
 import { TODAY_BLOCKS, useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { NAV } from "../spaces/Sidebar";
-import { MOD_LABEL } from "../shortcuts/keys";
+import { IS_MAC, MOD_LABEL } from "../shortcuts/keys";
 import { Icon } from "../../components/Icon";
 import { HelpTip } from "../../components/HelpTip";
 import { ImportSettings } from "../import/ImportView";
@@ -248,6 +248,7 @@ export function SettingsView() {
               {Array.from({ length: 13 }, (_, h) => h).map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}
             </select>
           </Row>
+          <MenuBarNext />
           <Lists />
         </Section>
 
@@ -315,6 +316,39 @@ function Lists() {
         {groups.map((g) => <ListItem key={g.id} name={g.name} onEdit={() => open({ kind: "group", item: g })} />)}
       </ListBox>
     </>
+  );
+}
+
+/** The next event next to the tray icon (macOS menu bar; the tooltip on Windows). */
+function MenuBarNext() {
+  const qc = useQueryClient();
+  const { data: on } = useQuery({ queryKey: ["menubarSetting"], queryFn: api.menubarSetting });
+  return (
+    <Row
+      title={IS_MAC ? "Next event in the menu bar" : "Next event at the Milo icon"}
+      info={
+        <>
+          Next to Milo's icon {IS_MAC ? "in the menu bar" : "by the clock (hover over it)"}: the next event and how long until it
+          starts, like "Chemistry lab in 25 min", or how long is left while it runs. It shows from three hours before, and
+          switches to the next event a quarter of an hour before that one starts. Sleep, all-day events and events marked as
+          not happening are left out. A running focus session shows its own time there instead.
+        </>
+      }
+    >
+      <label className="switch-control">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={on ?? true}
+          disabled={on === undefined}
+          onChange={async (e) => {
+            await api.setMenubarSetting(e.target.checked);
+            qc.invalidateQueries({ queryKey: ["menubarSetting"] });
+          }}
+        />
+        <span>{on === false ? "Off" : "On"}</span>
+      </label>
+    </Row>
   );
 }
 

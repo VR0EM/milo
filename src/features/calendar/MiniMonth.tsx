@@ -21,7 +21,7 @@ export function MiniMonth() {
   const weekends = useUi((s) => s.prefs.showWeekends);
   // In the month view the whole month is on screen, so nothing needs marking.
   const shown = (d: Date) =>
-    mode !== "month" && d >= viewStart && d < rangeEnd(mode, viewStart) && (mode === "day" || weekends || (d.getDay() !== 0 && d.getDay() !== 6));
+    mode !== "month" && d >= viewStart && d < rangeEnd(mode, viewStart) && (mode === "day" || mode === "three" || weekends || (d.getDay() !== 0 && d.getDay() !== 6));
   const step = (n: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + n, 1));
 
   return (

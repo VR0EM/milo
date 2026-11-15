@@ -973,3 +973,32 @@ html.capture-window body { overflow: hidden; }
 .news-foot { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
 .news-release + .news-release { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .dialog .news-items { color: var(--text); }
+
+/* ---------- command menu (Cmd+K) ---------- */
+/* Near the top of the window, so the list grows down and the field never moves. */
+.dialog.command-menu { width: min(560px, calc(100vw - 48px)); margin: 12vh auto auto; padding: 0; overflow: hidden; display: flex; flex-direction: column; max-height: min(520px, calc(100vh - 24vh)); }
+.command-search { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.command-search input { flex: 1; border: 0; background: none; padding: 4px 0; font-size: calc(15px * var(--text-scale)); color: var(--text); outline: none; min-height: 0; }
+.command-list { overflow-y: auto; padding: 6px; flex: 1; }
+.command-group { padding: 10px 10px 4px; font-size: calc(11px * var(--text-scale)); font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+.command-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; cursor: pointer; color: var(--text); }
+.command-item .icon { color: var(--muted); flex: none; }
+.command-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.command-item.active .icon { color: var(--accent); }
+.command-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-note { color: var(--muted); font-size: calc(12px * var(--text-scale)); white-space: nowrap; }
+.command-keys { flex: none; color: var(--muted); font-size: calc(11px * var(--text-scale)); }
+.command-empty { padding: 14px 10px; }
+.command-foot { display: flex; gap: 16px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: calc(11px * var(--text-scale)); }
+.command-foot kbd { font-size: calc(10px * var(--text-scale)); }
+
+/* ---------- next up (beside the calendar) ---------- */
+.next-up { display: flex; flex-direction: column; gap: 6px; }
+.next-up-head { font-size: calc(12px * var(--text-scale)); font-weight: 600; color: var(--muted); }
+.next-up-item { display: flex; align-items: stretch; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); cursor: pointer; }
+.next-up-item:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--line)); }
+.next-up-bar { flex: none; width: 3px; border-radius: 2px; background: var(--c); }
+.next-up-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.next-up-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next-up-when { color: var(--muted); font-size: calc(12px * var(--text-scale)); font-variant-numeric: tabular-nums; }
+.next-up-until { flex: none; align-self: center; color: var(--muted); font-size: calc(12px * var(--text-scale)); font-variant-numeric: tabular-nums; white-space: nowrap; }

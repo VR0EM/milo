@@ -7,6 +7,8 @@ type Row = Record<string, any>;
 const ts = () => new Date().toISOString();
 const base = (id: string, sortOrder: number) => ({ id, sortOrder, createdAt: ts(), updatedAt: ts(), deletedAt: null });
 
+/** Settings › Next event in the menu bar (kept in memory, like everything here). */
+let menubarOn = true;
 const tables: Record<string, Row[]> = {
   group: [{ ...base("seed-group-school", 0), name: "School" }],
   space: [
@@ -327,6 +329,8 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "set_backup_mirror": case "restore_backup": throw "Backups can only be managed in the desktop app";
       case "update_import_source": return update("import_source", a.id, a.input);
       case "show_focus_mini": case "size_focus_mini": case "close_focus_mini": case "show_main_window": return null;
+      case "menubar_setting": return menubarOn;
+      case "set_menubar_setting": menubarOn = a.on; return null;
       case "app_info":
         return { dataDir: "(browser preview: data lives in memory)", backupDir: "", backupCount: 0, lastBackup: null, version: "dev" };
       case "get_insights": return mockInsights(a.from, a.to);

@@ -11,8 +11,11 @@ import { WeekGrid } from "./WeekGrid";
 import { MonthGrid, monthWeeks } from "./MonthGrid";
 import { TaskDragGhost } from "./TaskTray";
 
-const MODES: [CalMode, string, string][] = [["day", "Day", "D"], ["week", "Week", "W"], ["month", "Month", "M"]];
+const MODES: [CalMode, string, string][] = [["day", "Day", "D"], ["three", "3 days", "3"], ["week", "Week", "W"], ["month", "Month", "M"]];
 import { BUFFER, firstShown, shiftShown } from "./days";
+
+/** What the arrows move by, in words. */
+const STEP: Record<CalMode, string> = { day: "day", three: "3 days", week: "week", month: "month" };
 
 export function CalendarView() {
   const viewStart = useUi((s) => s.viewStart);
@@ -25,9 +28,10 @@ export function CalendarView() {
   const mode = useUi((s) => s.calMode);
   const showWeekends = useUi((s) => s.prefs.showWeekends);
   const eventMinutes = useUi((s) => s.prefs.eventMinutes);
-  // The day view always steps through every day; the week and month follow the weekend setting.
-  const gridWeekends = mode === "day" || showWeekends;
-  const visibleCount = mode === "day" ? 1 : showWeekends ? 7 : 5;
+  // The day and 3-day views always show consecutive days; the week and month follow the
+  // weekend setting.
+  const gridWeekends = mode === "day" || mode === "three" || showWeekends;
+  const visibleCount = mode === "day" ? 1 : mode === "three" ? 3 : showWeekends ? 7 : 5;
   const start = firstShown(viewStart, gridWeekends);
   // Visible days plus a buffer on both sides, so scrolling sideways never shows an empty column.
   const days = useMemo(
@@ -64,8 +68,16 @@ export function CalendarView() {
         ui.select(null);
       } else if (e.key === "Escape") ui.select(null); // also clears a selected task
       else if (e.key === "t") ui.showDate(new Date());
+      else if (e.key === "g") {
+        // Go to a date: the command menu reads typed dates.
+        e.preventDefault();
+        useUi.setState({ commandOpen: true });
+      }
       else if (e.key === "d" || e.key === "w" || e.key === "m") ui.setCalMode(e.key === "d" ? "day" : e.key === "w" ? "week" : "month");
+      else if (e.key === "3") ui.setCalMode("three");
       else if (e.key === "n" && defaultSpaceId) {
+        // Keep the "n" itself out of the new event's title field, which takes the focus.
+        e.preventDefault();
         const now = new Date();
         const start = atMinutes(startOfDay(now), Math.ceil(minutesIntoDay(now) / 30) * 30);
         ui.showDate(start);
@@ -102,10 +114,10 @@ export function CalendarView() {
             </div>
             <button className="btn" onClick={() => useUi.getState().showDate(new Date())}>Today</button>
             <div className="btn-pair">
-              <button className="btn icon-only" aria-label={`Previous ${mode}`} title={`Previous ${mode} (←)`} onClick={() => useUi.getState().stepCalendar(-1)}>
+              <button className="btn icon-only" aria-label={`Previous ${STEP[mode]}`} title={`Previous ${STEP[mode]} (←)`} onClick={() => useUi.getState().stepCalendar(-1)}>
                 <Icon name="left" />
               </button>
-              <button className="btn icon-only" aria-label={`Next ${mode}`} title={`Next ${mode} (→)`} onClick={() => useUi.getState().stepCalendar(1)}>
+              <button className="btn icon-only" aria-label={`Next ${STEP[mode]}`} title={`Next ${STEP[mode]} (→)`} onClick={() => useUi.getState().stepCalendar(1)}>
                 <Icon name="right" />
               </button>
             </div>

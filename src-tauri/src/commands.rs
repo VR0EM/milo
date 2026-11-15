@@ -531,3 +531,17 @@ pub fn restore_change(db: State<Db>, id: String) -> Result<()> {
 pub fn reorder_spaces(db: State<Db>, ids: Vec<String>) -> Result<()> {
     tx!(db, |c| repo::reorder_spaces(c, &ids))
 }
+
+/// Whether the next event shows next to the tray icon.
+#[tauri::command(async)]
+pub fn menubar_setting(db: State<Db>) -> Result<bool> {
+    crate::menubar::enabled(conn!(db))
+}
+
+#[tauri::command(async)]
+pub fn set_menubar_setting(db: State<Db>, on: bool) -> Result<()> {
+    crate::menubar::set_enabled(conn!(db), on)?;
+    // Show (or clear) it at once instead of at the next half minute.
+    FOCUS_STARTED.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
