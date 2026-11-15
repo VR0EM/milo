@@ -1,6 +1,6 @@
 [package]
 name = "milo"
-version = "0.3.6"
+version = "0.3.7"
 description = "Milo - a calm personal cockpit"
 authors = ["VR0EM"]
 edition = "2021"
