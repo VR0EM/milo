@@ -3,7 +3,7 @@ import { fmtSpan, fmtUntil, pickNext } from "./nextUp";
 import type { CalEvent, Space } from "./types";
 
 const space = (id: string, role: Space["role"] = "normal"): Space => ({
-  id, groupId: null, name: id, color: "blue", role, icon: null, sortOrder: 0, deletedAt: null,
+  id, groupId: null, name: id, color: "blue", role, kind: "list", icon: null, sortOrder: 0, deletedAt: null,
 });
 const spaces = [space("school"), space("sleep", "sleep")];
 const at = (h: number, m = 0) => new Date(2026, 10, 16, h, m);

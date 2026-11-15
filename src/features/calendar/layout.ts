@@ -20,8 +20,10 @@ export interface Segment<T extends Timed> {
 /**
  * The part of each event that falls on `day`, with overlapping events packed
  * side by side. An event that crosses midnight (sleep) yields one segment per day.
+ * `minMinutes` is the shortest an event is drawn: a five-minute event drawn as tall as half an
+ * hour takes that room, so what follows goes beside it instead of underneath it.
  */
-export function layoutDay<T extends Timed>(items: T[], day: Date): Segment<T>[] {
+export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0): Segment<T>[] {
   const dayEnd = addDays(day, 1);
   const segs: Segment<T>[] = [];
   for (const item of items) {
@@ -50,13 +52,25 @@ export function layoutDay<T extends Timed>(items: T[], day: Date): Segment<T>[] 
   };
   for (const s of segs) {
     if (cluster.length && s.top >= clusterEnd) close();
+    const drawnBottom = Math.max(s.bottom, s.top + minMinutes);
     let col = columnEnds.findIndex((end) => end <= s.top);
     if (col === -1) col = columnEnds.length;
-    columnEnds[col] = s.bottom;
+    columnEnds[col] = drawnBottom;
     s.col = col;
     cluster.push(s);
-    clusterEnd = Math.max(clusterEnd, s.bottom);
+    clusterEnd = Math.max(clusterEnd, drawnBottom);
   }
   close();
   return segs;
+}
+
+/**
+ * Start and end while one edge of an event is pulled to `t` and the other stays at `fixed`.
+ * Pulled past the fixed edge, the event turns over (the old start becomes the end, or the
+ * other way round); right on it, the event keeps `shortest` on the side it was.
+ */
+export function turnOver(fixed: number, t: number, pulling: "start" | "end", shortest: number): [number, number] {
+  if (t > fixed) return [fixed, t];
+  if (t < fixed) return [t, fixed];
+  return pulling === "end" ? [fixed, fixed + shortest] : [fixed - shortest, fixed];
 }

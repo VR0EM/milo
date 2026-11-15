@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { useAction, useCreateEvent, useEvents, useSpaces, useTasks } from "../../lib/queries";
+import { INBOX_ID } from "../../lib/types";
 import { pickDefaultSpace } from "../../lib/spaces";
 import { preferredSpace, useUi, type View } from "../../lib/store";
 import {
@@ -140,12 +141,11 @@ function Menu() {
         },
       },
       {
-        id: "new-task", group: "Make", label: "New task", words: "add create assignment todo", icon: "tasks", keys: "N",
+        id: "new-task", group: "Make", label: "New to-do", words: "add create assignment task todo", icon: "tasks", keys: "N",
         run: () => {
-          if (!defaultSpaceId) return;
           go("tasks");
           act.mutate(
-            () => api.createTask({ spaceId: defaultSpaceId, typeId: null, title: "", notes: "", deadlineAt: null, targetAt: null, priority: null }),
+            () => api.createTask({ spaceId: INBOX_ID, typeId: null, title: "", notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: null }),
             { onSuccess: (t) => useUi.getState().selectTask((t as { id: string }).id, true) },
           );
         },
@@ -154,10 +154,18 @@ function Menu() {
         id: "note", group: "Make", label: "Write something down", words: "note inbox capture", icon: "pen",
         run: () => {
           go("today");
-          // The Inbox field on Today, once Today is on screen.
-          setTimeout(() => document.querySelector<HTMLInputElement>('input[aria-label="New note"]')?.focus(), 50);
+          // The field on Today's to-dos, once Today is on screen.
+          setTimeout(() => document.querySelector<HTMLInputElement>('input[aria-label="Write something down for today"]')?.focus(), 50);
         },
       },
+      {
+        id: "pick-today", group: "Make", label: "Choose what to do today", words: "today plan pick todo", icon: "today",
+        run: () => {
+          go("today");
+          useUi.setState({ pickTodayOpen: true });
+        },
+      },
+      { id: "go-inbox", group: "Make", label: "Sort the Inbox", words: "inbox notes sort", icon: "tasks", run: () => useUi.getState().openTasks("inbox") },
       { id: "help-keys", group: "Help", label: "Keyboard shortcuts", icon: "book", keys: "?", run: () => useUi.setState({ shortcutsOpen: true }) },
       { id: "help-new", group: "Help", label: "What's new", words: "changes update version", icon: "star", run: () => useUi.setState({ whatsNewOpen: true }) },
       { id: "help-guide", group: "Help", label: "Welcome guide", words: "setup start", icon: "home", run: () => useUi.setState({ setupOpen: true }) },

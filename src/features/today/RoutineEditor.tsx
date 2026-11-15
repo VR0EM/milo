@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { DayToggles } from "../../components/DayToggles";
 import { TimeField } from "../../components/TimeField";
-import { useAction, useArchiveWithUndo } from "../../lib/queries";
+import { useAction, useArchiveWithUndo, useRoutines } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import type { Routine, RoutineInput, RoutineItem } from "../../lib/types";
 
-/** Edits one routine. Every field saves as soon as it changes, like the detail panels. */
-export function RoutineEditor({ routines }: { routines: Routine[] }) {
+/** Edits one routine. Every field saves as soon as it changes, like the detail panels. Mounted once in App. */
+export function RoutineEditor() {
+  const routines = useRoutines().data ?? [];
   const id = useUi((s) => s.routineEditId);
   const routine = routines.find((r) => r.id === id);
   return routine ? <Editor key={routine.id} routine={routine} /> : null;
@@ -19,6 +20,8 @@ function Editor({ routine }: { routine: Routine }) {
   const archive = useArchiveWithUndo();
   const [name, setName] = useState(routine.name);
   const [newItem, setNewItem] = useState("");
+  const [under, setUnder] = useState("");
+  const top = routine.items.filter((i) => !i.parentId || !routine.items.some((p) => p.id === i.parentId));
   const close = () => useUi.setState({ routineEditId: null });
 
   useEffect(() => {
@@ -40,7 +43,7 @@ function Editor({ routine }: { routine: Routine }) {
     const text = newItem.trim();
     if (!text) return;
     setNewItem("");
-    act.mutate(() => api.createRoutineItem(routine.id, text));
+    act.mutate(() => api.createRoutineItem(routine.id, text, under || null));
   };
 
   return (
@@ -77,9 +80,19 @@ function Editor({ routine }: { routine: Routine }) {
         <fieldset className="field parts">
           <legend>Steps</legend>
           <ul>
-            {routine.items.map((item) => <ItemRow key={item.id} item={item} />)}
+            {top.map((item) => (
+              <ItemRow key={item.id} item={item}>
+                {routine.items.filter((c) => c.parentId === item.id).map((c) => <ItemRow key={c.id} item={c} />)}
+              </ItemRow>
+            ))}
           </ul>
           <div className="part-add">
+            {top.length > 0 && (
+              <select aria-label="Where the step goes" value={under} onChange={(e) => setUnder(e.target.value)} className="step-under">
+                <option value="">New step</option>
+                {top.map((i) => <option key={i.id} value={i.id}>Under {i.title}</option>)}
+              </select>
+            )}
             <input
               placeholder="Add a step, e.g. Take medication"
               aria-label="New step"
@@ -115,7 +128,7 @@ function Editor({ routine }: { routine: Routine }) {
   );
 }
 
-function ItemRow({ item }: { item: RoutineItem }) {
+function ItemRow({ item, children }: { item: RoutineItem; children?: React.ReactNode }) {
   const act = useAction("routines");
   const archive = useArchiveWithUndo();
   const [title, setTitle] = useState(item.title);
@@ -125,7 +138,8 @@ function ItemRow({ item }: { item: RoutineItem }) {
     else if (text !== item.title) act.mutate(() => api.updateRoutineItem(item.id, text));
   };
   return (
-    <li className="part-row">
+    <>
+    <li className={`part-row${item.parentId ? " sub" : ""}`}>
       <input
         className="part-title"
         aria-label="Step"
@@ -141,5 +155,7 @@ function ItemRow({ item }: { item: RoutineItem }) {
       />
       <button type="button" className="link" onClick={() => archive("routine_item", item.id, item.title)}>Archive</button>
     </li>
+    {children}
+    </>
   );
 }

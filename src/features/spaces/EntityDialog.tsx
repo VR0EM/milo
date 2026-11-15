@@ -4,10 +4,17 @@ import { api } from "../../lib/api";
 import { PALETTE, colorVar, isCustomColor } from "../../lib/colors";
 import { useArchiveWithUndo, useGroups, useSpaces } from "../../lib/queries";
 import { useUi, type Dialog } from "../../lib/store";
-import type { ActivityCategory, SpaceRole } from "../../lib/types";
+import type { ActivityCategory, SpaceKind, SpaceRole } from "../../lib/types";
 import { Icon, SPACE_ICONS } from "../../components/Icon";
 
 const TITLES = { space: "space", group: "group", activity: "activity", task_type: "task type" } as const;
+
+type Kind = Exclude<SpaceKind, "inbox">;
+const KINDS: [Kind, string, string][] = [
+  ["project", "Project", "A course: parts, types, progress"],
+  ["list", "List", "To-dos with steps, to tick off"],
+  ["none", "Time only", "No to-dos: sleep, travel, shifts"],
+];
 
 export function EntityDialog() {
   const dialog = useUi((s) => s.dialog);
@@ -30,6 +37,10 @@ function Form({ dialog }: { dialog: Dialog }) {
   );
   const [icon, setIcon] = useState<string | null>(dialog.kind === "space" ? (dialog.item?.icon ?? null) : null);
   const [role, setRole] = useState<SpaceRole>(dialog.kind === "space" ? (dialog.item?.role ?? "normal") : "normal");
+  const [kind, setKind] = useState<Kind>(
+    dialog.kind === "space" ? ((dialog.item?.kind as Kind | undefined) ?? dialog.spaceKind ?? (dialog.groupId ? "project" : "list")) : "list",
+  );
+  const [forSpace, setForSpace] = useState<string>(dialog.kind === "task_type" ? (dialog.item?.spaceId ?? dialog.spaceId ?? "") : "");
   const [category, setCategory] = useState<ActivityCategory>(
     dialog.kind === "activity" ? (dialog.item?.category ?? "other") : "other",
   );
@@ -43,14 +54,14 @@ function Form({ dialog }: { dialog: Dialog }) {
     e.preventDefault();
     try {
       if (dialog.kind === "space") {
-        const input = { name, color, role, groupId: groupId || null, icon };
+        const input = { name, color, role, groupId: groupId || null, icon, kind: dialog.item?.kind === "inbox" ? undefined : kind };
         await (item ? api.updateSpace(item.id, input) : api.createSpace(input));
         qc.invalidateQueries({ queryKey: ["spaces"] });
       } else if (dialog.kind === "group") {
         await (item ? api.updateGroup(item.id, { name }) : api.createGroup({ name }));
         qc.invalidateQueries({ queryKey: ["groups"] });
       } else if (dialog.kind === "task_type") {
-        await (item ? api.updateTaskType(item.id, name) : api.createTaskType(name));
+        await (item ? api.updateTaskType(item.id, name, forSpace || null) : api.createTaskType(name, forSpace || null));
         qc.invalidateQueries({ queryKey: ["taskTypes"] });
       } else {
         const input = { name, category };
@@ -66,7 +77,7 @@ function Form({ dialog }: { dialog: Dialog }) {
   const lastSpace = dialog.kind === "space" && activeSpaces.length <= 1;
 
   return (
-    <dialog ref={ref} className="dialog" onClose={close}>
+    <dialog ref={ref} className={`dialog${dialog.kind === "space" ? " wide" : ""}`} onClose={close}>
       <form onSubmit={submit}>
         <h2>{item ? `Edit ${TITLES[dialog.kind]}` : `New ${TITLES[dialog.kind]}`}</h2>
 
@@ -74,6 +85,32 @@ function Form({ dialog }: { dialog: Dialog }) {
           <span>Name</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
+
+        {dialog.kind === "space" && dialog.item?.kind !== "inbox" && (
+          <fieldset className="field">
+            <legend>What is this space for?</legend>
+            <div className="kind-picker" role="radiogroup" aria-label="What is this space for?">
+              {KINDS.map(([k, label, hint]) => (
+                <button type="button" key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>
+                  <span className="kind-name">{label}</span>
+                  <span className="muted small">{hint}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        {dialog.kind === "task_type" && (
+          <label className="field">
+            <span>For</span>
+            <select value={forSpace} onChange={(e) => setForSpace(e.target.value)}>
+              <option value="">All courses</option>
+              {activeSpaces.filter((s) => s.kind === "project" || s.id === forSpace).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {dialog.kind === "space" && (
           <>

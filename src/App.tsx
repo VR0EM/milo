@@ -9,10 +9,11 @@ import { ContextMenuHost } from "./components/ContextMenu";
 import { InsightsView } from "./features/insights/InsightsView";
 import { RemindersView } from "./features/reminders/RemindersView";
 import { TodayView } from "./features/today/TodayView";
-import { TasksView } from "./features/tasks/TasksView";
+import { TasksView } from "./features/tasks/TasksHome";
 import { Sidebar } from "./features/spaces/Sidebar";
 import { SpaceView } from "./features/spaces/SpaceView";
 import { SetupGate } from "./features/setup/SetupGuide";
+import { RoutineEditor } from "./features/today/RoutineEditor";
 import { useUi } from "./lib/store";
 import { useAppearance } from "./lib/useAppearance";
 import { checkAutomatically } from "./lib/updates";
@@ -40,6 +41,7 @@ export default function App() {
       <Sidebar />
       {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : view === "space" ? <SpaceView /> : <CalendarView />}
       <EntityDialog />
+      <RoutineEditor />
       <SetupGate />
       <ShortcutsDialog />
       <WhatsNewDialog />

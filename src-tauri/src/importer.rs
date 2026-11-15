@@ -732,7 +732,7 @@ END:VCALENDAR";
         let titles: Vec<String> = unmapped_titles(&c).unwrap().into_iter().map(|u| u.title).collect();
         assert_eq!(titles.len(), 2);
 
-        let analysis = repo::create_space(&c, SpaceInput { group_id: None, name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None }).unwrap();
+        let analysis = repo::create_space(&c, SpaceInput { group_id: None, name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None, kind: None }).unwrap();
         create_mapping(&c, TitleMappingInput { pattern: "analysis".into(), match_type: "contains".into(), space_id: analysis.id.clone(), activity_id: Some("seed-activity-class".into()) }).unwrap();
         let a = events(&c).into_iter().find(|e| e.title.starts_with("Analysis")).unwrap();
         assert_eq!((a.space_id.as_str(), a.activity_id.as_deref()), (analysis.id.as_str(), Some("seed-activity-class")));
@@ -769,12 +769,12 @@ END:VCALENDAR";
         repo::set_task_completed(&c, &lab.id, true).unwrap();
         assert_eq!(apply(&c, &s, &occ(FEED), true).unwrap().unchanged, 2);
         assert!(repo::get_task(&c, &lab.id).unwrap().completed_at.is_some());
-        let edit = TaskInput { space_id: lab.space_id.clone(), type_id: None, title: "My lab".into(), notes: String::new(), deadline_at: lab.deadline_at.clone(), target_at: None, priority: None };
+        let edit = TaskInput { space_id: lab.space_id.clone(), type_id: None, title: "My lab".into(), notes: String::new(), deadline_at: lab.deadline_at.clone(), target_at: None, priority: None, section_id: None };
         repo::update_task(&c, &lab.id, edit.clone()).unwrap();
         assert_eq!(apply(&c, &s, &occ(&FEED.replace("Physics lab", "Physics lab v2")), true).unwrap().kept, 1);
 
         // A title link moves imported tasks too; an open deadline that leaves the feed is archived.
-        let analysis = repo::create_space(&c, SpaceInput { group_id: None, name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None }).unwrap();
+        let analysis = repo::create_space(&c, SpaceInput { group_id: None, name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None, kind: None }).unwrap();
         create_mapping(&c, TitleMappingInput { pattern: "analysis".into(), match_type: "contains".into(), space_id: analysis.id.clone(), activity_id: None }).unwrap();
         assert!(repo::list_tasks(&c).unwrap().iter().any(|t| t.title.starts_with("Analysis") && t.space_id == analysis.id));
         let only_lab = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:b\nSUMMARY:Physics lab\nDTSTART:20300108T080000Z\nDTEND:20300108T100000Z\nEND:VEVENT\nEND:VCALENDAR";

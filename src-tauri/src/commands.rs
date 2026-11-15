@@ -124,6 +124,26 @@ pub fn update_task(db: State<Db>, id: String, input: TaskInput) -> Result<Task> 
     tx!(db, |c| repo::update_task(c, &id, input))
 }
 #[tauri::command(async)]
+pub fn set_task_today(db: State<Db>, id: String, day: Option<String>) -> Result<Task> {
+    tx!(db, |c| repo::set_task_today(c, &id, day.as_deref()))
+}
+#[tauri::command(async)]
+pub fn list_sections(db: State<Db>) -> Result<Vec<Section>> {
+    repo::list_sections(conn!(db))
+}
+#[tauri::command(async)]
+pub fn create_section(db: State<Db>, space_id: String, name: String) -> Result<Section> {
+    tx!(db, |c| repo::create_section(c, &space_id, &name))
+}
+#[tauri::command(async)]
+pub fn update_section(db: State<Db>, id: String, name: String) -> Result<Section> {
+    tx!(db, |c| repo::update_section(c, &id, &name))
+}
+#[tauri::command(async)]
+pub fn reorder_sections(db: State<Db>, ids: Vec<String>) -> Result<()> {
+    tx!(db, |c| repo::reorder_sections(c, &ids))
+}
+#[tauri::command(async)]
 pub fn set_task_completed(db: State<Db>, id: String, completed: bool) -> Result<Task> {
     tx!(db, |c| repo::set_task_completed(c, &id, completed))
 }
@@ -153,8 +173,8 @@ pub fn update_routine(db: State<Db>, id: String, input: RoutineInput) -> Result<
     tx!(db, |c| repo::update_routine(c, &id, input))
 }
 #[tauri::command(async)]
-pub fn create_routine_item(db: State<Db>, routine_id: String, title: String) -> Result<Routine> {
-    tx!(db, |c| repo::create_routine_item(c, &routine_id, &title))
+pub fn create_routine_item(db: State<Db>, routine_id: String, title: String, parent_id: Option<String>) -> Result<Routine> {
+    tx!(db, |c| repo::create_routine_item(c, &routine_id, &title, parent_id.as_deref()))
 }
 #[tauri::command(async)]
 pub fn update_routine_item(db: State<Db>, id: String, title: String) -> Result<Routine> {
@@ -448,29 +468,13 @@ pub fn set_repeat(db: State<Db>, id: String, rule: Option<RepeatRule>) -> Result
 
 // ---------- inbox and quick capture ----------
 
+/// Saves a quick note in the Inbox. The main window hears about it, also when the note came
+/// from the small capture window.
 #[tauri::command(async)]
-pub fn list_inbox(db: State<Db>) -> Result<Vec<InboxItem>> {
-    repo::list_inbox(conn!(db))
-}
-
-/// Saves a quick note. The main window hears about it, also when the note came from the
-/// small capture window.
-#[tauri::command(async)]
-pub fn add_inbox(app: AppHandle, db: State<Db>, text: String) -> Result<InboxItem> {
-    let item = tx!(db, |c| repo::add_inbox(c, &text))?;
+pub fn add_inbox(app: AppHandle, db: State<Db>, text: String) -> Result<Task> {
+    let task = tx!(db, |c| repo::add_inbox(c, &text))?;
     let _ = app.emit("data-changed", ());
-    Ok(item)
-}
-
-/// Turns a note into a task in one step: the task is made and the note handled together.
-#[tauri::command(async)]
-pub fn inbox_to_task(db: State<Db>, id: String, space_id: String) -> Result<Task> {
-    tx!(db, |c| repo::inbox_to_task(c, &id, &space_id))
-}
-
-#[tauri::command(async)]
-pub fn set_inbox_done(db: State<Db>, id: String, done: bool) -> Result<()> {
-    tx!(db, |c| repo::set_inbox_done(c, &id, done))
+    Ok(task)
 }
 
 pub const CAPTURE: &str = "capture";

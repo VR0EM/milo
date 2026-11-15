@@ -106,7 +106,7 @@ mod tests {
 
         let copy = Connection::open(&first).unwrap();
         let n: i64 = copy.query_row("SELECT COUNT(*) FROM spaces", [], |r| r.get(0)).unwrap();
-        assert_eq!(n, 3);
+        assert_eq!(n, 4);
     }
 
     #[test]

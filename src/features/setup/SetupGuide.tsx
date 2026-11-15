@@ -220,7 +220,7 @@ function Courses({ onDone }: { onDone: () => void }) {
     setBusy(true);
     try {
       const groupId = school?.id ?? (await api.createGroup({ name: "School" })).id;
-      for (const c of planned) await api.createSpace({ name: c.name, groupId, color: c.color, role: "normal", icon: "book" });
+      for (const c of planned) await api.createSpace({ name: c.name, groupId, color: c.color, role: "normal", icon: "book", kind: "project" });
       await Promise.all([qc.invalidateQueries({ queryKey: ["spaces"] }), qc.invalidateQueries({ queryKey: ["groups"] })]);
       onDone();
     } catch (err) {

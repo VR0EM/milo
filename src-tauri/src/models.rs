@@ -25,6 +25,8 @@ pub struct Space {
     pub role: String,
     /// A drawn icon name from the app's set, or None for the plain square.
     pub icon: Option<String>,
+    /// 'project' (a course), 'list', 'none' (time only) or 'inbox' (the hidden one).
+    pub kind: String,
     pub sort_order: i64,
     pub deleted_at: Option<String>,
 }
@@ -38,6 +40,19 @@ pub struct SpaceInput {
     pub role: String,
     #[serde(default)]
     pub icon: Option<String>,
+    /// Left out: a new space is a list, a changed one keeps its kind.
+    #[serde(default)]
+    pub kind: Option<String>,
+}
+
+/// A part of a course ("02 Titration").
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Section {
+    pub id: String,
+    pub space_id: String,
+    pub name: String,
+    pub sort_order: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -108,6 +123,8 @@ fn default_status() -> String {
 pub struct TaskType {
     pub id: String,
     pub name: String,
+    /// The course it belongs to; None = every course.
+    pub space_id: Option<String>,
     pub sort_order: i64,
     pub deleted_at: Option<String>,
 }
@@ -116,6 +133,8 @@ pub struct TaskType {
 #[serde(rename_all = "camelCase")]
 pub struct TaskTypeInput {
     pub name: String,
+    #[serde(default)]
+    pub space_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -157,6 +176,10 @@ pub struct Task {
     pub locally_modified: bool,
     pub sort_order: i64,
     pub created_at: String,
+    /// The part of a course it belongs to.
+    pub section_id: Option<String>,
+    /// The local day it was put on Today ('YYYY-MM-DD').
+    pub today_on: Option<String>,
     pub parts: Vec<TaskPart>,
 }
 
@@ -172,6 +195,8 @@ pub struct TaskInput {
     pub target_at: Option<String>,
     #[serde(default)]
     pub priority: Option<String>,
+    #[serde(default)]
+    pub section_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -180,6 +205,8 @@ pub struct RoutineItem {
     pub id: String,
     pub routine_id: String,
     pub title: String,
+    /// A step under another step.
+    pub parent_id: Option<String>,
     pub sort_order: i64,
 }
 
@@ -465,14 +492,6 @@ pub struct BackupFile {
 pub struct BackupSettings {
     pub mirror_dir: Option<String>,
     pub backups: Vec<BackupFile>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InboxItem {
-    pub id: String,
-    pub text: String,
-    pub created_at: String,
 }
 
 /// How an event repeats.

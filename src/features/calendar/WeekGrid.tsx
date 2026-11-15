@@ -7,7 +7,7 @@ import {
 } from "../../lib/time";
 import type { CalEvent, Space, Task } from "../../lib/types";
 import { firstShown, shiftShown, shownDistance } from "./days";
-import { layoutDay } from "./layout";
+import { layoutDay, turnOver } from "./layout";
 import { lanesPerColumn, layoutSpans } from "./spans";
 import { addDropTarget, useTaskDrag } from "./taskDrag";
 
@@ -291,10 +291,11 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
         const raw = timeAt(m.clientX, m.clientY, false).getTime() - t0;
         const delta = Math.round(raw / SNAP_MS) * SNAP_MS;
         latest = { id: ev!.id, start: new Date(s0 + delta), end: new Date(e0 + delta) };
-      } else if (mode === "end") {
-        latest = { id: ev!.id, start: new Date(s0), end: new Date(Math.max(t, s0 + SNAP_MS)) };
-      } else if (mode === "start") {
-        latest = { id: ev!.id, start: new Date(Math.min(t, e0 - SNAP_MS)), end: new Date(e0) };
+      } else if (mode === "end" || mode === "start") {
+        // The other edge stays put. Pulled past it, the event turns over: pulling the bottom
+        // above the start makes the start the new end, and the other way round.
+        const [a, b] = turnOver(mode === "end" ? s0 : e0, t, mode, SNAP_MS);
+        latest = { id: ev!.id, start: new Date(a), end: new Date(b) };
       } else {
         const a = Math.min(anchor, t);
         latest = { id: "new", start: new Date(a), end: new Date(Math.max(Math.max(anchor, t), a + SNAP_MS)) };
@@ -536,7 +537,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
           {days.map((day) => (
             <div key={day.getTime()} className={`day-col${sameDay(day, now) ? " today" : ""}`}>
               {sameDay(day, now) && <div className="now-line" style={{ top: px(minutesIntoDay(now)) }} />}
-              {layoutDay(shown, day).map((seg) => {
+              {layoutDay(shown, day, (MIN_EVENT_PX / hourHeight) * 60).map((seg) => {
                 const ev = seg.item.event;
                 const space = spaceById.get(ev?.spaceId ?? defaultSpaceId ?? "");
                 // Very short events (a deadline at 23:59) still get a clickable height, and one

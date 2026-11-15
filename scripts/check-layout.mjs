@@ -123,6 +123,12 @@ for (const [w, h, textSize] of [[1440, 900, "default"], [1000, 600, "default"], 
   const size = `${w}x${h}${textSize === "large" ? " large text" : ""}`;
   const counts = {};
   counts.today = await check(page, `${size} Today`);
+  // "What do you want to do today?"
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "+ From my to-dos")?.click());
+  await wait(500);
+  counts.picker = await check(page, `${size} Today picker`);
+  await page.keyboard.press("Escape");
+  await wait(300);
   await key("2"); counts.calendar = await check(page, `${size} Calendar`);
   // An event open beside the calendar, set to repeat (the Repeat field has a "?").
   await page.evaluate(() => [...document.querySelectorAll("[class*=event]")].find((e) => e.textContent.startsWith("Chemistry lab"))?.click());
@@ -132,14 +138,27 @@ for (const [w, h, textSize] of [[1440, 900, "default"], [1000, 600, "default"], 
   counts.event = await check(page, `${size} Calendar event`);
   await page.keyboard.press("Escape");
   await key("3");
-  await page.evaluate(() => [...document.querySelectorAll("td, span, div")].find((e) => e.textContent.trim() === "Lab report titration")?.click());
+  counts.tasks = await check(page, `${size} Tasks overview`);
+  // The Today list with a to-do open beside it.
+  await page.evaluate(() => [...document.querySelectorAll(".tile")].find((b) => b.textContent.startsWith("Today"))?.click());
+  await wait(400);
+  await page.evaluate(() => [...document.querySelectorAll(".todo-title")].find((e) => e.textContent.trim() === "Lab report titration")?.click());
   await wait(500);
-  counts.tasks = await check(page, `${size} Tasks`);
+  counts.todayList = await check(page, `${size} Tasks › Today, with a to-do open`);
+  // Every to-do in the table, the same to-do open.
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "All to-dos")?.click());
+  await wait(500);
+  await page.evaluate(() => [...document.querySelectorAll(".t-title")].find((e) => e.textContent.trim() === "Lab report titration")?.click());
+  await wait(500);
+  counts.allTodos = await check(page, `${size} All to-dos`);
   await key("4"); counts.insights = await check(page, `${size} Insights`);
   await key("5"); counts.reminders = await check(page, `${size} Reminders`);
-  await page.evaluate(() => [...document.querySelectorAll(".space-open")].find((e) => e.textContent.includes("Chemistry"))?.click());
-  await wait(500);
-  counts.space = await check(page, `${size} Space`);
+  // A space of each kind: a course, a list, and time only.
+  for (const name of ["Chemistry", "Errands", "Work"]) {
+    await page.evaluate((n) => [...document.querySelectorAll(".space-open")].find((e) => e.textContent.trim() === n)?.click(), name);
+    await wait(500);
+    counts[name] = await check(page, `${size} Space ${name}`);
+  }
   await key(","); counts.settings = await check(page, `${size} Settings (all open)`);
   // The welcome guide, every step.
   await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Open the guide")?.click());

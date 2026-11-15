@@ -14,9 +14,10 @@ let archiveKeep: number | null = null;
 const tables: Record<string, Row[]> = {
   group: [{ ...base("seed-group-school", 0), name: "School" }],
   space: [
-    { ...base("seed-space-personal", 0), groupId: null, name: "Personal", color: "blue", role: "normal", icon: "home" },
-    { ...base("seed-space-sleep", 1), groupId: null, name: "Sleep", color: "purple", role: "sleep", icon: "moon" },
-    { ...base("seed-space-transport", 2), groupId: null, name: "Transport", color: "gray", role: "normal", icon: "bus" },
+    { ...base("seed-space-inbox", -1), groupId: null, name: "Inbox", color: "gray", role: "normal", kind: "inbox", icon: null },
+    { ...base("seed-space-personal", 0), groupId: null, name: "Personal", color: "blue", role: "normal", kind: "list", icon: "home" },
+    { ...base("seed-space-sleep", 1), groupId: null, name: "Sleep", color: "purple", role: "sleep", kind: "none", icon: "moon" },
+    { ...base("seed-space-transport", 2), groupId: null, name: "Transport", color: "gray", role: "normal", kind: "none", icon: "bus" },
   ],
   activity: [
     { ...base("seed-activity-class", 0), name: "Class", category: "class" },
@@ -26,12 +27,12 @@ const tables: Record<string, Row[]> = {
   ],
   event: [],
   series: [],
-  inbox: [],
   change: [],
+  section: [],
   task_type: [
-    { ...base("seed-type-assignment", 0), name: "Assignment" },
-    { ...base("seed-type-theory", 1), name: "Theory" },
-    { ...base("seed-type-lab", 2), name: "Lab" },
+    { ...base("seed-type-assignment", 0), name: "Assignment", spaceId: null },
+    { ...base("seed-type-theory", 1), name: "Theory", spaceId: null },
+    { ...base("seed-type-lab", 2), name: "Lab", spaceId: null },
   ],
   task: [],
   task_part: [],
@@ -145,6 +146,12 @@ function remember(entity: string, id: string, input: Row) {
   tables.change.push({ ...base(crypto.randomUUID(), 0), entity, entityId: id, snapshot: { ...row } });
 }
 
+/** A section only counts in its own space (as section_in in repo.rs). */
+function sectionIn(input: Row): string | null {
+  const sec = input.sectionId && tables.section.find((r) => r.id === input.sectionId);
+  return sec && sec.spaceId === input.spaceId ? sec.id : null;
+}
+
 function checkEvent(input: Row) {
   if (input.endAt <= input.startAt) throw "An event must end after it starts";
 }
@@ -164,11 +171,11 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         tables.space.find((r) => r.id === a.id)!.groupId = a.groupId ?? null;
         return mockInvoke("reorder_spaces", { ids: a.ids });
       }
-      case "list_spaces": return tables.space.map((r): Row => ({ icon: null, ...r })).sort((x, y) => x.sortOrder - y.sortOrder);
+      case "list_spaces": return tables.space.map((r): Row => ({ icon: null, kind: "list", ...r })).sort((x, y) => x.sortOrder - y.sortOrder);
       case "reorder_spaces": {
         // Same as repo::reorder_spaces: the named spaces swap among their own places, then all
         // spaces are numbered again, so lists never collide.
-        const all = [...tables.space].sort((x, y) => x.sortOrder - y.sortOrder || x.name.localeCompare(y.name));
+        const all = tables.space.filter((r) => r.kind !== "inbox").sort((x, y) => x.sortOrder - y.sortOrder || x.name.localeCompare(y.name));
         const moved = (a.ids as string[]).filter((id) => all.some((r) => r.id === id));
         const slots = all.map((r, i) => (moved.includes(r.id) ? i : -1)).filter((i) => i >= 0);
         const order = all.map((r) => r.id);
@@ -179,8 +186,20 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "list_activities": return tables.activity.map((r) => ({ ...r }));
       case "create_group": return create("group", a.input);
       case "update_group": return update("group", a.id, a.input);
-      case "create_space": return create("space", a.input);
-      case "update_space": return update("space", a.id, a.input);
+      case "create_space": {
+        const kind = a.input.kind ?? "list";
+        if (!["project", "list", "none"].includes(kind)) throw `Unknown kind: ${kind}`;
+        return create("space", { ...a.input, kind });
+      }
+      case "update_space": {
+        const row = tables.space.find((r) => r.id === a.id);
+        const kind = row?.kind === "inbox" ? "inbox" : (a.input.kind ?? row?.kind ?? "list");
+        return update("space", a.id, { ...a.input, kind });
+      }
+      case "list_sections": return tables.section.filter((r) => !r.deletedAt).sort((x, y) => x.sortOrder - y.sortOrder).map((r) => ({ ...r }));
+      case "create_section": return create("section", { spaceId: a.spaceId, name: String(a.name).trim() });
+      case "update_section": return update("section", a.id, { name: String(a.name).trim() });
+      case "reorder_sections": (a.ids as string[]).forEach((id, i) => { const r = tables.section.find((x) => x.id === id); if (r) r.sortOrder = i; }); return null;
       case "create_activity": return create("activity", a.input);
       case "update_activity": return update("activity", a.id, a.input);
       case "event_by_id": return tables.event.filter((e) => e.id === a.id && !e.deletedAt).map((e) => ({ ...e }));
@@ -195,8 +214,15 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "create_task_type": return create("task_type", a.input);
       case "update_task_type": return update("task_type", a.id, a.input);
       case "list_tasks": return tables.task.filter((t) => !t.deletedAt).map((t) => taskView(t.id));
-      case "create_task": return taskView(create("task", a.input, { completedAt: null, sourceId: null, locallyModified: false }).id);
-      case "update_task": remember("task", a.id, a.input); return taskView(update("task", a.id, a.input).id);
+      case "create_task": return taskView(create("task", { ...a.input, sectionId: sectionIn(a.input) }, { completedAt: null, sourceId: null, locallyModified: false, todayOn: null }).id);
+      case "update_task": {
+        const input = { ...a.input, sectionId: sectionIn(a.input) };
+        remember("task", a.id, input);
+        return taskView(update("task", a.id, input).id);
+      }
+      case "set_task_today":
+        if (a.day && !/^\d{4}-\d{2}-\d{2}$/.test(a.day)) throw `Not a date: ${a.day}`;
+        return taskView(update("task", a.id, { todayOn: a.day ?? null }).id);
       case "set_task_completed":
         if (taskView(a.id).parts.length) throw "This task is completed by finishing its parts";
         return taskView(update("task", a.id, { completedAt: a.completed ? ts() : null }).id);
@@ -218,7 +244,8 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "update_routine": return routineView(update("routine", a.id, a.input).id);
       case "create_routine_item":
         if (!String(a.title).trim()) throw "Title cannot be empty";
-        create("routine_item", { routineId: a.routineId, title: a.title });
+        if (a.parentId && tables.routine_item.find((i) => i.id === a.parentId)?.routineId !== a.routineId) throw "That step is not in this routine";
+        create("routine_item", { routineId: a.routineId, title: a.title, parentId: a.parentId ?? null });
         return routineView(a.routineId);
       case "update_routine_item": return routineView(update("routine_item", a.id, { title: a.title }).routineId);
       case "list_routine_checks":
@@ -251,19 +278,10 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       }
       case "list_series": return tables.series.filter((r) => !r.deletedAt).map((r) => ({ id: r.id, rule: r.rule, firstDate: r.firstDate }));
       case "set_repeat": return setRepeat(a.id, a.rule);
-      case "list_inbox": return tables.inbox.filter((r) => !r.deletedAt).map((r) => ({ id: r.id, text: r.text, createdAt: r.createdAt }));
       case "add_inbox":
         if (!String(a.text).trim()) throw "Note cannot be empty";
-        return create("inbox", { text: String(a.text).trim() });
-      case "set_inbox_done": update("inbox", a.id, { deletedAt: a.done ? ts() : null }); return null;
+        return mockInvoke("create_task", { input: { spaceId: "seed-space-inbox", typeId: null, title: String(a.text).trim(), notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: null } });
       case "open_capture": case "hide_capture": return null;
-      case "inbox_to_task": {
-        const note = tables.inbox.find((r) => r.id === a.id && !r.deletedAt);
-        if (!note) throw "Not found";
-        const t = create("task", { spaceId: a.spaceId, typeId: null, title: note.text, notes: "", deadlineAt: null, targetAt: null, priority: null }, { completedAt: null, sourceId: null, locallyModified: false });
-        note.deletedAt = ts();
-        return taskView(t.id);
-      }
       case "list_changes":
         return tables.change.filter((c) => c.entity === a.entity && c.entityId === a.id)
           .sort((x, y) => y.createdAt.localeCompare(x.createdAt)).slice(0, 20)
@@ -276,7 +294,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         tables.change.push({ ...base(crypto.randomUUID(), 0), entity: ch.entity, entityId: ch.entityId, snapshot: { ...current } });
         const keys = table === "event"
           ? ["spaceId", "activityId", "title", "startAt", "endAt", "allDay", "notes", "status", "taskId"]
-          : ["spaceId", "typeId", "title", "notes", "deadlineAt", "targetAt", "priority"];
+          : ["spaceId", "typeId", "title", "notes", "deadlineAt", "targetAt", "priority", "sectionId"];
         keys.forEach((k) => { current[k] = ch.snapshot[k] ?? null; });
         current.updatedAt = ts();
         return null;
@@ -317,7 +335,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         const q = String(a.query ?? "").toLowerCase();
         const label = (r: Row) => r.title ?? r.name ?? r.pattern ?? "";
         const items = Object.entries(tables)
-          .filter(([k]) => !["focus", "series", "inbox", "change"].includes(k))
+          .filter(([k]) => !["focus", "series", "change"].includes(k))
           .flatMap(([entity, rows]) =>
             rows.filter((r) => r.deletedAt && !r.replaced && label(r).toLowerCase().includes(q)).map((r) => ({
               entity, id: r.id, label: label(r), context: null, when: r.startAt ?? r.deadlineAt ?? null,

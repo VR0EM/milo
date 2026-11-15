@@ -36,9 +36,10 @@ function FocusIndicator() {
 
 export function BrandMark({ size = 20 }: { size?: number }) {
   return (
-    // Milo's logo (src-tauri/icons/app-icon.svg): three columns of blocks, like a week planned.
+    // Milo's logo: three columns of blocks, like a week planned. The tile is dark in dark mode
+    // (src-tauri/icons/app-icon.svg) and white in light mode (app-icon-light.svg).
     <svg className="brand-mark" width={size} height={size} viewBox="0 0 256 256" aria-hidden="true">
-      <rect width="256" height="256" rx="54" fill="#1E293B" />
+      <rect width="256" height="256" rx="54" style={{ fill: "var(--logo-tile)" }} />
       <rect x="43" y="43" width="48" height="170" rx="10" fill="#38BDF8" />
       <rect x="104" y="43" width="48" height="105" rx="10" fill="#A78BFA" />
       <rect x="104" y="161" width="48" height="52" rx="10" fill="#F472B6" />
@@ -60,12 +61,12 @@ function NavButton({ view: v, label, icon, shortcut }: { view: View; label: stri
     >
       <Icon name={icon} />
       <span>{label}</span>
-      {v === "today" && <InboxCount />}
+      {v === "tasks" && <InboxCount />}
     </button>
   );
 }
 
-/** How many quick notes wait in the Inbox on Today. */
+/** How many quick notes wait in the Inbox, not in a space yet. */
 function InboxCount() {
   const n = useInbox().data?.length ?? 0;
   return n ? <span className="count" aria-label={`${n} notes in the inbox`}>{n}</span> : null;

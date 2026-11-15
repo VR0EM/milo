@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SidePanel } from "../../components/SidePanel";
 import { api } from "../../lib/api";
+import { endFocus } from "../../lib/focus";
 import { useAction, useActiveFocus, useActivities, useSpaces, useTasks } from "../../lib/queries";
 import { preferredSpace, useUi } from "../../lib/store";
 import { pickDefaultSpace } from "../../lib/spaces";
@@ -124,8 +125,10 @@ function Running({ session }: { session: FocusSession }) {
 
   const finish = () =>
     act.mutate(async () => {
-      await api.finishFocus(session.id);
-      useUi.getState().notify({ text: `Focus session saved to the calendar · ${fmtDuration(Math.max(elapsed, 60_000))}` });
+      const kept = await endFocus(session);
+      useUi.getState().notify({
+        text: kept ? `Focus session saved to the calendar · ${fmtDuration(elapsed)}` : "Stopped within a minute, so nothing was added to the calendar",
+      });
     });
   const discard = () =>
     act.mutate(async () => {

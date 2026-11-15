@@ -2,7 +2,7 @@ import { Fragment, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
-import { useAction, useEvents, useRoutineChecks, useRoutines, useSpaces, useTasks } from "../../lib/queries";
+import { useEvents, useSpaces, useTasks } from "../../lib/queries";
 import { useUi, type TodayBlock } from "../../lib/store";
 import { addDays, daysFromToday, fmtHm, fmtLongDay, fmtTime, startOfDay, toDateInput, toTimeInput } from "../../lib/time";
 import { taskProgress, type Confirmation, type Space, type Task } from "../../lib/types";
@@ -14,10 +14,8 @@ import { WhatsNewCard } from "../whatsnew/WhatsNew";
 import { useNow } from "../../lib/useNow";
 import { deadlineLine } from "../tasks/TasksView";
 import { FocusPanel } from "./FocusPanel";
-import { InboxBlock } from "./InboxBlock";
+import { TodayTodos } from "./TodayTodos";
 import { WhatNow } from "./WhatNow";
-import { RoutineEditor } from "./RoutineEditor";
-import { activeRoutine, nextRoutine } from "./routines";
 
 const DEADLINE_WINDOW_DAYS = 14;
 
@@ -29,7 +27,6 @@ export function TodayView() {
   const spaces = useSpaces().data ?? [];
   const events = useEvents(dayStart, dayEnd).data ?? [];
   const tasks = useTasks().data ?? [];
-  const routines = useRoutines().data ?? [];
 
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const live = events.filter((e) => e.status !== "skipped" && !e.allDay);
@@ -42,11 +39,10 @@ export function TodayView() {
 
   // Every block decides for itself whether it has something to show; empty ones stay away.
   const blocks: Record<TodayBlock, React.ReactNode> = {
+    todos: <TodayTodos now={now} />,
     day: <DayPlan now={now} events={events} spaceById={spaceById} />,
     whatnow: <WhatNow now={now} live={live} />,
-    inbox: <InboxBlock />,
     confirm: <ConfirmBlock now={now} />,
-    routine: <RoutineBlock now={now} />,
     deadlines: deadlines.length > 0 && <DeadlinesBlock deadlines={deadlines} spaceById={spaceById} />,
     wrapup: <EndOfDay now={now} events={events} />,
   };
@@ -67,7 +63,6 @@ export function TodayView() {
         </div>
       </main>
       <FocusPanel />
-      <RoutineEditor routines={routines} />
     </>
   );
 }
@@ -110,81 +105,6 @@ function DeadlinesBlock({ deadlines, spaceById }: { deadlines: Task[]; spaceById
           );
         })}
       </ul>
-    </section>
-  );
-}
-
-function RoutineBlock({ now }: { now: Date }) {
-  const routines = useRoutines().data ?? [];
-  const active = activeRoutine(routines, now);
-  const upcoming = nextRoutine(routines, now);
-  const day = active?.day ?? toDateInput(now);
-  const checked = useRoutineChecks(day).data ?? [];
-  const act = useAction("routineChecks");
-  const openEditor = (id: string) => useUi.setState({ routineEditId: id });
-  const addRoutine = useAction("routines");
-
-  return (
-    <section className="block">
-      <div className="block-head">
-        <h2>{active ? `${active.routine.name} routine` : "Routine"}</h2>
-        {active && (
-          <span className="muted">
-            {active.routine.items.filter((i) => checked.includes(i.id)).length} of {active.routine.items.length}
-          </span>
-        )}
-        <span className="spacer" />
-        {active && <button className="link" onClick={() => openEditor(active.routine.id)}>Edit</button>}
-      </div>
-
-      {active ? (
-        active.routine.items.length ? (
-          <ul className="routine-list">
-            {active.routine.items.map((item) => {
-              const on = checked.includes(item.id);
-              return (
-                <li key={item.id}>
-                  <label className={`check routine-item${on ? " on" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={(e) => {
-                        const value = e.target.checked;
-                        act.mutate(() => api.setRoutineCheck(item.id, day, value));
-                      }}
-                    />
-                    <span>{item.title}</span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="muted">This routine has no steps yet. Use Edit to add them.</p>
-        )
-      ) : (
-        <p className="muted">{upcoming ? `Next: ${upcoming.name} routine at ${fmtHm(upcoming.startTime)}.` : "No routine right now."}</p>
-      )}
-
-      <div className="routine-all">
-        <span className="muted">All routines:</span>
-        {routines.map((r) => (
-          <button key={r.id} className="link" onClick={() => openEditor(r.id)}>
-            {r.name} {fmtHm(r.startTime)}–{fmtHm(r.endTime)}
-          </button>
-        ))}
-        <button
-          className="link"
-          onClick={() =>
-            addRoutine.mutate(async () => {
-              const r = await api.createRoutine({ name: "New routine", startTime: "12:00", endTime: "13:00", weekdays: "1234567" });
-              openEditor(r.id);
-            })
-          }
-        >
-          New routine
-        </button>
-      </div>
     </section>
   );
 }

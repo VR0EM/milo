@@ -10,18 +10,35 @@ export interface Group {
 export type GroupInput = Pick<Group, "name">;
 
 export type SpaceRole = "normal" | "sleep";
+/** What a space is for: a course with parts, a list to tick off, time only, or the hidden Inbox. */
+export type SpaceKind = "project" | "list" | "none" | "inbox";
+/** The hidden space quick notes land in. */
+export const INBOX_ID = "seed-space-inbox";
 export interface Space {
   id: string;
   groupId: string | null;
   name: string;
   color: string;
   role: SpaceRole;
+  kind: SpaceKind;
   /** A drawn icon name (see SPACE_ICONS), or null for the plain square. */
   icon: string | null;
   sortOrder: number;
   deletedAt: string | null;
 }
-export type SpaceInput = Pick<Space, "groupId" | "name" | "color" | "role"> & { icon?: string | null };
+export type SpaceInput = Pick<Space, "groupId" | "name" | "color" | "role"> & {
+  icon?: string | null;
+  /** Left out: a new space is a list, an existing one keeps its kind. */
+  kind?: Exclude<SpaceKind, "inbox">;
+};
+
+/** A part of a course ("02 Titration"). */
+export interface Section {
+  id: string;
+  spaceId: string;
+  name: string;
+  sortOrder: number;
+}
 
 export type ActivityCategory = "class" | "self_study" | "other";
 export interface Activity {
@@ -82,15 +99,11 @@ export interface Change {
   snapshot: Record<string, unknown>;
 }
 
-export interface InboxItem {
-  id: string;
-  text: string;
-  createdAt: string;
-}
-
 export interface TaskType {
   id: string;
   name: string;
+  /** The course it is for; null = every course. */
+  spaceId: string | null;
   sortOrder: number;
   deletedAt: string | null;
 }
@@ -114,6 +127,10 @@ export interface Task {
   targetAt: string | null;
   completedAt: string | null;
   priority: Priority | null;
+  /** The part of a course it belongs to. */
+  sectionId: string | null;
+  /** The local day ('YYYY-MM-DD') it was put on Today; null = not picked. */
+  todayOn: string | null;
   sourceId: string | null;
   locallyModified: boolean;
   sortOrder: number;
@@ -121,7 +138,9 @@ export interface Task {
   parts: TaskPart[];
 }
 export type Priority = "low" | "medium" | "high";
-export type TaskInput = Pick<Task, "spaceId" | "typeId" | "title" | "notes" | "deadlineAt" | "targetAt" | "priority">;
+export type TaskInput = Pick<Task, "spaceId" | "typeId" | "title" | "notes" | "deadlineAt" | "targetAt" | "priority"> & {
+  sectionId?: string | null;
+};
 
 export const toTaskInput = (t: Task): TaskInput => ({
   spaceId: t.spaceId,
@@ -131,6 +150,7 @@ export const toTaskInput = (t: Task): TaskInput => ({
   deadlineAt: t.deadlineAt,
   targetAt: t.targetAt,
   priority: t.priority,
+  sectionId: t.sectionId,
 });
 
 /** 0..1. With parts: the done share by weight. Without: done or not. */
@@ -145,6 +165,8 @@ export interface RoutineItem {
   id: string;
   routineId: string;
   title: string;
+  /** A step under another step. */
+  parentId: string | null;
   sortOrder: number;
 }
 export interface Routine {
@@ -283,7 +305,7 @@ export type Entity =
   | "import_source"
   | "title_mapping"
   | "reminder_rule"
-  | "group" | "space" | "activity" | "event" | "task" | "task_part" | "task_type" | "routine" | "routine_item";
+  | "group" | "space" | "activity" | "event" | "task" | "task_part" | "task_type" | "routine" | "routine_item" | "section";
 
 export const toInput = (e: CalEvent): EventInput => ({
   spaceId: e.spaceId,

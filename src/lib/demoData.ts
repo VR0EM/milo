@@ -7,12 +7,13 @@ import { mockInvoke } from "./mockBackend";
 
 export async function seedDemo() {
   const g = (await api.listGroups())[0];
-  const mk = (name: string, color: string) => api.createSpace({ groupId: g.id, name, color, role: "normal" });
+  const mk = (name: string, color: string) => api.createSpace({ groupId: g.id, name, color, role: "normal", kind: "project" });
   const an = await mk("Analysis 2", "green");
   const ph = await mk("Physics", "orange");
   const ch = await mk("Chemistry", "teal");
   const pr = await mk("Programming", "purple");
-  const work = await api.createSpace({ groupId: null, name: "Work", color: "red", role: "normal" });
+  const work = await api.createSpace({ groupId: null, name: "Work", color: "red", role: "normal", kind: "none" });
+  const errands = await api.createSpace({ groupId: null, name: "Errands", color: "pink", role: "normal", kind: "list" });
 
   const ws = new Date();
   ws.setHours(0, 0, 0, 0);
@@ -46,17 +47,44 @@ export async function seedDemo() {
     x.setHours(h, m, 0, 0);
     return x.toISOString();
   };
+  const s1 = await api.createSection(ch.id, "01 Acids and bases");
+  const s2 = await api.createSection(ch.id, "02 Titration");
+  await api.createSection(ch.id, "03 Redox");
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const done1 = await api.createTask({ spaceId: ch.id, typeId: "seed-type-theory", title: "Read chapter 1", notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: s1.id });
+  await api.setTaskCompleted(done1.id, true);
+  const done2 = await api.createTask({ spaceId: ch.id, typeId: "seed-type-assignment", title: "Exercises pH", notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: s1.id });
+  await api.setTaskCompleted(done2.id, true);
+  await api.createTask({ spaceId: ch.id, typeId: "seed-type-theory", title: "Theory: equivalence point", notes: "", deadlineAt: due(4), targetAt: null, priority: null, sectionId: s2.id });
+  await api.createTask({ spaceId: ch.id, typeId: "seed-type-lab", title: "Prepare the lab", notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: s2.id });
+
+  for (const title of ["Pick up package at the post office", "Return library books", "Buy vitamin D"]) {
+    await api.createTask({ spaceId: errands.id, typeId: null, title, notes: "", deadlineAt: title.startsWith("Return") ? due(5, 17, 0) : null, targetAt: null, priority: null, sectionId: null });
+  }
+  const groceries = await api.createTask({ spaceId: errands.id, typeId: null, title: "Groceries", notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: null });
+  for (const p of ["Milk", "Bread", "Coffee"]) await api.createTaskPart(groceries.id, p);
+  const post = (await api.listTasks()).find((t) => t.title.startsWith("Pick up package"))!;
+  await api.setTaskToday(post.id, todayKey);
+
+  const note1 = await api.addInbox("Ask Lotte for the notes");
+  await api.addInbox("Look up the bus to the exam hall");
+  await api.setTaskToday(note1.id, todayKey);
+
   const t1 = await api.createTask({ spaceId: an.id, typeId: "seed-type-theory", title: "Chapters 4-6", notes: "", deadlineAt: due(9), targetAt: due(6), priority: "medium" });
   for (const p of ["Chapter 4", "Chapter 5", "Chapter 6"]) await api.createTaskPart(t1.id, p);
   const withParts = (await api.listTasks()).find((t) => t.id === t1.id)!;
   await api.setPartDone(withParts.parts[0].id, true);
   await api.createTask({ spaceId: ph.id, typeId: "seed-type-assignment", title: "Problem set 3", notes: "", deadlineAt: due(2, 17, 0), targetAt: null, priority: "high" });
-  const t3 = await api.createTask({ spaceId: ch.id, typeId: "seed-type-lab", title: "Lab report titration", notes: "", deadlineAt: due(5), targetAt: due(3), priority: "low" });
+  const t3 = await api.createTask({ spaceId: ch.id, typeId: "seed-type-lab", title: "Lab report titration", notes: "", deadlineAt: due(-1), targetAt: null, priority: "low", sectionId: s2.id });
+  await api.setTaskToday(t3.id, todayKey);
   for (const p of ["Data", "Discussion", "Conclusion"]) await api.createTaskPart(t3.id, p);
 
   await mockInvoke("demo_seed_import", {});
 
   const [morning, evening] = await api.listRoutines();
-  for (const s of ["Medication", "Glass of water", "Check Today"]) await api.createRoutineItem(morning.id, s);
+  for (const s of ["Medication", "Glass of water", "Check Today", "Pack backpack"]) await api.createRoutineItem(morning.id, s);
+  const pack = (await api.listRoutines()).find((r) => r.id === morning.id)!.items.find((i) => i.title === "Pack backpack")!;
+  for (const s of ["Laptop and charger", "Water bottle"]) await api.createRoutineItem(morning.id, s, pack.id);
   for (const s of ["Pack bag", "Plan tomorrow", "Screens off"]) await api.createRoutineItem(evening.id, s);
 }

@@ -12,6 +12,23 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.3.7",
+    date: "2026-11-16",
+    items: [
+      "Tasks opens on an overview: Today, Upcoming, the Inbox and what is past its deadline, then your courses and lists.",
+      "Each space is now a Project (a course, with parts, types and progress), a List (to-dos with steps) or Time only (sleep, travel, shifts). Change it with Edit on the space.",
+      "A course page shows its progress, a count per type, and its parts. Add a part with New part; right-click a part to rename, move or archive it.",
+      "Today has a list of its own: press + From my to-dos to choose what you want to do today. What is due today is on it by itself.",
+      "To-dos you picked yesterday and did not finish: Milo asks each morning, or keeps them, or lets them go (Settings › Today).",
+      "Notes you write down are now to-dos in the Inbox. Give them a space when you are ready; Tasks shows how many wait.",
+      "While a routine runs, What now? shows its steps to tick off. A step can have steps of its own.",
+      "Task types can be for one course or for all (Settings › Calendar & lists).",
+      "The parts of a task are now called steps.",
+      "Pull the bottom of an event above its start (or the top below its end) and the event turns over: the start becomes the end.",
+      "A focus session stopped within a minute leaves nothing in the calendar. Very short events no longer hide the events right after them.",
+    ],
+  },
+  {
     version: "0.3.6",
     date: "2026-11-15",
     items: [

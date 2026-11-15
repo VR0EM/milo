@@ -4,17 +4,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { addDays, startOfDay, startOfWeek } from "./time";
-import type { Activity, CalEvent, Group, Space, TaskType } from "./types";
+import type { Activity, CalEvent, Group, Space, SpaceKind, TaskType } from "./types";
 
 /** The calendar never zooms out further than all 24 hours on screen (see WeekGrid); this is only a floor. */
 export const MIN_HOUR_HEIGHT = 8;
 export const MAX_HOUR_HEIGHT = 160;
 
 export type Dialog =
-  | { kind: "space"; item?: Space; groupId?: string | null }
+  | { kind: "space"; item?: Space; groupId?: string | null; spaceKind?: Exclude<SpaceKind, "inbox"> }
   | { kind: "group"; item?: Group }
   | { kind: "activity"; item?: Activity }
-  | { kind: "task_type"; item?: TaskType };
+  | { kind: "task_type"; item?: TaskType; spaceId?: string };
 
 export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings" | "space";
 export type Theme = "system" | "light" | "dark";
@@ -58,17 +58,20 @@ export interface Prefs {
   lastSeenVersion: string;
   /** The space new events, tasks and notes go to (right-click a space). Without it: the one used last. */
   defaultSpaceId: string | null;
+  /** To-dos picked for an earlier day and not finished: ask each morning, keep them on Today, or let them go. */
+  yesterdayMode: "ask" | "keep" | "drop";
 }
-export type TodayBlock = "day" | "whatnow" | "inbox" | "confirm" | "routine" | "deadlines" | "wrapup";
+export type TodayBlock = "todos" | "day" | "whatnow" | "confirm" | "deadlines" | "wrapup";
 export const TODAY_BLOCKS: [TodayBlock, string][] = [
-  ["day", "Your day"],
+  ["todos", "Today's to-dos"],
   ["whatnow", "What now?"],
-  ["inbox", "Inbox"],
+  ["day", "Your day"],
   ["confirm", "Medication and other checks"],
-  ["routine", "Routine"],
   ["deadlines", "Deadlines"],
   ["wrapup", "End of the day"],
 ];
+/** Where a list of to-dos in Tasks is: the overview, or one of the lists across all spaces. */
+export type TasksList = "overview" | "today" | "upcoming" | "inbox" | "late" | "all";
 export const DEFAULT_PREFS: Prefs = {
   theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true,
   autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7,
@@ -77,6 +80,7 @@ export const DEFAULT_PREFS: Prefs = {
   // A new install has nothing to catch up on.
   lastSeenVersion: __APP_VERSION__,
   defaultSpaceId: null,
+  yesterdayMode: "ask",
 };
 /** The space new things go to: the one chosen as default, else the one used last. */
 export const preferredSpace = (s: { prefs: Prefs; lastSpaceId: string | null }) => s.prefs.defaultSpaceId ?? s.lastSpaceId;
@@ -139,6 +143,12 @@ interface UiState {
   /** One day, week or month forward (1) or back (-1). */
   stepCalendar: (n: number) => void;
   selectedTaskId: string | null;
+  /** Which list Tasks shows. */
+  tasksList: TasksList;
+  /** Open Tasks on one of its lists. */
+  openTasks: (list: TasksList) => void;
+  /** The "What do you want to do today?" picker is open. */
+  pickTodayOpen: boolean;
   showCompleted: boolean;
   selectedEventId: string | null;
   focusTitle: boolean;
@@ -225,6 +235,9 @@ export const useUi = create<UiState>()(
       focusTitle: false,
       dialog: null,
       routineEditId: null,
+      tasksList: "overview",
+      openTasks: (tasksList) => set({ view: "tasks", tasksList, selectedTaskId: null, selectedEventId: null }),
+      pickTodayOpen: false,
       shortcutsOpen: false,
       whatsNewOpen: false,
       commandOpen: false,
@@ -286,6 +299,16 @@ export const useUi = create<UiState>()(
         // The start screen from Settings, unless it is "where I left off".
         if (merged.prefs.startView !== "last") merged.view = merged.prefs.startView;
         // Blocks added to Today in a later version join the saved order at their place.
+        // 0.3.7: the Inbox and Routine blocks became Today's to-dos (and the routine moved into
+        // What now?). The to-dos take the place the Inbox had.
+        const savedOrder = merged.prefs.todayOrder as string[];
+        if (!savedOrder.includes("todos")) {
+          const at = savedOrder.indexOf("inbox");
+          merged.prefs.todayOrder = (at >= 0 ? [...savedOrder.slice(0, at), "todos", ...savedOrder.slice(at)] : ["todos", ...savedOrder]) as TodayBlock[];
+        }
+        const valid = new Set(TODAY_BLOCKS.map(([b]) => b));
+        merged.prefs.todayOrder = merged.prefs.todayOrder.filter((b) => valid.has(b));
+        merged.prefs.todayHidden = merged.prefs.todayHidden.filter((b) => valid.has(b));
         const known = new Set(merged.prefs.todayOrder);
         merged.prefs.todayOrder = [...merged.prefs.todayOrder, ...TODAY_BLOCKS.map(([b]) => b).filter((b) => !known.has(b))];
         // The calendar opens on today, in the day, week or month view that was used last.
@@ -303,7 +326,7 @@ export const useUi = create<UiState>()(
         }
         return merged;
       },
-      partialize: (s) => ({ prefs: s.prefs, calMode: s.calMode, dayCount: s.dayCount, panelWidth: s.panelWidth, spaceViewId: s.spaceViewId, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
+      partialize: (s) => ({ prefs: s.prefs, tasksList: s.tasksList, calMode: s.calMode, dayCount: s.dayCount, panelWidth: s.panelWidth, spaceViewId: s.spaceViewId, collapsedGroups: s.collapsedGroups, settingsOpen: s.settingsOpen, view: s.view, insightsPeriod: s.insightsPeriod, showCompleted: s.showCompleted, hourHeight: s.hourHeight, hiddenSpaceIds: s.hiddenSpaceIds, lastSpaceId: s.lastSpaceId }),
     },
   ),
 );

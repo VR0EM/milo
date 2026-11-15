@@ -547,3 +547,32 @@ same mark.
   or group still in use, and imported events (a sync would add them again), stay. An optional
   clean-up after 30 days, 3 months or a year runs right after the daily backup.
 - **Insights** got Year (weekly bars, a label every fourth week); focus lengths are 15/30/45/60.
+
+## One kind of to-do, three kinds of spaces, one Today (0.3.7)
+
+The second feedback round asked for a task list with filters, sub-items, a list per course and
+a daily list. Milo had tasks, inbox notes and routine items as three separate things. Now:
+
+- **Everything to do is a to-do** (the `tasks` table). A quick note is a to-do in the hidden
+  Inbox space (`seed-space-inbox`, kind `inbox`); migration 012 moved open notes there and
+  marked the old rows handled. The Inbox is left out of `useSpaces`, the sidebar and every
+  space choice except a to-do's own Space field (`useAllSpaces` includes it, for names).
+- **A space has a kind**: `project` (a course: parts, types, progress), `list` (to-dos with
+  steps) or `none` (time only: sleep, travel, shifts). Existing spaces in a group became
+  projects, Sleep and Transport became time only, the rest lists. The kind only changes how
+  the space page looks and where to-dos can go; nothing is lost by changing it.
+- **Parts of a course** are `sections`. A to-do's section must be in its own space; moving the
+  to-do to another space takes it out (`section_in`). Archiving a part keeps its to-dos.
+  The old "parts" of a task are called **steps** in the interface (the table is still
+  `task_parts`), so "part" means one thing.
+- **Today** is a to-do's `today_on` date plus whatever is due today. Picking is explicit
+  ("+ From my to-dos"); nothing lands on Today by itself except a deadline. Left-over picks
+  from earlier days are asked about, kept or dropped, as chosen in Settings › Today
+  (`yesterdayMode`). Writing something on Today's card puts it in the Inbox *and* on Today.
+- **Routines stay routines** (their own tables, ticks per day). They are listed under Tasks ›
+  Lists and edited in the same dialog as before; while one runs, What now? shows its steps
+  instead of a suggestion ("Show a to-do instead" switches back). Steps can have one level of
+  sub-steps (`routine_items.parent_id`). The Routine and Inbox blocks left Today.
+- **Task types per course**: `task_types.space_id` (null = all courses), set in Settings.
+- What now? suggests from Today's open to-dos first, and from all open ones only when nothing
+  was picked.

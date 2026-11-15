@@ -30,6 +30,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("task", "SELECT t.id, t.title, s.name, t.deadline_at, t.deleted_at, 0 FROM tasks t JOIN spaces s ON s.id = t.space_id WHERE t.deleted_at IS NOT NULL"),
     ("task_part", "SELECT p.id, p.title, t.title, NULL, p.deleted_at, 0 FROM task_parts p JOIN tasks t ON t.id = p.task_id WHERE p.deleted_at IS NOT NULL"),
     ("task_type", "SELECT id, name, NULL, NULL, deleted_at, 0 FROM task_types WHERE deleted_at IS NOT NULL"),
+    ("section", "SELECT x.id, x.name, s.name, NULL, x.deleted_at, 0 FROM sections x JOIN spaces s ON s.id = x.space_id WHERE x.deleted_at IS NOT NULL"),
     ("routine", "SELECT id, name, start_time || '–' || end_time, NULL, deleted_at, 0 FROM routines WHERE deleted_at IS NOT NULL"),
     ("routine_item", "SELECT i.id, i.title, r.name, NULL, i.deleted_at, 0 FROM routine_items i JOIN routines r ON r.id = i.routine_id WHERE i.deleted_at IS NOT NULL"),
     ("reminder_rule", "SELECT id, title, NULL, NULL, deleted_at, 0 FROM reminder_rules WHERE deleted_at IS NOT NULL"),
@@ -125,6 +126,10 @@ pub fn delete_forever(c: &Connection, entity: &str, id: &str) -> Result<()> {
             }
             "routine_item" => {
                 c.execute("DELETE FROM routine_checks WHERE item_id = ?1", [id])?;
+                c.execute("UPDATE routine_items SET parent_id = NULL WHERE parent_id = ?1", [id])?;
+            }
+            "section" => {
+                c.execute("UPDATE tasks SET section_id = NULL WHERE section_id = ?1", [id])?;
             }
             "reminder_rule" => {
                 c.execute("DELETE FROM reminder_log WHERE rule_id = ?1", [id])?;
@@ -278,7 +283,7 @@ mod tests {
         let c = open_in_memory().unwrap();
         let t = repo::create_task(
             &c,
-            TaskInput { space_id: "seed-space-personal".into(), type_id: None, title: "Essay".into(), notes: String::new(), deadline_at: None, target_at: None, priority: None },
+            TaskInput { space_id: "seed-space-personal".into(), type_id: None, title: "Essay".into(), notes: String::new(), deadline_at: None, target_at: None, priority: None, section_id: None },
         )
         .unwrap();
         repo::create_task_part(&c, &t.id, TaskPartInput { title: "Intro".into(), weight: 1.0 }).unwrap();

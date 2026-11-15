@@ -27,6 +27,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/009_plan_capture_repeat.sql"),
     include_str!("migrations/010_change_log.sql"),
     include_str!("migrations/011_space_icons.sql"),
+    include_str!("migrations/012_todos.sql"),
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -70,19 +71,26 @@ fn init(mut conn: Connection) -> Result<Connection> {
 
 /// Brings any database (also a restored older backup) up to the current schema.
 pub fn migrate(conn: &mut Connection) -> Result<()> {
+    // Migration 012 moves the open inbox notes over, so their table must be there even on a
+    // database that skipped the real 009 (see `repair`).
+    let current: usize = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if (9..12).contains(&current) {
+        conn.execute_batch(INBOX_TABLE)?;
+    }
     migrate_to(conn, MIGRATIONS.len())?;
     repair(conn)
 }
 
 /// Tables that every database must have, in the same shape their migrations make them.
-const REPAIR_TABLES: &str = "
+const INBOX_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS inbox_items (
   id TEXT PRIMARY KEY,
   text TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT
-);
+);";
+const REPAIR_TABLES: &str = "
 CREATE TABLE IF NOT EXISTS event_series (
   id TEXT PRIMARY KEY,
   freq TEXT NOT NULL,
@@ -110,6 +118,15 @@ CREATE TABLE IF NOT EXISTS change_log (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS change_log_entity ON change_log(entity, entity_id, created_at);
+CREATE TABLE IF NOT EXISTS sections (
+  id TEXT PRIMARY KEY,
+  space_id TEXT NOT NULL REFERENCES spaces(id),
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
 ";
 
 /// Columns that every database must have: (table, column, how to add it).
@@ -118,6 +135,11 @@ const REPAIR_COLUMNS: &[(&str, &str, &str)] = &[
     ("events", "series_id", "ALTER TABLE events ADD COLUMN series_id TEXT REFERENCES event_series(id)"),
     ("events", "replaced", "ALTER TABLE events ADD COLUMN replaced INTEGER NOT NULL DEFAULT 0"),
     ("spaces", "icon", "ALTER TABLE spaces ADD COLUMN icon TEXT"),
+    ("spaces", "kind", "ALTER TABLE spaces ADD COLUMN kind TEXT NOT NULL DEFAULT 'list'"),
+    ("tasks", "section_id", "ALTER TABLE tasks ADD COLUMN section_id TEXT REFERENCES sections(id)"),
+    ("tasks", "today_on", "ALTER TABLE tasks ADD COLUMN today_on TEXT"),
+    ("task_types", "space_id", "ALTER TABLE task_types ADD COLUMN space_id TEXT REFERENCES spaces(id)"),
+    ("routine_items", "parent_id", "ALTER TABLE routine_items ADD COLUMN parent_id TEXT REFERENCES routine_items(id)"),
 ];
 
 /// Adds what a database lacks although its version says it has it. A development build once
@@ -126,6 +148,7 @@ const REPAIR_COLUMNS: &[(&str, &str, &str)] = &[
 /// order this changes nothing.
 fn repair(conn: &mut Connection) -> Result<()> {
     let tx = conn.transaction()?;
+    tx.execute_batch(INBOX_TABLE)?;
     tx.execute_batch(REPAIR_TABLES)?;
     for (table, column, ddl) in REPAIR_COLUMNS {
         let present: i64 = tx.query_row(
@@ -210,6 +233,32 @@ mod tests {
         conn.execute("INSERT INTO inbox_items (id, text, created_at, updated_at) VALUES ('i1', 'x', ?1, ?1)", params!["2026-11-03T00:00:00.000Z"]).unwrap();
         let fk: i64 = conn.query_row("PRAGMA foreign_key_check", [], |_| Ok(1)).unwrap_or(0);
         assert_eq!(fk, 0, "no broken references");
+    }
+
+    #[test]
+    fn open_inbox_notes_become_todos_in_the_inbox() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        migrate_to(&mut conn, 11).unwrap();
+        let ts = "2026-11-03T08:00:00.000Z";
+        conn.execute("INSERT INTO inbox_items (id, text, created_at, updated_at) VALUES ('open', 'Buy paper', ?1, ?1)", [ts]).unwrap();
+        conn.execute("INSERT INTO inbox_items (id, text, created_at, updated_at, deleted_at) VALUES ('handled', 'Old', ?1, ?1, ?1)", [ts]).unwrap();
+        conn.execute(
+            "INSERT INTO groups (id, name, sort_order, created_at, updated_at) VALUES ('g', 'School', 1, ?1, ?1)", [ts],
+        ).ok();
+        conn.execute(
+            "INSERT INTO spaces (id, group_id, name, color, role, sort_order, created_at, updated_at) VALUES ('course', 'g', 'Chemistry', 'teal', 'normal', 5, ?1, ?1)", [ts],
+        ).unwrap();
+        migrate(&mut conn).unwrap();
+        let moved: Vec<(String, String, String)> = conn
+            .prepare("SELECT id, space_id, title FROM tasks").unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap()
+            .collect::<rusqlite::Result<_>>().unwrap();
+        assert_eq!(moved, vec![("open".to_string(), "seed-space-inbox".to_string(), "Buy paper".to_string())]);
+        let open: i64 = conn.query_row("SELECT COUNT(*) FROM inbox_items WHERE deleted_at IS NULL", [], |r| r.get(0)).unwrap();
+        assert_eq!(open, 0);
+        let kind: String = conn.query_row("SELECT kind FROM spaces WHERE id = 'course'", [], |r| r.get(0)).unwrap();
+        assert_eq!(kind, "project", "a space in a group is taken to be a course");
     }
 
     #[test]

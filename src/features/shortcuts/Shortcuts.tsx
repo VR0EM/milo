@@ -64,7 +64,7 @@ export function ShortcutsDialog() {
             <tr key={label}><td>{k(`${MOD_LABEL}${i + 1}`)}</td><td>{label}</td></tr>
           ))}
           <tr><td>{k(`${MOD_LABEL},`)}</td><td>Settings</td></tr>
-          <tr><td>{k(CAPTURE_KEY)}</td><td>Write something down, from any app (lands in the Inbox on Today)</td></tr>
+          <tr><td>{k(CAPTURE_KEY)}</td><td>Write something down, from any app (lands in the Inbox)</td></tr>
           <tr><td>{k(`${MOD_LABEL}K`)}</td><td>Commands: go anywhere, find a task, event or space, or type a date</td></tr>
           <tr><td>{k("?")}</td><td>This overview</td></tr>
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>

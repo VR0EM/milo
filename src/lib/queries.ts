@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { useUi } from "./store";
-import { toInput, toTaskInput, type CalEvent, type Entity, type EventInput, type Task, type TaskInput } from "./types";
+import { INBOX_ID, toInput, toTaskInput, type CalEvent, type Entity, type EventInput, type Space, type Task, type TaskInput } from "./types";
 
 const report = (e: unknown) => useUi.getState().notify({ text: String(e), error: true });
 
 export const useGroups = () => useQuery({ queryKey: ["groups"], queryFn: api.listGroups });
-export const useSpaces = () => useQuery({ queryKey: ["spaces"], queryFn: api.listSpaces });
+const withoutInbox = (list: Space[]) => list.filter((s) => s.kind !== "inbox");
+/** The spaces to show and choose from. The hidden Inbox is left out; see useAllSpaces. */
+export const useSpaces = () => useQuery({ queryKey: ["spaces"], queryFn: api.listSpaces, select: withoutInbox });
+/** Every space, the Inbox included: for naming the space a to-do is in. */
+export const useAllSpaces = () => useQuery({ queryKey: ["spaces"], queryFn: api.listSpaces });
 export const useActivities = () => useQuery({ queryKey: ["activities"], queryFn: api.listActivities });
 
 export const useEvents = (from: Date, to: Date) =>
@@ -70,7 +74,7 @@ export function useUpdateEvent() {
 
 const plural: Record<Entity, string> = {
   group: "groups", space: "spaces", activity: "activities", event: "events",
-  task: "tasks", task_part: "tasks", task_type: "taskTypes", routine: "routines", routine_item: "routines", reminder_rule: "reminders", import_source: "importSources", title_mapping: "titleMappings", semester: "semesters",
+  task: "tasks", task_part: "tasks", task_type: "taskTypes", section: "sections", routine: "routines", routine_item: "routines", reminder_rule: "reminders", import_source: "importSources", title_mapping: "titleMappings", semester: "semesters",
 };
 
 export function useSetArchived() {
@@ -88,6 +92,7 @@ export function useSetArchived() {
 
 export const useTasks = () => useQuery({ queryKey: ["tasks"], queryFn: api.listTasks });
 export const useTaskTypes = () => useQuery({ queryKey: ["taskTypes"], queryFn: api.listTaskTypes });
+export const useSections = () => useQuery({ queryKey: ["sections"], queryFn: api.listSections });
 
 /**
  * Any task change: run it, then put the returned task in the cache.
@@ -139,7 +144,9 @@ export const useInsights = (from: string, to: string) =>
   useQuery({ queryKey: ["insights", from, to], queryFn: () => api.getInsights(from, to), staleTime: 0, refetchOnMount: "always" });
 export const useActiveFocus = () => useQuery({ queryKey: ["focus"], queryFn: api.activeFocus });
 export const useSeries = () => useQuery({ queryKey: ["series"], queryFn: api.listSeries });
-export const useInbox = () => useQuery({ queryKey: ["inbox"], queryFn: api.listInbox });
+const openInbox = (list: Task[]) => list.filter((t) => t.spaceId === INBOX_ID && !t.completedAt);
+/** Quick notes not handled yet: open to-dos in the Inbox. */
+export const useInbox = () => useQuery({ queryKey: ["tasks"], queryFn: api.listTasks, select: openInbox });
 
 /** Run a change and refresh the lists it touches. */
 export function useAction(...keys: string[]) {

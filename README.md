@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="docs/screenshots/icon.png" width="96" height="96" alt="Milo icon">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/icon.png">
+  <img src="docs/screenshots/icon-light.png" width="96" height="96" alt="Milo icon">
+</picture>
 
 # Milo
 
@@ -40,8 +43,9 @@ stays predictable: nothing moves, beeps or celebrates on its own.
 <td width="50%" valign="top">
 
 ### Today
-Your day as one timeline with a *now* line, **What now?** suggesting a single next step,
-an inbox for loose thoughts, routines, deadlines and a short look back at the end of the day.
+A short list of what you chose to do today, your day as one timeline with a *now* line,
+**What now?** with a single next step (or the routine that is running), deadlines and a short
+look back at the end of the day.
 
 </td>
 <td width="50%" valign="top">
@@ -65,8 +69,9 @@ time aside for it.
 <td width="50%" valign="top">
 
 ### Tasks
-Deadlines and an aim to finish by, priorities, parts with progress, filters by space and
-time. Earlier versions of a task can be brought back.
+An overview of Today, Upcoming, the Inbox and what is late, then every course with its
+progress and every list. Courses have parts and task types; to-dos have steps, deadlines and
+priorities. Earlier versions of a to-do can be brought back.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tasks-dark.png">
@@ -120,7 +125,7 @@ overview of its time, tasks and what is coming up.
 - **Focus sessions** with a small always-on-top timer; a session fills in the calendar by itself.
 - **Next event in the menu bar**, like *Chemistry lab in 25 min*, so time stays visible
   (on Windows: in the tray icon's tooltip).
-- **Quick notes from any app** with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd>; they wait in the inbox.
+- **Quick notes from any app** with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd>; they wait in the Inbox.
 - **Reminders** before events, at set times, or every so often (water, a break), and checks
   like medication taken.
 - **Welcome guide** on the first start: courses, timetable link, rhythm.

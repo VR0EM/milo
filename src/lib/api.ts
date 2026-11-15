@@ -9,7 +9,7 @@ import type {
   ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
-  EventSeries, InboxItem, RepeatRule, Change,
+  EventSeries, RepeatRule, Change, Section,
 } from "./types";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
@@ -38,13 +38,20 @@ export const api = {
   updateEvent: (id: string, input: EventInput) => call<CalEvent>("update_event", { id, input }),
 
   listTaskTypes: () => call<TaskType[]>("list_task_types"),
-  createTaskType: (name: string) => call<TaskType>("create_task_type", { input: { name } }),
-  updateTaskType: (id: string, name: string) => call<TaskType>("update_task_type", { id, input: { name } }),
+  createTaskType: (name: string, spaceId: string | null = null) => call<TaskType>("create_task_type", { input: { name, spaceId } }),
+  updateTaskType: (id: string, name: string, spaceId: string | null) => call<TaskType>("update_task_type", { id, input: { name, spaceId } }),
+
+  listSections: () => call<Section[]>("list_sections"),
+  createSection: (spaceId: string, name: string) => call<Section>("create_section", { spaceId, name }),
+  updateSection: (id: string, name: string) => call<Section>("update_section", { id, name }),
+  reorderSections: (ids: string[]) => call<void>("reorder_sections", { ids }),
 
   listTasks: () => call<Task[]>("list_tasks"),
   createTask: (input: TaskInput) => call<Task>("create_task", { input }),
   updateTask: (id: string, input: TaskInput) => call<Task>("update_task", { id, input }),
   setTaskCompleted: (id: string, completed: boolean) => call<Task>("set_task_completed", { id, completed }),
+  /** On Today for `day` ('YYYY-MM-DD'), or off it with null. */
+  setTaskToday: (id: string, day: string | null) => call<Task>("set_task_today", { id, day }),
   createTaskPart: (taskId: string, title: string) => call<Task>("create_task_part", { taskId, input: { title } }),
   updateTaskPart: (id: string, title: string, weight: number) =>
     call<Task>("update_task_part", { id, input: { title, weight } }),
@@ -53,7 +60,8 @@ export const api = {
   listRoutines: () => call<Routine[]>("list_routines"),
   createRoutine: (input: RoutineInput) => call<Routine>("create_routine", { input }),
   updateRoutine: (id: string, input: RoutineInput) => call<Routine>("update_routine", { id, input }),
-  createRoutineItem: (routineId: string, title: string) => call<Routine>("create_routine_item", { routineId, title }),
+  createRoutineItem: (routineId: string, title: string, parentId: string | null = null) =>
+    call<Routine>("create_routine_item", { routineId, title, parentId }),
   updateRoutineItem: (id: string, title: string) => call<Routine>("update_routine_item", { id, title }),
   listRoutineChecks: (day: string) => call<string[]>("list_routine_checks", { day }),
   setRoutineCheck: (itemId: string, day: string, checked: boolean) =>
@@ -110,14 +118,12 @@ export const api = {
   listSeries: () => call<EventSeries[]>("list_series"),
   setRepeat: (id: string, rule: RepeatRule | null) => call<CalEvent>("set_repeat", { id, rule }),
 
-  listInbox: () => call<InboxItem[]>("list_inbox"),
-  addInbox: (text: string) => call<InboxItem>("add_inbox", { text }),
-  setInboxDone: (id: string, done: boolean) => call<void>("set_inbox_done", { id, done }),
+  /** A quick note: a to-do in the Inbox. */
+  addInbox: (text: string) => call<Task>("add_inbox", { text }),
   reorderSpaces: (ids: string[]) => call<void>("reorder_spaces", { ids }),
   /** Into another group (or none), with that list's new order. */
   moveSpace: (id: string, groupId: string | null, ids: string[]) => call<void>("move_space", { id, groupId, ids }),
   reorderGroups: (ids: string[]) => call<void>("reorder_groups", { ids }),
-  inboxToTask: (id: string, spaceId: string) => call<Task>("inbox_to_task", { id, spaceId }),
 
   listChanges: (entity: "event" | "task", id: string) => call<Change[]>("list_changes", { entity, id }),
   restoreChange: (id: string) => call<void>("restore_change", { id }),

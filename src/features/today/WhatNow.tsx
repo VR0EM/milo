@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import { colorVar } from "../../lib/colors";
 import { beginFocus } from "../../lib/focus";
-import { useAction, useActiveFocus, useActivities, useSpaces, useTasks } from "../../lib/queries";
+import { api } from "../../lib/api";
+import { useAction, useActiveFocus, useActivities, useAllSpaces, useRoutineChecks, useRoutines, useTasks } from "../../lib/queries";
 import { useUi } from "../../lib/store";
-import { daysFromToday, fmtDuration, fmtRelativeDays, fmtTime, startOfDay } from "../../lib/time";
-import type { CalEvent, Task } from "../../lib/types";
+import { daysFromToday, fmtDuration, fmtHm, fmtRelativeDays, fmtTime, startOfDay, toDateInput } from "../../lib/time";
+import { todayList } from "../../lib/today";
+import type { CalEvent, Routine, Task } from "../../lib/types";
+import { activeRoutine } from "./routines";
 import { SpaceMark } from "../../components/Icon";
 
 /** After this hour the day counts as done; "free time" stops there. */
@@ -33,10 +36,71 @@ function reason(t: Task, now: Date) {
   return parts.join(" · ") || "no deadline";
 }
 
-/** One suggestion for the free time now, with the reason in plain words. */
+/**
+ * What to do now. While a routine runs (07:00–10:00, say) that is its checklist; otherwise one
+ * suggestion for the free time, from Today's to-dos first, with the reason in plain words.
+ */
 export function WhatNow({ now, live }: { now: Date; live: CalEvent[] }) {
+  const routines = useRoutines().data ?? [];
+  const running = activeRoutine(routines, now);
+  const [later, setLater] = useState<string | null>(null);
+  if (running && later !== running.routine.id + running.day) {
+    return <RoutineNow routine={running.routine} day={running.day} onSkip={() => setLater(running.routine.id + running.day)} />;
+  }
+  return <Suggestion now={now} live={live} />;
+}
+
+function RoutineNow({ routine, day, onSkip }: { routine: Routine; day: string; onSkip: () => void }) {
+  const checked = useRoutineChecks(day).data ?? [];
+  const act = useAction("routineChecks");
+  const items = routine.items;
+  const top = items.filter((i) => !i.parentId || !items.some((p) => p.id === i.parentId));
+  const done = items.filter((i) => checked.includes(i.id)).length;
+  const row = (id: string, title: string, sub: boolean) => {
+    const on = checked.includes(id);
+    return (
+      <li key={id} className={sub ? "sub" : undefined}>
+        <label className={`check routine-item${on ? " on" : ""}`}>
+          <input
+            type="checkbox"
+            className="todo-check"
+            checked={on}
+            onChange={(e) => {
+              const value = e.target.checked;
+              act.mutate(() => api.setRoutineCheck(id, day, value));
+            }}
+          />
+          <span>{title}</span>
+        </label>
+      </li>
+    );
+  };
+  return (
+    <section className="block what-now">
+      <div className="block-head">
+        <h2>What now?</h2>
+        <span className="muted small">{routine.name} until {fmtHm(routine.endTime)}</span>
+        <span className="spacer" />
+        <button className="link" onClick={() => useUi.setState({ routineEditId: routine.id })}>Edit</button>
+      </div>
+      {items.length === 0 ? (
+        <p className="muted">This routine has no steps yet. Use Edit to add them.</p>
+      ) : (
+        <>
+          <span className="muted small">{done} of {items.length} done</span>
+          <ul className="routine-list">
+            {top.flatMap((i) => [row(i.id, i.title, false), ...items.filter((c) => c.parentId === i.id).map((c) => row(c.id, c.title, true))])}
+          </ul>
+        </>
+      )}
+      <button className="link" onClick={onSkip}>Show a to-do instead</button>
+    </section>
+  );
+}
+
+function Suggestion({ now, live }: { now: Date; live: CalEvent[] }) {
   const tasks = useTasks().data ?? [];
-  const spaces = useSpaces().data ?? [];
+  const spaces = useAllSpaces().data ?? [];
   const activities = useActivities().data ?? [];
   const focus = useActiveFocus().data ?? null;
   const act = useAction("focus");
@@ -50,10 +114,12 @@ export function WhatNow({ now, live }: { now: Date; live: CalEvent[] }) {
   const freeUntil = Math.min(nextEvent ? new Date(nextEvent.startAt).getTime() : dayEnd, dayEnd);
   const freeMin = Math.max(0, Math.round((freeUntil - busyUntil) / 60_000));
 
-  const candidates = useMemo(
-    () => tasks.filter((t) => !t.completedAt).sort((a, b) => score(a, now) - score(b, now) || a.title.localeCompare(b.title)),
-    [tasks, now],
-  );
+  // What was picked for today comes first; with nothing picked, every open to-do.
+  const candidates = useMemo(() => {
+    const picked = todayList(tasks, now).filter((t) => !t.completedAt);
+    const pool = picked.length ? picked : tasks.filter((t) => !t.completedAt);
+    return pool.sort((a, b) => score(a, now) - score(b, now) || a.title.localeCompare(b.title));
+  }, [tasks, now]);
   if (focus) return null;
 
   // A block planned for a task right now comes first.
@@ -115,7 +181,7 @@ export function WhatNow({ now, live }: { now: Date; live: CalEvent[] }) {
             <div className="suggestion-text">
               <div className="suggestion-title">{task.title || "Untitled"}</div>
               <div className="muted small">
-                {plannedNow ? "You planned this for now" : reason(task, now)}
+                {plannedNow ? "You planned this for now" : task.todayOn === toDateInput(now) ? `on Today · ${reason(task, now)}` : reason(task, now)}
                 {space ? ` · ${space.name}` : ""}
               </div>
             </div>

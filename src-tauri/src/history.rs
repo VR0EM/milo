@@ -103,6 +103,7 @@ pub fn restore(c: &Connection, change_id: &str) -> Result<(String, String)> {
                 deadline_at: maybe(&v, "deadlineAt"),
                 target_at: maybe(&v, "targetAt"),
                 priority: maybe(&v, "priority"),
+                section_id: maybe(&v, "sectionId"),
             };
             remember(c, "task", &entity_id, &repo::get_task(c, &entity_id)?, true)?;
             repo::update_task_unlogged(c, &entity_id, input)?;

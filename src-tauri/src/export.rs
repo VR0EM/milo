@@ -60,7 +60,7 @@ mod tests {
         let n = super::export_all(&c, path.to_str().unwrap()).unwrap();
         let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(doc["app"], "Milo");
-        assert_eq!(doc["tables"]["spaces"].as_array().unwrap().len(), 3);
+        assert_eq!(doc["tables"]["spaces"].as_array().unwrap().len(), 4);
         assert!(doc["tables"]["title_mappings"].is_array());
         assert!(n > 10);
         // Exporting again to the same file replaces it (the Save dialog's "Replace").

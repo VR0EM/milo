@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, autostart, files } from "../../lib/api";
 import type { BackupFile } from "../../lib/types";
 import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
-import { useActivities, useTaskTypes } from "../../lib/queries";
+import { useActivities, useSpaces, useTaskTypes } from "../../lib/queries";
 import { TODAY_BLOCKS, useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { NAV } from "../spaces/Sidebar";
 import { IS_MAC } from "../shortcuts/keys";
@@ -281,6 +281,13 @@ export function SettingsView() {
 
         <Section id="today" title="Today" info="Which blocks Today shows, and in what order. Blocks with nothing to show stay out of the way by themselves.">
           <TodayBlocks />
+          <Row title="To-dos left from yesterday">
+            <select value={prefs.yesterdayMode} onChange={(e) => setPrefs({ yesterdayMode: e.target.value as typeof prefs.yesterdayMode })}>
+              <option value="ask">Ask me each morning</option>
+              <option value="keep">Keep them on Today</option>
+              <option value="drop">Take them off Today</option>
+            </select>
+          </Row>
         </Section>
 
         <Section id="calendar" title="Calendar &amp; lists">
@@ -352,6 +359,7 @@ function ListItem({ name, meta, onEdit }: { name: string; meta?: string; onEdit:
 function Lists() {
   const activities = (useActivities().data ?? []).filter((a) => !a.deletedAt);
   const types = (useTaskTypes().data ?? []).filter((t) => !t.deletedAt);
+  const spaceName = new Map((useSpaces().data ?? []).map((s) => [s.id, s.name]));
   const open = useUi((s) => s.openDialog);
 
   return (
@@ -360,8 +368,10 @@ function Lists() {
       <ListBox title="Activities" info="What kind of time an event was: class, self-study, lab, exam and so on. Each one counts as class, self-study or not productive, which is what Insights adds up." add={() => open({ kind: "activity" })}>
         {activities.map((a) => <ListItem key={a.id} name={a.name} meta={CATEGORY[a.category]} onEdit={() => open({ kind: "activity", item: a })} />)}
       </ListBox>
-      <ListBox title="Task types" add={() => open({ kind: "task_type" })}>
-        {types.map((t) => <ListItem key={t.id} name={t.name} onEdit={() => open({ kind: "task_type", item: t })} />)}
+      <ListBox title="Task types" info="Kinds of to-dos in a course, such as Assignment or Theory. A type can be for every course or for one; a course page counts its to-dos per type." add={() => open({ kind: "task_type" })}>
+        {types.map((t) => (
+          <ListItem key={t.id} name={t.name} meta={t.spaceId ? spaceName.get(t.spaceId) ?? "One course" : "All courses"} onEdit={() => open({ kind: "task_type", item: t })} />
+        ))}
       </ListBox>
     </>
   );

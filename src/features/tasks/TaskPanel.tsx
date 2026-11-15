@@ -4,10 +4,11 @@ import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
 import { DateInput } from "../../components/DateInput";
 import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
-import { useArchiveWithUndo, useEvents, useImportSources, useTaskAction, useUpdateTask } from "../../lib/queries";
+import { useArchiveWithUndo, useEvents, useImportSources, useSections, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { addDays, fmtDuration, fmtRange, fromInputs, startOfDay, toDateInput, toTimeInput } from "../../lib/time";
-import { type CalEvent, type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
+import { INBOX_ID, type CalEvent, type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
+import { isOnToday, useSetToday } from "./Todo";
 import { deadlineLine } from "./TasksView";
 import { EarlierVersions } from "../history/EarlierVersions";
 
@@ -19,11 +20,11 @@ interface Props {
 
 export function TaskPanel({ task, spaces, types }: Props) {
   return (
-    <SidePanel label="Task details">
+    <SidePanel label="To-do details">
       {task ? (
         <TaskForm key={task.id} task={task} spaces={spaces} types={types} />
       ) : (
-        <p className="panel-empty">Select a task to see its details.</p>
+        <p className="panel-empty">Select a to-do to see its details.</p>
       )}
     </SidePanel>
   );
@@ -51,8 +52,15 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
   const update = useUpdateTask();
   const save = (patch: Partial<TaskInput>) => update(task.id, patch);
   const due = deadlineLine(task);
-  const spaceChoices = spaces.filter((s) => !s.deletedAt || s.id === task.spaceId);
-  const typeChoices = types.filter((t) => !t.deletedAt || t.id === task.typeId);
+  const setToday = useSetToday();
+  const onToday = isOnToday(task);
+  const sections = (useSections().data ?? []).filter((x) => x.spaceId === task.spaceId);
+  // To-dos live in courses, lists and the Inbox; a time-only space only when it already is there.
+  const spaceChoices = spaces.filter(
+    (s) => s.id === task.spaceId || (!s.deletedAt && (s.kind === "project" || s.kind === "list")),
+  );
+  const inboxListed = spaceChoices.some((s) => s.id === INBOX_ID);
+  const typeChoices = types.filter((t) => t.id === task.typeId || (!t.deletedAt && (!t.spaceId || t.spaceId === task.spaceId)));
 
   const addPart = () => {
     const text = newPart.trim();
@@ -75,6 +83,13 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
       />
       {due && <p className={`panel-sub${due.late ? " late" : ""}`}>{due.text}</p>}
 
+      {!task.completedAt && (
+        <label className="switch-control today-switch">
+          <input type="checkbox" role="switch" checked={onToday} onChange={(e) => setToday(task, e.target.checked)} />
+          <span>On Today</span>
+        </label>
+      )}
+
       <PlannedTime task={task} />
 
       <div className="field-row">
@@ -83,12 +98,13 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
           <select
             value={task.spaceId}
             onChange={(e) => {
-              save({ spaceId: e.target.value });
-              useUi.getState().setLastSpace(e.target.value);
+              save({ spaceId: e.target.value, sectionId: null });
+              if (e.target.value !== INBOX_ID) useUi.getState().setLastSpace(e.target.value);
             }}
           >
+            {!inboxListed && <option value={INBOX_ID}>Inbox</option>}
             {spaceChoices.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}{s.deletedAt ? " (archived)" : ""}</option>
+              <option key={s.id} value={s.id}>{s.kind === "inbox" ? "Inbox" : s.name}{s.deletedAt ? " (archived)" : ""}</option>
             ))}
           </select>
         </label>
@@ -102,6 +118,15 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
           </select>
         </label>
       </div>
+      {sections.length > 0 && (
+        <label className="field">
+          <span>Part of the course</span>
+          <select value={task.sectionId ?? ""} onChange={(e) => save({ sectionId: e.target.value || null })}>
+            <option value="">No part</option>
+            {sections.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+        </label>
+      )}
 
       <div className="field">
         <span>Priority</span>
@@ -120,7 +145,7 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
       <MomentField label="Aim to finish by" value={task.targetAt} onChange={(v) => save({ targetAt: v })} />
 
       <fieldset className="field parts">
-        <legend>Parts</legend>
+        <legend>Steps</legend>
         <ul>
           {task.parts.map((p) => (
             <PartRow key={p.id} part={p} />
@@ -128,8 +153,8 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
         </ul>
         <div className="part-add">
           <input
-            placeholder="Add a part, e.g. Chapter 1"
-            aria-label="New part"
+            placeholder="Add a step, e.g. Chapter 1"
+            aria-label="New step"
             value={newPart}
             onChange={(e) => setNewPart(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addPart()}
@@ -152,7 +177,7 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
           type="button"
           className="btn quiet"
           onClick={() => {
-            archive("task", task.id, task.title || "Task");
+            archive("task", task.id, task.title || "To-do");
             useUi.getState().selectTask(null);
           }}
         >
@@ -185,7 +210,7 @@ function PartRow({ part }: { part: TaskPart }) {
       />
       <input
         className="part-title"
-        aria-label="Part title"
+        aria-label="Step title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onBlur={commit}

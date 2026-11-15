@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { pickDefaultSpace } from "../../lib/spaces";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
-import { useSpaces, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
-import { preferredSpace, useUi } from "../../lib/store";
+import { useAllSpaces, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
+import { useUi } from "../../lib/store";
 import { daysFromToday, fmtMoment, fmtRelativeDays } from "../../lib/time";
-import { taskProgress, type Space, type Task, type TaskType } from "../../lib/types";
+import { INBOX_ID, taskProgress, type Space, type Task, type TaskType } from "../../lib/types";
 import { ignoreForShortcut } from "../shortcuts/keys";
 import { PriorityMark } from "../../components/PriorityMark";
 import { Icon } from "../../components/Icon";
@@ -37,11 +36,11 @@ function dueBucket(t: Task): Exclude<Due, "all"> {
 const filters = { query: "", spaceId: "", due: "all" as Due, status: "open" as Status, sort: "deadline" as Sort };
 const unfolded = new Set<string>();
 
-export function TasksView() {
-  const spaces = useSpaces().data ?? [];
+/** Every to-do in one table, with filters: the old Tasks screen. */
+export function AllTodos() {
+  const spaces = useAllSpaces().data ?? [];
   const types = useTaskTypes().data ?? [];
   const tasks = useTasks().data ?? [];
-  const lastSpaceId = useUi(preferredSpace);
   const selectedId = useUi((s) => s.selectedTaskId);
   const act = useTaskAction();
 
@@ -58,8 +57,8 @@ export function TasksView() {
   };
   Object.assign(filters, { query, spaceId, due, status, sort });
 
-  const active = spaces.filter((s) => !s.deletedAt);
-  const defaultSpaceId = pickDefaultSpace(active, spaceId || lastSpaceId)?.id ?? null;
+  const active = spaces.filter((s) => !s.deletedAt && s.kind !== "none");
+  const defaultSpaceId = spaceId || INBOX_ID;
   const selected = tasks.find((t) => t.id === selectedId) ?? null;
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   const typeById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
@@ -118,11 +117,13 @@ export function TasksView() {
       <main className="tasks">
         <header className="toolbar">
           <h1>
-            Tasks<span className="h1-note">{openCount} open</span>
+            <button className="crumb" onClick={() => useUi.getState().openTasks("overview")}>Tasks</button>
+            <span className="crumb-sep" aria-hidden="true">›</span>
+            All to-dos<span className="h1-note">{openCount} open</span>
           </h1>
           <div className="toolbar-actions">
-            <input className="search" type="search" placeholder="Search tasks" aria-label="Search tasks" value={query} onChange={(e) => setQuery(e.target.value)} />
-            <button className="btn primary" disabled={!defaultSpaceId} onClick={newTask}>New task</button>
+            <input className="search" type="search" placeholder="Search to-dos" aria-label="Search to-dos" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <button className="btn primary" disabled={!defaultSpaceId} onClick={newTask}>New to-do</button>
           </div>
         </header>
 
@@ -172,7 +173,7 @@ export function TasksView() {
           {shown.length === 0 && (
             <div className="table-empty">
               {tasks.length === 0 ? (
-                <>No tasks yet. Press <kbd>N</kbd> or use New task.</>
+                <>No to-dos yet. Press <kbd>N</kbd> or use New to-do.</>
               ) : (
                 <>
                   No tasks match these filters.{" "}

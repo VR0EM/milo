@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
+import { endFocus } from "../../lib/focus";
 import { api, miniExpanded, setMiniExpanded, startWindowDrag } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useSpaces } from "../../lib/queries";
@@ -62,7 +63,7 @@ export function MiniTimer() {
   };
 
   const finish = async () => {
-    await api.finishFocus(session.id);
+    await endFocus(session);
     qc.invalidateQueries();
   };
 

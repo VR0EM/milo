@@ -9,6 +9,7 @@ const KIND: Record<Entity, string> = {
   event: "Event",
   task: "Task",
   task_part: "Task part",
+  section: "Part of a course",
   space: "Space",
   group: "Group",
   activity: "Activity",

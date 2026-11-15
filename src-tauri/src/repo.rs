@@ -85,6 +85,7 @@ fn space_from(r: &Row) -> rusqlite::Result<Space> {
         name: r.get("name")?,
         color: r.get("color")?,
         role: r.get("role")?,
+        kind: r.get("kind")?,
         icon: r.get("icon")?,
         sort_order: r.get("sort_order")?,
         deleted_at: r.get("deleted_at")?,
@@ -101,18 +102,26 @@ fn get_space(c: &Connection, id: &str) -> Result<Space> {
     Ok(c.query_row("SELECT * FROM spaces WHERE id = ?1", [id], space_from)?)
 }
 
+/// The hidden space quick notes land in.
+pub const INBOX: &str = "seed-space-inbox";
+
+const KINDS: &[&str] = &["project", "list", "none"];
+
 pub fn create_space(c: &Connection, input: SpaceInput) -> Result<Space> {
     one_of(&input.role, &["normal", "sleep"], "role")?;
+    let kind = input.kind.clone().unwrap_or_else(|| "list".into());
+    one_of(&kind, KINDS, "kind")?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO spaces (id, group_id, name, color, role, icon, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+        "INSERT INTO spaces (id, group_id, name, color, role, kind, icon, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
         params![
             id,
             input.group_id,
             non_empty(&input.name, "Name")?,
             input.color,
             input.role,
+            kind,
             icon(&input.icon)?,
             next_sort(c, "spaces")?,
             ts
@@ -123,9 +132,14 @@ pub fn create_space(c: &Connection, input: SpaceInput) -> Result<Space> {
 
 pub fn update_space(c: &Connection, id: &str, input: SpaceInput) -> Result<Space> {
     one_of(&input.role, &["normal", "sleep"], "role")?;
+    if let Some(kind) = &input.kind {
+        one_of(kind, KINDS, "kind")?;
+    }
+    // The Inbox stays what it is; leaving the kind out keeps it.
     changed(c.execute(
-        "UPDATE spaces SET group_id = ?2, name = ?3, color = ?4, role = ?5, icon = ?6, updated_at = ?7 WHERE id = ?1",
-        params![id, input.group_id, non_empty(&input.name, "Name")?, input.color, input.role, icon(&input.icon)?, now()],
+        "UPDATE spaces SET group_id = ?2, name = ?3, color = ?4, role = ?5, icon = ?6, updated_at = ?7,
+         kind = CASE WHEN kind = 'inbox' THEN kind ELSE COALESCE(?8, kind) END WHERE id = ?1",
+        params![id, input.group_id, non_empty(&input.name, "Name")?, input.color, input.role, icon(&input.icon)?, now(), input.kind],
     )?)?;
     get_space(c, id)
 }
@@ -145,7 +159,7 @@ fn icon(value: &Option<String>) -> Result<Option<String>> {
 /// never take the place of another (the first space is a default in a few places).
 pub fn reorder_spaces(c: &Connection, ids: &[String]) -> Result<()> {
     let all: Vec<String> = c
-        .prepare("SELECT id FROM spaces ORDER BY sort_order, name")?
+        .prepare("SELECT id FROM spaces WHERE kind != 'inbox' ORDER BY sort_order, name")?
         .query_map([], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?;
     let moved: Vec<&String> = ids.iter().filter(|id| all.contains(id)).collect();
@@ -193,6 +207,48 @@ pub fn reorder_groups(c: &Connection, ids: &[String]) -> Result<()> {
 }
 
 // ---------- activities ----------
+
+// ---------- sections (the parts of a course) ----------
+
+fn section_from(r: &Row) -> rusqlite::Result<Section> {
+    Ok(Section { id: r.get("id")?, space_id: r.get("space_id")?, name: r.get("name")?, sort_order: r.get("sort_order")? })
+}
+
+pub fn list_sections(c: &Connection) -> Result<Vec<Section>> {
+    let mut s = c.prepare("SELECT * FROM sections WHERE deleted_at IS NULL ORDER BY sort_order, created_at")?;
+    let rows = s.query_map([], section_from)?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+fn get_section(c: &Connection, id: &str) -> Result<Section> {
+    Ok(c.query_row("SELECT * FROM sections WHERE id = ?1", [id], section_from)?)
+}
+
+pub fn create_section(c: &Connection, space_id: &str, name: &str) -> Result<Section> {
+    let (id, ts) = (new_id(), now());
+    c.execute(
+        "INSERT INTO sections (id, space_id, name, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+        params![id, space_id, non_empty(name, "Name")?, next_sort(c, "sections")?, ts],
+    )?;
+    get_section(c, &id)
+}
+
+pub fn update_section(c: &Connection, id: &str, name: &str) -> Result<Section> {
+    changed(c.execute(
+        "UPDATE sections SET name = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, non_empty(name, "Name")?, now()],
+    )?)?;
+    get_section(c, id)
+}
+
+/// Puts sections in the order given; ids not listed keep their place after them.
+pub fn reorder_sections(c: &Connection, ids: &[String]) -> Result<()> {
+    let ts = now();
+    for (i, id) in ids.iter().enumerate() {
+        c.execute("UPDATE sections SET sort_order = ?2, updated_at = ?3 WHERE id = ?1", params![id, i as i64, ts])?;
+    }
+    Ok(())
+}
 
 fn activity_from(r: &Row) -> rusqlite::Result<Activity> {
     Ok(Activity {
@@ -361,6 +417,7 @@ fn task_type_from(r: &Row) -> rusqlite::Result<TaskType> {
     Ok(TaskType {
         id: r.get("id")?,
         name: r.get("name")?,
+        space_id: r.get("space_id")?,
         sort_order: r.get("sort_order")?,
         deleted_at: r.get("deleted_at")?,
     })
@@ -379,16 +436,16 @@ fn get_task_type(c: &Connection, id: &str) -> Result<TaskType> {
 pub fn create_task_type(c: &Connection, input: TaskTypeInput) -> Result<TaskType> {
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO task_types (id, name, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
-        params![id, non_empty(&input.name, "Name")?, next_sort(c, "task_types")?, ts],
+        "INSERT INTO task_types (id, name, space_id, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+        params![id, non_empty(&input.name, "Name")?, input.space_id, next_sort(c, "task_types")?, ts],
     )?;
     get_task_type(c, &id)
 }
 
 pub fn update_task_type(c: &Connection, id: &str, input: TaskTypeInput) -> Result<TaskType> {
     changed(c.execute(
-        "UPDATE task_types SET name = ?2, updated_at = ?3 WHERE id = ?1",
-        params![id, non_empty(&input.name, "Name")?, now()],
+        "UPDATE task_types SET name = ?2, space_id = ?3, updated_at = ?4 WHERE id = ?1",
+        params![id, non_empty(&input.name, "Name")?, input.space_id, now()],
     )?)?;
     get_task_type(c, id)
 }
@@ -417,6 +474,8 @@ fn task_from(r: &Row) -> rusqlite::Result<Task> {
         target_at: r.get("target_at")?,
         completed_at: r.get("completed_at")?,
         priority: r.get("priority")?,
+        section_id: r.get("section_id")?,
+        today_on: r.get("today_on")?,
         source_id: r.get("source_id")?,
         locally_modified: r.get("locally_modified")?,
         sort_order: r.get("sort_order")?,
@@ -456,12 +515,21 @@ fn check_priority(p: &Option<String>) -> Result<()> {
     }
 }
 
+/// A section only counts when it belongs to the task's space; moving a task to another space
+/// takes it out of its section.
+fn section_in(c: &Connection, input: &TaskInput) -> Result<Option<String>> {
+    let Some(section) = &input.section_id else { return Ok(None) };
+    let space: Option<String> =
+        c.query_row("SELECT space_id FROM sections WHERE id = ?1", [section], |r| r.get(0)).optional()?;
+    Ok(if space.as_deref() == Some(input.space_id.as_str()) { Some(section.clone()) } else { None })
+}
+
 pub fn create_task(c: &Connection, input: TaskInput) -> Result<Task> {
     check_priority(&input.priority)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO tasks (id, space_id, type_id, title, notes, deadline_at, target_at, priority, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+        "INSERT INTO tasks (id, space_id, type_id, title, notes, deadline_at, target_at, priority, section_id, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
         params![
             id,
             input.space_id,
@@ -471,6 +539,7 @@ pub fn create_task(c: &Connection, input: TaskInput) -> Result<Task> {
             input.deadline_at,
             input.target_at,
             input.priority,
+            section_in(c, &input)?,
             next_sort(c, "tasks")?,
             ts
         ],
@@ -488,7 +557,8 @@ pub fn update_task(c: &Connection, id: &str, input: TaskInput) -> Result<Task> {
         && before.notes == input.notes
         && before.deadline_at == input.deadline_at
         && before.target_at == input.target_at
-        && before.priority == input.priority;
+        && before.priority == input.priority
+        && before.section_id == section_in(c, &input)?;
     if same {
         return Ok(before);
     }
@@ -503,10 +573,22 @@ pub fn update_task_unlogged(c: &Connection, id: &str, input: TaskInput) -> Resul
     check_priority(&input.priority)?;
     changed(c.execute(
         "UPDATE tasks SET space_id = ?2, type_id = ?3, title = ?4, notes = ?5, deadline_at = ?6, target_at = ?7,
-         priority = ?8, updated_at = ?9,
+         priority = ?8, section_id = ?9, updated_at = ?10,
          locally_modified = (source_id IS NOT NULL) OR locally_modified WHERE id = ?1",
-        params![id, input.space_id, input.type_id, input.title.trim(), input.notes, input.deadline_at, input.target_at, input.priority, now()],
+        params![id, input.space_id, input.type_id, input.title.trim(), input.notes, input.deadline_at, input.target_at, input.priority, section_in(c, &input)?, now()],
     )?)?;
+    get_task(c, id)
+}
+
+/// Puts a to-do on Today (`day` is the local date) or takes it off (`None`). Not a change worth
+/// keeping a version of.
+pub fn set_task_today(c: &Connection, id: &str, day: Option<&str>) -> Result<Task> {
+    if let Some(d) = day {
+        if chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_err() {
+            return Err(AppError::Invalid(format!("Not a date: {d}")));
+        }
+    }
+    changed(c.execute("UPDATE tasks SET today_on = ?2, updated_at = ?3 WHERE id = ?1", params![id, day, now()])?)?;
     get_task(c, id)
 }
 
@@ -625,6 +707,7 @@ fn items_of(c: &Connection, routine_id: &str) -> Result<Vec<RoutineItem>> {
                 id: r.get("id")?,
                 routine_id: r.get("routine_id")?,
                 title: r.get("title")?,
+                parent_id: r.get("parent_id")?,
                 sort_order: r.get("sort_order")?,
             })
         })?
@@ -667,11 +750,19 @@ pub fn update_routine(c: &Connection, id: &str, input: RoutineInput) -> Result<R
     get_routine(c, id)
 }
 
-pub fn create_routine_item(c: &Connection, routine_id: &str, title: &str) -> Result<Routine> {
+/// A step of a routine, or with `parent_id` a step under another step of the same routine.
+pub fn create_routine_item(c: &Connection, routine_id: &str, title: &str, parent_id: Option<&str>) -> Result<Routine> {
+    if let Some(p) = parent_id {
+        let of: Option<String> =
+            c.query_row("SELECT routine_id FROM routine_items WHERE id = ?1", [p], |r| r.get(0)).optional()?;
+        if of.as_deref() != Some(routine_id) {
+            return Err(AppError::Invalid("That step is not in this routine".into()));
+        }
+    }
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO routine_items (id, routine_id, title, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-        params![id, routine_id, non_empty(title, "Title")?, next_sort(c, "routine_items")?, ts],
+        "INSERT INTO routine_items (id, routine_id, title, parent_id, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        params![id, routine_id, non_empty(title, "Title")?, parent_id, next_sort(c, "routine_items")?, ts],
     )?;
     get_routine(c, routine_id)
 }
@@ -825,43 +916,13 @@ pub fn discard_focus(c: &Connection, id: &str) -> Result<()> {
 
 // ---------- inbox ----------
 
-/// Quick notes, oldest first, that have not been handled yet.
-pub fn list_inbox(c: &Connection) -> Result<Vec<InboxItem>> {
-    let mut s = c.prepare("SELECT id, text, created_at FROM inbox_items WHERE deleted_at IS NULL ORDER BY created_at")?;
-    let rows = s
-        .query_map([], |r| Ok(InboxItem { id: r.get(0)?, text: r.get(1)?, created_at: r.get(2)? }))?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
-}
-
-pub fn add_inbox(c: &Connection, text: &str) -> Result<InboxItem> {
-    let text = non_empty(text, "Note")?;
-    let (id, ts) = (new_id(), now());
-    c.execute("INSERT INTO inbox_items (id, text, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", params![id, text, ts])?;
-    Ok(InboxItem { id, text, created_at: ts })
-}
-
-/// Makes a task of a note (in `space_id`) and marks the note handled.
-pub fn inbox_to_task(c: &Connection, id: &str, space_id: &str) -> Result<Task> {
-    let text: String = c
-        .query_row("SELECT text FROM inbox_items WHERE id = ?1 AND deleted_at IS NULL", [id], |r| r.get(0))
-        .optional()?
-        .ok_or(AppError::NotFound)?;
-    let task = create_task(
+/// Saves a quick note as a to-do in the hidden Inbox space, from where it can go on Today, be
+/// ticked off or move to a course.
+pub fn add_inbox(c: &Connection, text: &str) -> Result<Task> {
+    create_task(
         c,
-        TaskInput { space_id: space_id.into(), type_id: None, title: text, notes: String::new(), deadline_at: None, target_at: None, priority: None },
-    )?;
-    set_inbox_done(c, id, true)?;
-    Ok(task)
-}
-
-/// A handled note leaves the inbox. The row stays, like everything in Milo.
-pub fn set_inbox_done(c: &Connection, id: &str, done: bool) -> Result<()> {
-    let ts = now();
-    changed(c.execute(
-        "UPDATE inbox_items SET deleted_at = ?2, updated_at = ?3 WHERE id = ?1",
-        params![id, if done { Some(ts.clone()) } else { None }, ts],
-    )?)
+        TaskInput { space_id: INBOX.into(), type_id: None, title: non_empty(text, "Note")?, notes: String::new(), deadline_at: None, target_at: None, priority: None, section_id: None },
+    )
 }
 
 // ---------- reminder rules ----------
@@ -990,6 +1051,7 @@ pub fn table_of(entity: &str) -> Result<&'static str> {
         "import_source" => "import_sources",
         "title_mapping" => "title_mappings",
         "semester" => "semesters",
+        "section" => "sections",
         other => return Err(AppError::Invalid(format!("Unknown entity: {other}"))),
     })
 }
@@ -1037,8 +1099,82 @@ mod tests {
     fn seeds_exist() {
         let c = open_in_memory().unwrap();
         assert_eq!(list_activities(&c).unwrap().len(), 4);
-        assert_eq!(list_spaces(&c).unwrap().len(), 3);
+        // Personal, Sleep, Travel and the hidden Inbox.
+        assert_eq!(list_spaces(&c).unwrap().len(), 4);
         assert_eq!(list_groups(&c).unwrap().len(), 1);
+    }
+
+    fn todo(space: &str, title: &str, section: Option<&str>) -> TaskInput {
+        TaskInput {
+            space_id: space.into(), type_id: None, title: title.into(), notes: String::new(),
+            deadline_at: None, target_at: None, priority: None, section_id: section.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn a_quick_note_is_a_todo_in_the_inbox() {
+        let c = open_in_memory().unwrap();
+        let t = add_inbox(&c, "  Ask Lotte for the notes ").unwrap();
+        assert_eq!((t.space_id.as_str(), t.title.as_str()), (INBOX, "Ask Lotte for the notes"));
+        assert!(add_inbox(&c, "   ").is_err());
+        let inbox = list_spaces(&c).unwrap().into_iter().find(|s| s.id == INBOX).unwrap();
+        assert_eq!(inbox.kind, "inbox");
+        // Renaming it leaves it the Inbox.
+        let renamed = update_space(&c, INBOX, SpaceInput { group_id: None, name: "Notes".into(), color: "gray".into(), role: "normal".into(), icon: None, kind: Some("list".into()) }).unwrap();
+        assert_eq!(renamed.kind, "inbox");
+    }
+
+    #[test]
+    fn spaces_have_a_kind() {
+        let c = open_in_memory().unwrap();
+        let mk = |kind: Option<&str>| SpaceInput { group_id: None, name: "X".into(), color: "blue".into(), role: "normal".into(), icon: None, kind: kind.map(Into::into) };
+        assert_eq!(create_space(&c, mk(None)).unwrap().kind, "list");
+        let p = create_space(&c, mk(Some("project"))).unwrap();
+        assert_eq!(p.kind, "project");
+        assert_eq!(update_space(&c, &p.id, mk(None)).unwrap().kind, "project", "left out keeps it");
+        assert_eq!(update_space(&c, &p.id, mk(Some("none"))).unwrap().kind, "none");
+        assert!(create_space(&c, mk(Some("inbox"))).is_err());
+        let kinds: Vec<(String, String)> = list_spaces(&c).unwrap().into_iter().map(|s| (s.id, s.kind)).collect();
+        assert!(kinds.contains(&("seed-space-sleep".into(), "none".into())));
+        assert!(kinds.contains(&("seed-space-personal".into(), "list".into())));
+    }
+
+    #[test]
+    fn a_todo_sits_in_a_section_of_its_own_space_only() {
+        let c = open_in_memory().unwrap();
+        let sec = create_section(&c, "seed-space-personal", "02 Titration").unwrap();
+        let t = create_task(&c, todo("seed-space-personal", "Lab report", Some(&sec.id))).unwrap();
+        assert_eq!(t.section_id.as_deref(), Some(sec.id.as_str()));
+        // Moving it to another space takes it out of the section.
+        let moved = update_task(&c, &t.id, todo(INBOX, "Lab report", Some(&sec.id))).unwrap();
+        assert_eq!(moved.section_id, None);
+        assert_eq!(update_section(&c, &sec.id, " 03 Buffers ").unwrap().name, "03 Buffers");
+        set_archived(&c, "section", &sec.id, true).unwrap();
+        assert!(list_sections(&c).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_todo_goes_on_today_and_off_again() {
+        let c = open_in_memory().unwrap();
+        let t = create_task(&c, todo("seed-space-personal", "Groceries", None)).unwrap();
+        assert_eq!(t.today_on, None);
+        assert_eq!(set_task_today(&c, &t.id, Some("2026-11-18")).unwrap().today_on.as_deref(), Some("2026-11-18"));
+        assert!(set_task_today(&c, &t.id, Some("tomorrow")).is_err());
+        assert_eq!(set_task_today(&c, &t.id, None).unwrap().today_on, None);
+        // No version is kept for it.
+        assert!(crate::history::list(&c, "task", &t.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_routine_step_can_have_steps() {
+        let c = open_in_memory().unwrap();
+        let r = create_routine(&c, RoutineInput { name: "Morning".into(), start_time: "07:00".into(), end_time: "10:00".into(), weekdays: "1234567".into() }).unwrap();
+        let r = create_routine_item(&c, &r.id, "Pack backpack", None).unwrap();
+        let parent = r.items[0].id.clone();
+        let r = create_routine_item(&c, &r.id, "Laptop", Some(&parent)).unwrap();
+        assert_eq!(r.items[1].parent_id.as_deref(), Some(parent.as_str()));
+        let other = create_routine(&c, RoutineInput { name: "Evening".into(), start_time: "20:00".into(), end_time: "22:00".into(), weekdays: "1234567".into() }).unwrap();
+        assert!(create_routine_item(&c, &other.id, "Teeth", Some(&parent)).is_err());
     }
 
     #[test]
@@ -1097,12 +1233,12 @@ mod tests {
                 notes: String::new(),
                 deadline_at: Some("2026-12-01T22:59:00.000Z".into()),
                 target_at: None,
-                priority: Some("high".into()),
+                priority: Some("high".into()), section_id: None
             },
         )
         .unwrap();
         assert_eq!(t.priority.as_deref(), Some("high"));
-        let mut bad = TaskInput { space_id: t.space_id.clone(), type_id: None, title: "x".into(), notes: String::new(), deadline_at: None, target_at: None, priority: Some("urgent".into()) };
+        let mut bad = TaskInput { space_id: t.space_id.clone(), type_id: None, title: "x".into(), notes: String::new(), deadline_at: None, target_at: None, priority: Some("urgent".into()), section_id: None };
         assert!(update_task(&c, &t.id, bad.clone()).is_err(), "only low, medium, high");
         bad.priority = None;
         assert_eq!(update_task(&c, &t.id, bad).unwrap().priority, None);
@@ -1144,7 +1280,7 @@ mod tests {
         assert!(create_routine(&c, bad("07:00", "")).is_err());
         assert!(create_routine(&c, bad("09:00", "1")).is_err());
 
-        let r = create_routine_item(&c, "seed-routine-morning", "Medication").unwrap();
+        let r = create_routine_item(&c, "seed-routine-morning", "Medication", None).unwrap();
         let item = r.items[0].id.clone();
         set_routine_check(&c, &item, "2026-11-11", true).unwrap();
         set_routine_check(&c, &item, "2026-11-11", true).unwrap();
@@ -1169,7 +1305,7 @@ mod tests {
                 notes: String::new(),
                 deadline_at: None,
                 target_at: None,
-                priority: None,
+                priority: None, section_id: None
             },
         )
         .unwrap();
@@ -1196,19 +1332,6 @@ mod tests {
         assert_eq!((e.start_at.as_str(), e.end_at.as_str()), ("2020-01-01T10:10:00.000Z", "2020-01-01T11:40:00.000Z"));
         let count: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE deleted_at IS NULL", [], |r| r.get(0)).unwrap();
         assert_eq!(count, 1);
-    }
-
-    #[test]
-    fn inbox_notes_are_handled_not_deleted() {
-        let c = open_in_memory().unwrap();
-        assert!(add_inbox(&c, "   ").is_err());
-        let a = add_inbox(&c, "mail prof about the lab").unwrap();
-        add_inbox(&c, "buy notebook").unwrap();
-        assert_eq!(list_inbox(&c).unwrap().len(), 2);
-        set_inbox_done(&c, &a.id, true).unwrap();
-        assert_eq!(list_inbox(&c).unwrap().len(), 1);
-        let kept: i64 = c.query_row("SELECT COUNT(*) FROM inbox_items", [], |r| r.get(0)).unwrap();
-        assert_eq!(kept, 2);
     }
 
     #[test]
@@ -1255,7 +1378,7 @@ mod tests {
         let c = open_in_memory().unwrap();
         let s = create_space(
             &c,
-            SpaceInput { group_id: Some("seed-group-school".into()), name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None },
+            SpaceInput { group_id: Some("seed-group-school".into()), name: "Analysis".into(), color: "green".into(), role: "normal".into(), icon: None, kind: None },
         )
         .unwrap();
         assert_eq!(s.sort_order, 3);
@@ -1272,7 +1395,7 @@ mod tests {
         assert_eq!(sleep.icon.as_deref(), Some("moon"), "the seeds get an icon");
 
         let input = |icon: Option<&str>| SpaceInput {
-            group_id: None, name: "Chemistry".into(), color: "teal".into(), role: "normal".into(), icon: icon.map(Into::into),
+            group_id: None, name: "Chemistry".into(), color: "teal".into(), role: "normal".into(), icon: icon.map(Into::into), kind: None
         };
         let s = create_space(&c, input(Some("flask"))).unwrap();
         assert_eq!(s.icon.as_deref(), Some("flask"));
@@ -1280,10 +1403,10 @@ mod tests {
         assert_eq!(update_space(&c, &s.id, input(Some(""))).unwrap().icon, None);
 
         // Chemistry and Personal swap places; Sleep and Transport stay where they are.
-        let before: Vec<String> = list_spaces(&c).unwrap().into_iter().map(|x| x.id).collect();
+        let before: Vec<String> = list_spaces(&c).unwrap().into_iter().map(|x| x.id).filter(|id| id != INBOX).collect();
         assert_eq!(before, ["seed-space-personal", "seed-space-sleep", "seed-space-transport", s.id.as_str()]);
         reorder_spaces(&c, &[s.id.clone(), "seed-space-personal".into()]).unwrap();
-        let after = list_spaces(&c).unwrap();
+        let after: Vec<Space> = list_spaces(&c).unwrap().into_iter().filter(|x| x.id != INBOX).collect();
         let order: Vec<&str> = after.iter().map(|x| x.id.as_str()).collect();
         assert_eq!(order, [s.id.as_str(), "seed-space-sleep", "seed-space-transport", "seed-space-personal"]);
         let numbers: Vec<i64> = after.iter().map(|x| x.sort_order).collect();
@@ -1295,14 +1418,14 @@ mod tests {
         let c = open_in_memory().unwrap();
         let school = list_groups(&c).unwrap()[0].clone();
         let other = create_group(&c, GroupInput { name: "Life".into() }).unwrap();
-        let input = |g: Option<&str>, n: &str| SpaceInput { group_id: g.map(Into::into), name: n.into(), color: "teal".into(), role: "normal".into(), icon: None };
+        let input = |g: Option<&str>, n: &str| SpaceInput { group_id: g.map(Into::into), name: n.into(), color: "teal".into(), role: "normal".into(), icon: None, kind: None };
         let chem = create_space(&c, input(Some(&school.id), "Chemistry")).unwrap();
 
         // Out of School, in front of Personal among the spaces without a group.
         move_space(&c, &chem.id, None, &[chem.id.clone(), "seed-space-personal".into()]).unwrap();
         let spaces = list_spaces(&c).unwrap();
         assert_eq!(spaces.iter().find(|s| s.id == chem.id).unwrap().group_id, None);
-        let loose: Vec<&str> = spaces.iter().filter(|s| s.group_id.is_none()).map(|s| s.id.as_str()).collect();
+        let loose: Vec<&str> = spaces.iter().filter(|s| s.group_id.is_none() && s.id != INBOX).map(|s| s.id.as_str()).collect();
         assert_eq!(loose[0], chem.id, "it lands where it was dropped");
 
         // Into Life; a group that does not exist is refused.
