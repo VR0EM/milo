@@ -252,6 +252,11 @@ pub fn get_event(c: &Connection, id: &str) -> Result<Event> {
     Ok(c.query_row("SELECT * FROM events WHERE id = ?1", [id], event_from)?)
 }
 
+/// The event with this id, unless it was archived (or never existed).
+pub fn find_event(c: &Connection, id: &str) -> Result<Option<Event>> {
+    Ok(c.query_row("SELECT * FROM events WHERE id = ?1 AND deleted_at IS NULL", [id], event_from).optional()?)
+}
+
 pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<Event> {
     check_event(&input)?;
     let (id, ts) = (new_id(), now());
@@ -1001,6 +1006,16 @@ mod tests {
         assert_eq!(list_activities(&c).unwrap().len(), 4);
         assert_eq!(list_spaces(&c).unwrap().len(), 3);
         assert_eq!(list_groups(&c).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_event_is_found_by_id_until_archived() {
+        let c = open_in_memory().unwrap();
+        let e = create_event(&c, input("2026-11-11T08:00:00.000Z", "2026-11-11T09:00:00.000Z"), "manual").unwrap();
+        assert_eq!(find_event(&c, &e.id).unwrap().map(|f| f.id), Some(e.id.clone()));
+        set_archived(&c, "event", &e.id, true).unwrap();
+        assert!(find_event(&c, &e.id).unwrap().is_none());
+        assert!(find_event(&c, "no-such-event").unwrap().is_none());
     }
 
     #[test]

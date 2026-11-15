@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { pickDefaultSpace } from "../../lib/spaces";
-import { useActivities, useArchiveWithUndo, useCreateEvent, useEvents, useSpaces, useTaskTypes, useTasks } from "../../lib/queries";
+import { useActivities, useArchiveWithUndo, useCreateEvent, useEventById, useEvents, useSpaces, useTaskTypes, useTasks } from "../../lib/queries";
 import { useUi, type CalMode } from "../../lib/store";
 import { addDays, atMinutes, fmtLongDay, fmtMonth, isoWeek, minutesIntoDay, startOfDay } from "../../lib/time";
 import { Icon } from "../../components/Icon";
@@ -55,7 +55,9 @@ export function CalendarView() {
   const selectedTask = allTasks.find((t) => t.id === selectedTaskId) ?? null;
 
   const visible = useMemo(() => events.filter((e) => !hidden.includes(e.spaceId)), [events, hidden]);
-  const selected = events.find((e) => e.id === selectedId) ?? null;
+  // The selected event stays open while the calendar moves to days without it.
+  const selectedById = useEventById(selectedId).data?.find((e) => e.id === selectedId) ?? null;
+  const selected = events.find((e) => e.id === selectedId) ?? selectedById;
   const active = spaces.filter((s) => !s.deletedAt);
   const defaultSpaceId = pickDefaultSpace(active, lastSpaceId)?.id ?? null;
 

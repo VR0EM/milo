@@ -198,6 +198,7 @@ Open the browser version with `?demo` (<http://localhost:1420/?demo>) for a samp
 npm test                      # the interface's logic (Vitest)
 cd src-tauri && cargo test    # the data layer (Rust)
 npx tsc --noEmit              # types
+npm run check:layout          # every screen at three window sizes (needs npm run dev and Chrome)
 ```
 
 Every push builds Milo for macOS and Windows in GitHub Actions and runs all tests there.

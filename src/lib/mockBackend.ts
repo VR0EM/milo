@@ -170,6 +170,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "update_space": return update("space", a.id, a.input);
       case "create_activity": return create("activity", a.input);
       case "update_activity": return update("activity", a.id, a.input);
+      case "event_by_id": return tables.event.filter((e) => e.id === a.id && !e.deletedAt).map((e) => ({ ...e }));
       case "list_events":
         return tables.event
           .filter((e) => !e.deletedAt && e.startAt < a.to && e.endAt > a.from)

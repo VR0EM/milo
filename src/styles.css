@@ -174,7 +174,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 /* ---------- calendar ---------- */
 .calendar { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); }
-.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); min-height: 60px; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); min-height: 60px; }
 .toolbar h1 { font-size: calc(20px * var(--text-scale)); font-weight: 600; letter-spacing: -0.015em; white-space: nowrap; display: flex; align-items: baseline; gap: 10px; }
 .h1-note { font-size: calc(13px * var(--text-scale)); font-weight: 500; color: var(--muted); letter-spacing: 0; }
 .toolbar-actions { display: flex; gap: 6px; }
@@ -233,7 +233,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .handle.bottom { bottom: 0; }
 
 /* ---------- detail panel ---------- */
-.panel { width: 300px; border-left: 1px solid var(--line); background: var(--bg); padding: 16px; overflow-y: auto; }
+.panel { width: 300px; border-left: 1px solid var(--line); background: var(--bg); padding: 16px; overflow-y: auto; overflow-x: hidden; }
 .panel-empty { color: var(--muted); margin-top: 40px; text-align: center; line-height: 1.7; }
 .panel-idle { display: flex; flex-direction: column; gap: 16px; }
 .mini-month { display: flex; flex-direction: column; gap: 6px; }
@@ -421,7 +421,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 /* ---------- insights ---------- */
 .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--sunken); padding: 2px; gap: 2px; }
-.segmented button { background: none; border: 0; padding: 4px 12px; cursor: pointer; color: var(--muted); min-height: 26px; }
+.segmented button { background: none; border: 0; padding: 4px 12px; cursor: pointer; color: var(--muted); min-height: 26px; white-space: nowrap; }
 
 .segmented button { border-radius: 6px; }
 .segmented button.on { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
@@ -548,7 +548,7 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
 .help-btn { width: 18px; height: 18px; border-radius: 9px; border: 1px solid var(--line); background: var(--raised); color: var(--muted);
   font-size: calc(11px * var(--text-scale)); font-weight: 600; line-height: 1; display: inline-grid; place-items: center; cursor: pointer; padding: 0; }
 .help-btn:hover, .help-btn.on { color: var(--accent); border-color: var(--accent); }
-.help-pop { position: absolute; top: calc(100% + 6px); left: -8px; z-index: 30; width: max-content; max-width: 300px; white-space: normal;
+.help-pop { position: fixed; z-index: 80; width: max-content; max-width: min(300px, calc(100vw - 16px)); white-space: normal;
   background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow-lift);
   font-size: calc(12.5px * var(--text-scale)); font-weight: 400; line-height: 1.5; text-transform: none; letter-spacing: 0; }
 
@@ -642,6 +642,11 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
   .tr.th > :nth-child(4) .th-sort { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .t-rel, .t-parts > span[aria-hidden="true"]:last-child { display: none; }
 }
+/* The smallest window with a task open: the progress column goes too, so nothing scrolls sideways. */
+@container (max-width: 560px) {
+  .tr { grid-template-columns: 28px minmax(90px, 1fr) 28px minmax(72px, 110px) minmax(84px, 120px); gap: 8px; }
+  .tr > :nth-child(3) { display: none; }
+}
 
 /* ---------- priority ---------- */
 :root { --prio-high: #d93a3f; --prio-medium: #d98a00; --prio-low: #6f86a6; }
@@ -655,7 +660,8 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
 .prio-medium rect.on { fill: var(--prio-medium); }
 .prio-low { color: var(--prio-low); }
 .prio-low rect.on { fill: var(--prio-low); }
-.prio-picker button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; }
+.prio-picker { display: flex; }
+.prio-picker button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 6px; flex: 1 1 auto; min-width: 0; }
 .prio-picker .prio { gap: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .t-parts .mini-progress { width: 46px; }

@@ -83,6 +83,12 @@ pub fn update_activity(db: State<Db>, id: String, input: ActivityInput) -> Resul
 pub fn list_events(db: State<Db>, from: String, to: String) -> Result<Vec<Event>> {
     repo::list_events(conn!(db), &from, &to)
 }
+/// One event by id, as a list of one (empty when it was archived). A list, so it shares the
+/// calendar's cache and quick updates (see useEventById in src/lib/queries.ts).
+#[tauri::command(async)]
+pub fn event_by_id(db: State<Db>, id: String) -> Result<Vec<Event>> {
+    Ok(repo::find_event(conn!(db), &id)?.into_iter().collect())
+}
 #[tauri::command(async)]
 pub fn create_event(db: State<Db>, input: EventInput) -> Result<Event> {
     tx!(db, |c| repo::create_event(c, input, "manual"))

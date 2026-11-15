@@ -16,6 +16,13 @@ export const useEvents = (from: Date, to: Date) =>
     placeholderData: keepPreviousData,
   });
 
+/**
+ * The selected event, also after the calendar moved to days without it. Kept as a list of
+ * one under "events", so quick updates, archiving and refreshing reach it like any list.
+ */
+export const useEventById = (id: string | null) =>
+  useQuery({ queryKey: ["events", "id", id], queryFn: () => api.eventById(id!), enabled: !!id });
+
 /** Apply a change to every cached event list at once, so the grid reacts immediately. */
 function patchEvents(qc: QueryClient, fn: (list: CalEvent[]) => CalEvent[]) {
   qc.setQueriesData<CalEvent[]>({ queryKey: ["events"] }, (list) => (list ? fn(list) : list));
@@ -25,7 +32,12 @@ export function useCreateEvent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: EventInput) => api.createEvent(input),
-    onSuccess: (created) => patchEvents(qc, (list) => [...list, created]),
+    // A new event joins the lists of days, not the list kept for one selected event.
+    onSuccess: (created) =>
+      qc.setQueriesData<CalEvent[]>(
+        { predicate: (q) => q.queryKey[0] === "events" && q.queryKey[1] !== "id" },
+        (list) => (list ? [...list, created] : list),
+      ),
     onError: report,
     onSettled: () => qc.invalidateQueries({ queryKey: ["events"] }),
   });

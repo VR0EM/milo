@@ -274,6 +274,7 @@ pub fn run() {
             commands::create_activity,
             commands::update_activity,
             commands::list_events,
+            commands::event_by_id,
             commands::create_event,
             commands::update_event,
             commands::list_task_types,

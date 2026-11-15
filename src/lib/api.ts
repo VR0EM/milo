@@ -32,6 +32,8 @@ export const api = {
   updateActivity: (id: string, input: ActivityInput) => call<Activity>("update_activity", { id, input }),
 
   listEvents: (from: string, to: string) => call<CalEvent[]>("list_events", { from, to }),
+  /** A list of one, or empty when the event was archived. */
+  eventById: (id: string) => call<CalEvent[]>("event_by_id", { id }),
   createEvent: (input: EventInput) => call<CalEvent>("create_event", { input }),
   updateEvent: (id: string, input: EventInput) => call<CalEvent>("update_event", { id, input }),
 

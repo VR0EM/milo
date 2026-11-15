@@ -472,3 +472,26 @@ links, conferencing, time zones, sounds).
 - **Next up** beside the calendar while nothing is selected: the event running or the next one,
   by the same rule as the menu bar (`lib/nextUp.ts`), with a countdown only within three hours.
 - Found while testing: N in the calendar could type its "n" into the new event's title.
+
+## Nothing scrolls sideways, at any window size
+
+The "?" explanation sat inside its panel; next to a right edge it stuck out and the whole panel
+scrolled sideways. It now floats above the page (like the date picker) and moves left or up to
+stay inside the window. The side panel never scrolls sideways at all.
+
+`npm run check:layout` checks this for every screen, the event and task panels, all Settings
+blocks and every step of the welcome guide, at 1440 x 900, the smallest window (1000 x 600) and
+the smallest with large text. It reports sideways scrolling, buttons or fields cut off, short
+labels breaking over two lines, and each "?" that does not open, sticks out, or stays after Esc.
+Its first run also found: the calendar's buttons (Today, arrows) falling off the toolbar in a
+small window (the toolbar now wraps), "3 days" breaking over two lines, the task table scrolling
+sideways with a task open (the progress column now goes first), and "High" cut off in the
+priority picker with large text.
+
+## The selected event stays open while the calendar moves
+
+The panel used to look for the selected event among the days on screen only, so moving to
+another week (arrows, swiping, the mini month) put the mini month back, and editing an event
+that was not on screen failed with "Not found". The selected event is now also loaded by itself
+(`event_by_id`, `useEventById`), as a list of one inside the same "events" cache: quick updates,
+archiving and refreshing reach it like any other list. Esc still closes it.
