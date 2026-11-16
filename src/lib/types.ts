@@ -44,6 +44,35 @@ export interface SpaceSuggestion {
   /** Why the first choice, in a few words. */
   why: string | null;
 }
+/** One occurrence of a found event. */
+export interface SearchWhen {
+  eventId: string;
+  startAt: string;
+  allDay: boolean;
+}
+/** One event, or all events with the same title in the same space (a weekly class). */
+export interface EventHit {
+  title: string;
+  spaceId: string;
+  location: string;
+  count: number;
+  last: SearchWhen | null;
+  next: SearchWhen | null;
+  inTitle: boolean;
+}
+export interface TaskHit {
+  id: string;
+  title: string;
+  spaceId: string;
+  deadlineAt: string | null;
+  completedAt: string | null;
+  inTitle: boolean;
+}
+export interface SearchResults {
+  events: EventHit[];
+  tasks: TaskHit[];
+}
+
 /** An open to-do that a note seems to repeat. */
 export interface Similar {
   taskId: string;

@@ -24,6 +24,14 @@ export function useGlobalShortcuts() {
         useUi.setState({ commandOpen: !s.commandOpen });
         return;
       }
+      // Cmd+F: the search page, over everything of any date.
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+        if (document.querySelector("dialog[open]")) return;
+        e.preventDefault();
+        useUi.getState().openSearch();
+        setTimeout(() => document.querySelector<HTMLInputElement>("#search-input")?.select(), 30);
+        return;
+      }
       if (mod && e.key === ",") {
         e.preventDefault();
         useUi.getState().setView("settings");
@@ -66,6 +74,7 @@ export function ShortcutsDialog() {
           <tr><td>{k(`${MOD_LABEL},`)}</td><td>Settings</td></tr>
           <tr><td>{k(CAPTURE_KEY)}</td><td>Write something down, from any app (lands in the Inbox)</td></tr>
           <tr><td>{k(`${MOD_LABEL}K`)}</td><td>Commands: go anywhere, find a task, event or space, or type a date</td></tr>
+          <tr><td>{k(`${MOD_LABEL}F`)}</td><td>Search all events and to-dos, of any date</td></tr>
           <tr><td>{k("?")}</td><td>This overview</td></tr>
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>
           <tr><td colSpan={2}><h3>Calendar</h3></td></tr>

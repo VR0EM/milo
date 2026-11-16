@@ -159,6 +159,11 @@ for (const [w, h, textSize] of [[1440, 900, "default"], [1000, 600, "default"], 
     await wait(500);
     counts[name] = await check(page, `${size} Space ${name}`);
   }
+  // Search, with results for a common word.
+  await key("f");
+  await page.type("#search-input", "lab");
+  await wait(500);
+  counts.search = await check(page, `${size} Search`);
   await key(","); counts.settings = await check(page, `${size} Settings (all open)`);
   // The welcome guide, every step.
   await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Open the guide")?.click());

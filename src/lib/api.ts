@@ -9,7 +9,7 @@ import type {
   ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
-  EventSeries, RepeatRule, Change, Section, ModelStatus, Similar, SpaceSuggestion,
+  EventSeries, RepeatRule, Change, Section, ModelStatus, SearchResults, Similar, SpaceSuggestion,
 } from "./types";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
@@ -50,6 +50,8 @@ export const api = {
     call<SpaceSuggestion[]>("suggest_in_space", { spaceId, what, texts }),
   /** For each [id, text]: an open to-do it seems to repeat, or null. */
   similarTodos: (items: [string, string][]) => call<(Similar | null)[]>("similar_todos", { items }),
+  /** Every event (any date) and to-do (also done) with these words. */
+  search: (query: string) => call<SearchResults>("search", { query }),
   smartModelStatus: () => call<ModelStatus>("smart_model_status"),
   downloadSmartModel: () => call<void>("download_smart_model"),
   removeSmartModel: () => call<void>("remove_smart_model"),

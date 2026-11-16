@@ -1242,3 +1242,19 @@ input.todo-check.small { width: 15px; height: 15px; }
 /* Where an event is ("ELL.01.01"): readable at a glance, a little stronger than the grey around it. */
 .place { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .event-place { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- search ---------- */
+.search-page .page-scroll { --content: 860px; gap: 14px; }
+.search-bar { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); padding: 0 12px; color: var(--muted); }
+.search-bar:focus-within { border-color: var(--accent); }
+.search-bar input { flex: 1; min-width: 0; border: 0; background: none; padding: 10px 0; font-size: calc(15px * var(--text-scale)); color: var(--text); outline: none; }
+.search-results { gap: 4px; padding: 12px 10px; }
+.search-results h2 { padding: 0 8px 4px; display: flex; align-items: baseline; gap: 8px; }
+.search-row { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; text-align: left; padding: 7px 8px; border-radius: 7px; cursor: pointer; color: var(--text); min-width: 0; }
+.search-row:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.search-row .icon { color: var(--muted); flex: none; }
+.search-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(14px * var(--text-scale)); }
+.search-row.done .search-title { color: var(--muted); text-decoration: line-through; }
+.search-when { flex: none; min-width: 9em; text-align: right; }
+.search-row .place, .search-row > .muted { flex: none; }
+@media (max-width: 1100px) { .search-when { min-width: 0; } }

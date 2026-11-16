@@ -2,7 +2,7 @@
 // Data lives in memory for the lifetime of the page.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SystemOne, sameThing } from "./systemOne";
+import { SystemOne, normalize, sameThing } from "./systemOne";
 type Row = Record<string, any>;
 
 const ts = () => new Date().toISOString();
@@ -226,6 +226,36 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           const d = model.decide(text, ids);
           return { choices: d.ranked.slice(0, 3).map((r) => ({ spaceId: r.label, p: r.p })), sure: false, why: null };
         });
+      }
+      case "search": {
+        // As search.rs: every word somewhere; repeats of one event as one result.
+        const words = normalize(String(a.query)).split(" ").filter(Boolean);
+        if (!words.length) return { events: [], tasks: [] };
+        const now = ts();
+        const spaceName = (id: string) => tables.space.find((s) => s.id === id)?.name ?? "";
+        const has = (hay: string) => words.every((w) => hay.includes(w));
+        const groups = new Map<string, Row>();
+        for (const e of tables.event.filter((x) => !x.deletedAt)) {
+          const t = normalize(e.title);
+          if (!has(`${t} ${normalize(e.notes ?? "")} ${normalize(e.location ?? "")} ${normalize(spaceName(e.spaceId))}`)) continue;
+          const key = `${t}|${e.spaceId}`;
+          const g = groups.get(key) ?? { title: e.title, spaceId: e.spaceId, location: "", count: 0, last: null, next: null, inTitle: false };
+          groups.set(key, g);
+          g.count++;
+          g.inTitle ||= has(t);
+          const when = { eventId: e.id, startAt: e.startAt, allDay: e.allDay };
+          if (e.startAt <= now) { if (!g.last || e.startAt > g.last.startAt) { g.last = when; g.location = e.location || g.location; } }
+          else if (!g.next || e.startAt < g.next.startAt) { g.next = when; g.location = e.location || g.location; }
+        }
+        const events = [...groups.values()].sort((x, y) =>
+          Number(y.inTitle) - Number(x.inTitle) || Number(!x.next) - Number(!y.next) ||
+          (x.next ? x.next.startAt.localeCompare(y.next.startAt) : (y.last?.startAt ?? "").localeCompare(x.last?.startAt ?? "")));
+        const tasks = tables.task.filter((t) => !t.deletedAt).filter((t) => {
+          const steps = tables.task_part.filter((p) => p.taskId === t.id && !p.deletedAt).map((p) => p.title).join(" ");
+          return has(`${normalize(t.title)} ${normalize(t.notes ?? "")} ${normalize(spaceName(t.spaceId))} ${normalize(steps)}`);
+        }).map((t) => ({ id: t.id, title: t.title, spaceId: t.spaceId, deadlineAt: t.deadlineAt, completedAt: t.completedAt, inTitle: has(normalize(t.title)) }))
+          .sort((x, y) => Number(y.inTitle) - Number(x.inTitle) || Number(!!x.completedAt) - Number(!!y.completedAt) || (x.deadlineAt ?? "9999").localeCompare(y.deadlineAt ?? "9999"));
+        return { events: events.slice(0, 100), tasks: tasks.slice(0, 100) };
       }
       case "similar_todos": {
         const open = tables.task.filter((t) => !t.deletedAt && !t.completedAt && t.title);

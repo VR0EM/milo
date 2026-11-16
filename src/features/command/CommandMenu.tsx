@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
-import { useAction, useCreateEvent, useEvents, useSpaces, useTasks } from "../../lib/queries";
+import { useAction, useCreateEvent, useSearch, useSpaces } from "../../lib/queries";
+import { eventWhen, openEvent, openTask, taskWhen } from "../search/found";
 import { INBOX_ID } from "../../lib/types";
 import { pickDefaultSpace } from "../../lib/spaces";
 import { preferredSpace, useUi, type View } from "../../lib/store";
 import {
-  addDays,
   atMinutes,
   fmtDateField,
-  fmtMoment,
   fromDateInput,
   minutesIntoDay,
   parseDate,
@@ -60,13 +59,8 @@ function Menu() {
   const lastSpaceId = useUi(preferredSpace);
   const eventMinutes = useUi((s) => s.prefs.eventMinutes);
   const spaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
-  const tasks = useTasks().data ?? [];
-  // Events from a month back to four months ahead: enough to find what is meant.
-  const [range] = useState(() => {
-    const today = startOfDay(new Date());
-    return [addDays(today, -30), addDays(today, 120)] as const;
-  });
-  const events = useEvents(range[0], range[1]).data ?? [];
+  // Every event and to-do of any date, found in Rust (search.rs).
+  const found = useSearch(query).data;
   const createEvent = useCreateEvent();
   const act = useAction("tasks");
 
@@ -173,41 +167,48 @@ function Menu() {
     list.push(...(words.length ? commands.filter((c) => matches(c, words)) : commands));
 
     if (words.length) {
-      const found = <T,>(xs: T[], make: (x: T) => Item) => xs.map(make).filter((i) => matches(i, words)).slice(0, MAX_FOUND);
       list.push(
-        ...found(spaces, (s) => ({ id: `space-${s.id}`, group: "Spaces", label: s.name, icon: "home" as IconName, run: () => useUi.getState().openSpace(s.id) })),
-        ...found(
-          [...tasks].sort((a, b) => Number(!!a.completedAt) - Number(!!b.completedAt)),
-          (t) => ({
-            id: `task-${t.id}`,
-            group: "Tasks",
-            label: t.title || "Untitled",
-            note: [t.completedAt ? "done" : "", t.deadlineAt ? `due ${fmtMoment(new Date(t.deadlineAt))}` : ""].filter(Boolean).join(" · "),
-            icon: "tasks" as IconName,
-            run: () => { go("tasks"); useUi.getState().selectTask(t.id); },
-          }),
-        ),
-        ...found(
-          // The coming ones first, then the most recent past ones.
-          [...events].sort((a, b) => {
-            const now = Date.now();
-            const fa = new Date(a.endAt).getTime() >= now;
-            const fb = new Date(b.endAt).getTime() >= now;
-            return fa !== fb ? (fa ? -1 : 1) : fa ? a.startAt.localeCompare(b.startAt) : b.startAt.localeCompare(a.startAt);
-          }),
-          (e) => ({
-            id: `event-${e.id}`,
-            group: "Events",
-            label: e.title || "Untitled",
-            note: e.allDay ? fmtDateField(new Date(e.startAt)) : fmtMoment(new Date(e.startAt)),
-            icon: "calendar" as IconName,
-            run: () => { go("calendar"); useUi.getState().showDate(new Date(e.startAt)); useUi.getState().select(e.id); },
-          }),
-        ),
+        ...spaces
+          .map((s): Item => ({ id: `space-${s.id}`, group: "Spaces", label: s.name, icon: "home", run: () => useUi.getState().openSpace(s.id) }))
+          .filter((i) => matches(i, words))
+          .slice(0, MAX_FOUND),
       );
+      const events = found?.events ?? [];
+      const eventItem = (h: (typeof events)[number]): Item => ({
+        id: `event-${h.title}-${h.spaceId}`,
+        group: h.next ? "Coming" : "Earlier",
+        label: h.title || "Untitled",
+        note: [h.location, eventWhen(h)].filter(Boolean).join(" · "),
+        icon: "calendar",
+        run: () => openEvent((h.next ?? h.last)!),
+      });
+      list.push(...events.filter((h) => h.next).slice(0, MAX_FOUND).map(eventItem));
+      list.push(...events.filter((h) => !h.next).slice(0, MAX_FOUND).map(eventItem));
+      list.push(
+        ...(found?.tasks ?? []).slice(0, MAX_FOUND).map((t): Item => ({
+          id: `task-${t.id}`,
+          group: "To-dos",
+          label: t.title || "Untitled",
+          note: taskWhen(t),
+          icon: "tasks",
+          run: () => openTask(t.id),
+        })),
+      );
+      const total = events.length + (found?.tasks.length ?? 0);
+      if (total > 0) {
+        list.push({
+          id: "search-all",
+          group: "Search",
+          label: `Show all results for “${query.trim()}”`,
+          note: `${total}`,
+          icon: "search",
+          keys: `${MOD_LABEL}F`,
+          run: () => useUi.getState().openSearch(query.trim()),
+        });
+      }
     }
     return list;
-  }, [query, hiddenScreens, spaces, tasks, events, defaultSpaceId, eventMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, hiddenScreens, spaces, found, defaultSpaceId, eventMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
@@ -232,7 +233,7 @@ function Menu() {
           aria-controls="command-list"
           aria-activedescendant={items[active] ? `cmd-${items[active].id}` : undefined}
           aria-label="Type a command, a date, or what you are looking for"
-          placeholder="Type a command, a date, or a task…"
+          placeholder="Type a command, a date, or what you are looking for…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {

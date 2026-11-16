@@ -639,3 +639,19 @@ as a first line "Location: …" in the notes, which only show when an event is o
   ("Lab in 25 min · ELL.01.01"); not while it runs, as she is there then.
 - Tried on a real school timetable (186 lessons, kept out of the repository): every lesson got its
   room, no notes kept a "Location:" line, and a second sync changed nothing.
+
+## Search (0.3.9)
+
+Asked for: finding earlier events. Cmd+K only looked at event titles from 30 days back to four
+months ahead, five at most.
+
+- `search.rs` looks at every event and to-do that is not archived, of any date: title, notes,
+  location, space, activity, and a to-do's steps. Capitals and accents do not matter; every word
+  typed must be found. Plain substring matching in Rust: a few thousand rows take milliseconds,
+  so no index or model is needed.
+- Repeats of one event (same title, same space) are one result with the count, the last and the
+  next time, so a weekly class is one line instead of thirteen.
+- Words in the title rank first; then coming before past, nearest first. To-dos: open before
+  done, nearest deadline first.
+- Cmd+K shows Coming, Earlier and To-dos (five each) and "Show all results"; Cmd/Ctrl+F opens the
+  search page with filters (all / events / to-dos, any time / coming / earlier, space).

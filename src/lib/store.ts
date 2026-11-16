@@ -16,7 +16,7 @@ export type Dialog =
   | { kind: "activity"; item?: Activity }
   | { kind: "task_type"; item?: TaskType; spaceId?: string };
 
-export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings" | "space";
+export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings" | "space" | "search";
 export type Theme = "system" | "light" | "dark";
 export type Accent = "blue" | "teal" | "green" | "plum" | "clay" | "custom";
 export type Font = "system" | "rounded" | "humanist" | "serif";
@@ -149,6 +149,10 @@ interface UiState {
   openTasks: (list: TasksList) => void;
   /** The "What do you want to do today?" picker is open. */
   pickTodayOpen: boolean;
+  /** What the search page looks for. */
+  searchQuery: string;
+  /** The search page, on these words. */
+  openSearch: (query?: string) => void;
   showCompleted: boolean;
   selectedEventId: string | null;
   focusTitle: boolean;
@@ -238,6 +242,9 @@ export const useUi = create<UiState>()(
       tasksList: "overview",
       openTasks: (tasksList) => set({ view: "tasks", tasksList, selectedTaskId: null, selectedEventId: null }),
       pickTodayOpen: false,
+      searchQuery: "",
+      openSearch: (query) =>
+        set((s) => ({ view: "search", searchQuery: query ?? s.searchQuery, commandOpen: false, selectedTaskId: null, selectedEventId: null })),
       shortcutsOpen: false,
       whatsNewOpen: false,
       commandOpen: false,

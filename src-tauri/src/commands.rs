@@ -153,6 +153,12 @@ pub fn suggest_in_space(
     let (labels, examples) = crate::suggest::labels_history(conn!(db), &space_id, &what, chrono::Utc::now())?;
     s.suggest_among(&texts, labels, &examples)
 }
+/// Every event and to-do with these words, of any date.
+#[tauri::command(async)]
+pub fn search(db: State<Db>, query: String) -> Result<crate::search::SearchResults> {
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    crate::search::search(conn!(db), &query, &now)
+}
 /// For each note (id, text): an open to-do it seems to repeat.
 #[tauri::command(async)]
 pub fn similar_todos(db: State<Db>, s: State<crate::suggest::Suggester>, items: Vec<(String, String)>) -> Result<Vec<Option<crate::suggest::Similar>>> {

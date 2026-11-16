@@ -12,6 +12,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.3.9",
+    date: "2026-11-16",
+    items: [
+      "Search everything with Cmd+F (Ctrl+F on Windows): every event, also long ago, and every to-do, also done. It looks in titles, notes, rooms and steps.",
+      "A weekly class shows once in the results, with how often, the last time and the next time.",
+      "Cmd+K finds events of any date too, and offers to show all results.",
+    ],
+  },
+  {
     version: "0.3.8",
     date: "2026-11-16",
     items: [

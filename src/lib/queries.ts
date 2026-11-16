@@ -129,6 +129,17 @@ export function useSimilar(tasks: Task[]) {
     select: (list) => new Map(tasks.map((t, i) => [t.id, list[i]])),
   });
 }
+/** Everything with these words, of any date; asked again when tasks or events change. */
+export function useSearch(query: string) {
+  const version = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks }).dataUpdatedAt;
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["search", q, version],
+    queryFn: () => api.search(q),
+    enabled: q.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
 export const useSmartModel = () => useQuery({ queryKey: ["smartModel"], queryFn: api.smartModelStatus });
 export const useSections = () => useQuery({ queryKey: ["sections"], queryFn: api.listSections });
 
