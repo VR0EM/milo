@@ -101,6 +101,10 @@ function Menu() {
         id: `view-${view}`, group: "Go to", label, icon, run: () => go(view),
       })),
       { id: "view-settings", group: "Go to", label: "Settings", icon: "settings", keys: `${MOD_LABEL},`, run: () => go("settings") },
+      // The way out when her own CSS hid or broke a screen.
+      ...(useUi.getState().prefs.customCssOn && useUi.getState().prefs.customCss.trim()
+        ? [{ id: "custom-css-off", group: "Go to", label: "Turn off custom CSS", words: "style theme reset", icon: "settings", run: () => useUi.getState().setPrefs({ customCssOn: false }) } as Item]
+        : []),
       {
         id: "cal-today", group: "Calendar", label: "Go to today", words: "now", icon: "calendar", keys: "T",
         run: () => { go("calendar"); useUi.getState().showDate(new Date()); },

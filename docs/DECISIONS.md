@@ -740,3 +740,21 @@ The rest of the first feedback file (docs kept outside the repository):
   settings file, keeps the first original beside it, and leaves a file it cannot parse alone.
   The Microsoft Store version of Claude keeps that file in its package folder; both are looked
   for. Other apps get a snippet to paste.
+
+## More themes, shape and custom CSS (0.4.1)
+
+- **Colour themes are surface palettes** (Neutral, Paper, Slate, Sage, Ink), separate from the
+  accent and from light/dark. Each sets only backgrounds, lines and text, for light and dark
+  (`data-mode`, worked out in JS from the theme and the computer, so one rule per tone instead
+  of a copy inside the dark media query). In light mode the page takes the tint clearly and
+  cards stay lighter than the page (the first, near-white tints were too faint to tell apart).
+  Grey text keeps at least 4.4:1 on the sidebar in every theme. The samples in Settings are
+  small pictures of Milo (sidebar, page, card, text) in the mode shown now.
+- **Higher contrast** mixes grey text and lines toward the text colour, so it works on any theme
+  and on custom colours.
+- **Corners, spacing, sidebar** are multipliers (`--r`, `--d`) and a width (`--sidebar-w`). Small
+  radii scale; circles (dots, swatches, the "?" button) and switches stay round. Spacing changes
+  row heights and block padding only, never text size (that is Text size).
+- **Custom CSS** is stored with the other preferences and added last, so it wins. It applies as
+  typing pauses. The way out when it hides the screen: Ctrl/⌘K › "Turn off custom CSS", which
+  keeps the text. No plugins: code with access to her data is not worth it for one person.

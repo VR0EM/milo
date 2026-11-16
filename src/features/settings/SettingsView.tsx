@@ -6,7 +6,8 @@ import { api, autostart, files, inDesktop, onModelProgress } from "../../lib/api
 import type { BackupFile } from "../../lib/types";
 import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
 import { useActivities, useSmartModel, useSpaces, useTaskTypes } from "../../lib/queries";
-import { TODAY_BLOCKS, useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
+import { TODAY_BLOCKS, useUi, type Accent, type Corners, type Density, type Font, type Palette, type SidebarWidth, type TextSize, type Theme } from "../../lib/store";
+import { CustomCss } from "./CustomCss";
 import { NAV } from "../spaces/Sidebar";
 import { IS_MAC } from "../shortcuts/keys";
 import { Icon } from "../../components/Icon";
@@ -26,6 +27,13 @@ const FONTS: [Font, string, string][] = [
 ].filter(([f]) => IS_MAC || f !== "rounded") as [Font, string, string][];
 const SIZES: [TextSize, string][] = [["small", "Small"], ["default", "Default"], ["large", "Large"]];
 const THEMES: [Theme, string][] = [["system", "Match the computer"], ["light", "Light"], ["dark", "Dark"]];
+const PALETTES: [Palette, string, string][] = [
+  ["neutral", "Neutral", "Plain greys"],
+  ["paper", "Paper", "Warm, like paper"],
+  ["slate", "Slate", "Cool blue-grey"],
+  ["sage", "Sage", "A hint of green"],
+  ["ink", "Ink", "Crisp white, or black at night"],
+];
 const CATEGORY: Record<string, string> = { class: "Class", self_study: "Self-study", other: "Not productive" };
 
 /** One labelled setting: the name (with an optional "?" explanation) on the left, the control on the right. */
@@ -279,6 +287,16 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
+          <Row title="Colours">
+            <div className="palette-picker" role="radiogroup" aria-label="Colours">
+              {PALETTES.map(([p, label, hint]) => (
+                <button key={p} role="radio" aria-checked={prefs.palette === p} title={hint} className={prefs.palette === p ? "on" : ""} onClick={() => setPrefs({ palette: p })}>
+                  <span className="palette-sample" data-palette-sample={p} aria-hidden="true"><i className="ps-side" /><i className="ps-card" /></span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </Row>
           <Row title="Accent colour">
             <div className="accent-picker" role="radiogroup" aria-label="Accent colour">
               {ACCENTS.map(([a, label]) => (
@@ -338,6 +356,18 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
+          <Row title="Corners">
+            <Choice<Corners> value={prefs.corners} label="Corners" options={[["round", "Round"], ["soft", "Soft"], ["square", "Square"]]} onChange={(corners) => setPrefs({ corners })} />
+          </Row>
+          <Row title="Spacing" info="How much room rows and blocks get: Compact shows more at once, Roomy is calmer to read.">
+            <Choice<Density> value={prefs.density} label="Spacing" options={[["compact", "Compact"], ["comfortable", "Default"], ["roomy", "Roomy"]]} onChange={(density) => setPrefs({ density })} />
+          </Row>
+          <Row title="Contrast" info="Higher makes grey text and lines darker in light mode and lighter in dark mode, in every colour theme.">
+            <Choice value={prefs.highContrast ? "high" : "normal"} label="Contrast" options={[["normal", "Normal"], ["high", "Higher"]]} onChange={(v) => setPrefs({ highContrast: v === "high" })} />
+          </Row>
+          <Row title="Sidebar width">
+            <Choice<SidebarWidth> value={prefs.sidebarWidth} label="Sidebar width" options={[["narrow", "Narrow"], ["default", "Default"], ["wide", "Wide"]]} onChange={(sidebarWidth) => setPrefs({ sidebarWidth })} />
+          </Row>
           <Row title="Event colours">
             <Choice value={prefs.eventStrength} label="Event colours" options={[["soft", "Soft"], ["normal", "Normal"], ["strong", "Strong"]]} onChange={(eventStrength) => setPrefs({ eventStrength })} />
           </Row>
@@ -370,6 +400,8 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
+          <h3 className="fold-sub">Custom CSS</h3>
+          <CustomCss />
         </Section>
 
         <Section id="today" title="Today" info="Which blocks Today shows, and in what order. Blocks with nothing to show stay out of the way by themselves.">

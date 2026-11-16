@@ -22,6 +22,10 @@ export type Theme = "system" | "light" | "dark";
 export type Accent = "blue" | "teal" | "green" | "plum" | "clay" | "custom";
 export type Font = "system" | "rounded" | "humanist" | "serif";
 export type TextSize = "small" | "default" | "large";
+export type Palette = "neutral" | "paper" | "slate" | "sage" | "ink";
+export type Corners = "round" | "soft" | "square";
+export type Density = "compact" | "comfortable" | "roomy";
+export type SidebarWidth = "narrow" | "default" | "wide";
 export const TEXT_SCALE: Record<TextSize, number> = { small: 0.92, default: 1, large: 1.1 };
 
 /** Preferences from the Settings screen. */
@@ -32,6 +36,16 @@ export interface Prefs {
   customAccent: string;
   font: Font;
   textSize: TextSize;
+  /** The colour theme of backgrounds, lines and text; each has a light and a dark tone. */
+  palette: Palette;
+  corners: Corners;
+  density: Density;
+  /** Grey text and lines closer to the text colour. */
+  highContrast: boolean;
+  sidebarWidth: SidebarWidth;
+  /** Her own CSS, added after Milo's, and whether it is used. */
+  customCss: string;
+  customCssOn: boolean;
   /** Open the small always-on-top timer when a focus session starts. */
   focusMini: boolean;
   /** Ask GitHub for a newer version when Milo starts (at most once a day). */
@@ -77,6 +91,8 @@ export const TODAY_BLOCKS: [TodayBlock, string][] = [
 export type TasksList = "overview" | "today" | "upcoming" | "inbox" | "late" | "all";
 export const DEFAULT_PREFS: Prefs = {
   theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true,
+  palette: "neutral", corners: "soft", density: "comfortable", highContrast: false, sidebarWidth: "default",
+  customCss: "", customCssOn: true,
   autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7,
   eventStrength: "normal", timeFormat: "24h", weekStart: 1, startView: "last", hiddenScreens: [],
   todayOrder: TODAY_BLOCKS.map(([b]) => b), todayHidden: [], setupDone: false, startCardHidden: false,
