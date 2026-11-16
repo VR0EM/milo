@@ -2,7 +2,7 @@
 //! restored. Restoring is `repo::set_archived(.., false)`.
 
 use crate::error::{AppError, Result};
-use crate::models::ArchivedItem;
+use crate::models::{ArchiveKind, ArchivePage, ArchivedItem};
 use crate::repo;
 use rusqlite::{Connection, OptionalExtension};
 
@@ -19,9 +19,6 @@ pub fn clean_up(c: &Connection, now: chrono::DateTime<chrono::Utc>) -> Result<us
     delete_archived_before(c, &before)
 }
 
-/// Archived events can be many; the newest are listed and the rest counted.
-const EVENT_LIMIT: i64 = 300;
-
 /// (entity, SQL returning id, label, context, when, archived_at, removed_by_sync)
 const SOURCES: &[(&str, &str)] = &[
     ("space", "SELECT id, name, NULL, NULL, deleted_at, 0 FROM spaces WHERE deleted_at IS NOT NULL"),
@@ -37,52 +34,55 @@ const SOURCES: &[(&str, &str)] = &[
     ("import_source", "SELECT id, name, location, NULL, deleted_at, 0 FROM import_sources WHERE deleted_at IS NOT NULL"),
     ("title_mapping", "SELECT m.id, m.pattern, s.name, NULL, m.deleted_at, 0 FROM title_mappings m JOIN spaces s ON s.id = m.space_id WHERE m.deleted_at IS NOT NULL"),
     ("semester", "SELECT id, name, start_date || ' – ' || end_date, NULL, deleted_at, 0 FROM semesters WHERE deleted_at IS NOT NULL"),
+    ("event", "SELECT e.id, e.title, s.name, e.start_at, e.deleted_at, e.removed_by_sync FROM events e JOIN spaces s ON s.id = e.space_id WHERE e.deleted_at IS NOT NULL AND e.replaced = 0"),
 ];
 
-fn read(c: &Connection, entity: &str, sql: &str, params: &[&dyn rusqlite::ToSql]) -> Result<Vec<ArchivedItem>> {
-    let mut s = c.prepare(sql)?;
-    let rows = s
-        .query_map(params, |r| {
-            Ok(ArchivedItem {
-                entity: entity.to_string(),
-                id: r.get(0)?,
-                label: r.get::<_, String>(1)?,
-                context: r.get(2)?,
-                when: r.get(3)?,
-                archived_at: r.get(4)?,
-                removed_by_sync: r.get(5)?,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
+/// Everything archived as one table `a(entity, id, label, context, at, archived, sync)`,
+/// narrowed to labels containing ?1 (lower case, "" for all).
+fn archived_cte() -> String {
+    let parts: Vec<String> = SOURCES.iter().map(|(e, sql)| sql.replacen("SELECT ", &format!("SELECT '{e}', "), 1)).collect();
+    format!(
+        "WITH all_archived(entity, id, label, context, at, archived, sync) AS ({}),
+         a AS (SELECT * FROM all_archived WHERE ?1 = '' OR instr(lower(label), ?1) > 0)",
+        parts.join(" UNION ALL ")
+    )
 }
 
-/// Everything archived whose label contains `query` (case-insensitive), newest first,
-/// plus how many archived events were left out by the limit.
-pub fn list_archived(c: &Connection, query: &str) -> Result<(Vec<ArchivedItem>, i64)> {
-    let q = query.trim().to_lowercase();
-    let mut items = Vec::new();
-    for (entity, sql) in SOURCES {
-        items.extend(read(c, entity, sql, &[])?.into_iter().filter(|i| q.is_empty() || i.label.to_lowercase().contains(&q)));
-    }
+fn item(r: &rusqlite::Row) -> rusqlite::Result<ArchivedItem> {
+    Ok(ArchivedItem {
+        entity: r.get(0)?,
+        id: r.get(1)?,
+        label: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+        context: r.get(3)?,
+        when: r.get(4)?,
+        archived_at: r.get(5)?,
+        removed_by_sync: r.get(6)?,
+    })
+}
 
-    let like = format!("%{q}%");
-    let events = read(
-        c,
-        "event",
-        "SELECT e.id, e.title, s.name, e.start_at, e.deleted_at, e.removed_by_sync FROM events e JOIN spaces s ON s.id = e.space_id
-         WHERE e.deleted_at IS NOT NULL AND e.replaced = 0 AND lower(e.title) LIKE ?1 ORDER BY e.deleted_at DESC LIMIT ?2",
-        &[&like, &EVENT_LIMIT],
-    )?;
-    let total: i64 = c.query_row(
-        "SELECT COUNT(*) FROM events WHERE deleted_at IS NOT NULL AND replaced = 0 AND lower(title) LIKE ?1",
-        [&like],
-        |r| r.get(0),
-    )?;
-    let hidden = total - events.len() as i64;
-    items.extend(events);
-    items.sort_by(|a, b| b.archived_at.cmp(&a.archived_at));
-    Ok((items, hidden))
+/// One page of the archive, newest first: what matches `query` (by name, any case) and `kind`
+/// (an entity, or "" for all), from `offset`, at most `limit`. Also how many match in all and
+/// how many of each kind match the query, so the list never has to be loaded whole.
+pub fn page(c: &Connection, query: &str, kind: &str, limit: i64, offset: i64) -> Result<ArchivePage> {
+    let q = query.trim().to_lowercase();
+    let cte = archived_cte();
+    let kinds: Vec<ArchiveKind> = c
+        .prepare(&format!("{cte} SELECT entity, COUNT(*) FROM a GROUP BY entity ORDER BY COUNT(*) DESC"))?
+        .query_map([&q], |r| Ok(ArchiveKind { entity: r.get(0)?, count: r.get(1)? }))?
+        .collect::<rusqlite::Result<_>>()?;
+    let total = kinds.iter().filter(|k| kind.is_empty() || k.entity == kind).map(|k| k.count).sum();
+    let items = c
+        .prepare(&format!(
+            "{cte} SELECT * FROM a WHERE ?2 = '' OR entity = ?2 ORDER BY archived DESC, entity, id LIMIT ?3 OFFSET ?4"
+        ))?
+        .query_map(rusqlite::params![q, kind, limit.max(0), offset.max(0)], item)?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(ArchivePage { items, total, kinds })
+}
+
+/// Everything archived whose label contains `query`, newest first (for clean-ups and tests).
+pub fn list_archived(c: &Connection, query: &str) -> Result<Vec<ArchivedItem>> {
+    Ok(page(c, query, "", i64::MAX, 0)?.items)
 }
 
 /// Removes an archived item for good, with what only belonged to it (a task's parts, a routine's
@@ -163,21 +163,9 @@ fn has_table(c: &Connection, name: &str) -> Result<bool> {
 /// Deletes for good everything that was archived before `before` (ISO time) and can go.
 /// Returns how many items went; what must stay archived is left without complaint.
 pub fn delete_archived_before(c: &Connection, before: &str) -> Result<usize> {
-    let (items, _) = list_archived(c, "")?;
     let mut gone = 0;
-    // Events beyond the listing limit are counted too.
-    let mut ids: Vec<(String, String)> = items.into_iter().filter(|i| i.archived_at.as_str() < before).map(|i| (i.entity, i.id)).collect();
-    let extra: Vec<String> = c
-        .prepare("SELECT id FROM events WHERE deleted_at IS NOT NULL AND deleted_at < ?1 AND source_id IS NULL")?
-        .query_map([before], |r| r.get(0))?
-        .collect::<rusqlite::Result<_>>()?;
-    for id in extra {
-        if !ids.iter().any(|(_, x)| *x == id) {
-            ids.push(("event".into(), id));
-        }
-    }
-    for (entity, id) in ids {
-        if delete_forever(c, &entity, &id).is_ok() {
+    for i in list_archived(c, "")?.into_iter().filter(|i| i.archived_at.as_str() < before) {
+        if delete_forever(c, &i.entity, &i.id).is_ok() {
             gone += 1;
         }
     }
@@ -206,16 +194,15 @@ mod tests {
         repo::set_archived(&c, "event", &e.id, true).unwrap();
         repo::set_archived(&c, "activity", "seed-activity-exam", true).unwrap();
 
-        let (items, hidden) = list_archived(&c, "").unwrap();
-        assert_eq!(hidden, 0);
+        let items = list_archived(&c, "").unwrap();
         assert_eq!(items.iter().map(|i| i.entity.as_str()).collect::<Vec<_>>().len(), 2);
         assert!(items.iter().any(|i| i.entity == "event" && i.label == "Dentist" && i.context.as_deref() == Some("Personal")));
 
-        assert_eq!(list_archived(&c, "dent").unwrap().0.len(), 1);
-        assert_eq!(list_archived(&c, "EXAM").unwrap().0.len(), 1);
+        assert_eq!(list_archived(&c, "dent").unwrap().len(), 1);
+        assert_eq!(list_archived(&c, "EXAM").unwrap().len(), 1);
 
         repo::set_archived(&c, "event", &e.id, false).unwrap();
-        assert!(list_archived(&c, "dent").unwrap().0.is_empty());
+        assert!(list_archived(&c, "dent").unwrap().is_empty());
     }
 
     #[test]
@@ -231,7 +218,7 @@ mod tests {
         )
         .unwrap();
         c.execute("UPDATE events SET source = 'import', deleted_at = '2026-01-01T00:00:00.000Z', removed_by_sync = 1 WHERE id = ?1", [&e.id]).unwrap();
-        assert!(list_archived(&c, "").unwrap().0[0].removed_by_sync);
+        assert!(list_archived(&c, "").unwrap()[0].removed_by_sync);
         repo::set_archived(&c, "event", &e.id, false).unwrap();
         let back = repo::get_event(&c, &e.id).unwrap();
         assert!(back.locally_modified, "a restored event is the user's choice, so syncs leave it");
@@ -248,6 +235,38 @@ mod tests {
         )
         .unwrap()
         .id
+    }
+
+    #[test]
+    fn the_archive_comes_in_pages_with_counts_per_kind() {
+        let c = open_in_memory().unwrap();
+        for n in 0..120 {
+            let e = event(&c, &format!("Plan {n}"));
+            repo::set_archived(&c, "event", &e, true).unwrap();
+            c.execute("UPDATE events SET deleted_at = ?1 WHERE id = ?2", [format!("2026-01-01T00:{:02}:{:02}.000Z", n / 60, n % 60), e]).unwrap();
+        }
+        repo::set_archived(&c, "activity", "seed-activity-exam", true).unwrap();
+        repo::set_archived(&c, "space", "seed-space-transport", true).unwrap();
+
+        let first = page(&c, "", "", 50, 0).unwrap();
+        assert_eq!((first.items.len(), first.total), (50, 122));
+        assert_eq!(first.kinds[0].entity, "event");
+        assert_eq!(first.kinds[0].count, 120);
+        assert_eq!(first.kinds.len(), 3);
+        // Newest first: the two archived just now, then the latest plan.
+        assert!(first.items[..2].iter().all(|i| i.entity != "event"));
+        assert_eq!(first.items[2].label, "Plan 119");
+
+        let last = page(&c, "", "", 50, 100).unwrap();
+        assert_eq!(last.items.len(), 22);
+        assert_eq!(last.items.last().unwrap().label, "Plan 0");
+
+        let events = page(&c, "", "event", 500, 0).unwrap();
+        assert_eq!((events.items.len(), events.total), (120, 120));
+        let found = page(&c, "PLAN 11", "", 50, 0).unwrap();
+        assert_eq!(found.total, 11, "Plan 11 and Plan 110 to 119");
+        assert_eq!(page(&c, "exam", "event", 50, 0).unwrap().total, 0);
+        assert_eq!(page(&c, "exam", "", 50, 0).unwrap().kinds.len(), 1);
     }
 
     #[test]

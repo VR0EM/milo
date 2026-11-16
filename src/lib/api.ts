@@ -125,7 +125,9 @@ export const api = {
   emptyArchive: () => call<number>("empty_archive"),
   archiveKeepSetting: () => call<number | null>("archive_keep_setting"),
   setArchiveKeepSetting: (days: number | null) => call<void>("set_archive_keep_setting", { days }),
-  listArchived: (query: string) => call<{ items: ArchivedItem[]; hiddenEvents: number }>("list_archived", { query }),
+  /** One page of the archive, newest first, with how many match and how many of each kind. */
+  listArchived: (query: string, kind: Entity | "", limit: number, offset = 0) =>
+    call<{ items: ArchivedItem[]; total: number; kinds: { entity: Entity; count: number }[] }>("list_archived", { query, kind, limit, offset }),
 
   menubarSetting: () => call<boolean>("menubar_setting"),
   setMenubarSetting: (on: boolean) => call<void>("set_menubar_setting", { on }),
@@ -158,6 +160,13 @@ export const api = {
   sizeFocusMini: (expanded: boolean) => call<void>("size_focus_mini", { expanded }),
   closeFocusMini: () => call<void>("close_focus_mini"),
   showMainWindow: () => call<void>("show_main_window"),
+
+  // AI apps through MCP (Settings › Connect AI).
+  aiSetup: () => call<{ access: string; snippet: string; claudeFound: boolean; claudeConnected: boolean }>("ai_setup"),
+  setAiAccess: (access: "off" | "read" | "write") => call<void>("set_ai_access", { access }),
+  connectClaudeDesktop: () => call<void>("connect_claude_desktop"),
+  /** Moves when another program wrote to the database. */
+  dataVersion: () => call<number>("data_version"),
 
   setArchived: (entity: Entity, id: string, archived: boolean) =>
     call<void>("set_archived", { entity, id, archived }),

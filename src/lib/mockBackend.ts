@@ -12,6 +12,7 @@ const base = (id: string, sortOrder: number) => ({ id, sortOrder, createdAt: ts(
 let menubarOn = true;
 /** Settings › Archive: delete archived items for good after this many days (null = never). */
 let archiveKeep: number | null = null;
+let aiAccess = "off";
 const tables: Record<string, Row[]> = {
   group: [{ ...base("seed-group-school", 0), name: "School" }],
   space: [
@@ -469,7 +470,12 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
             })),
           )
           .sort((x, y) => y.archivedAt.localeCompare(x.archivedAt));
-        return { items, hiddenEvents: 0 };
+        const counts = new Map<string, number>();
+        for (const i of items) counts.set(i.entity, (counts.get(i.entity) ?? 0) + 1);
+        const kinds = [...counts].map(([entity, count]) => ({ entity, count })).sort((x, y) => y.count - x.count);
+        const ofKind = a.kind ? items.filter((i) => i.entity === a.kind) : items;
+        const from = Number(a.offset ?? 0);
+        return { items: ofKind.slice(from, from + Number(a.limit ?? 50)), total: ofKind.length, kinds };
       }
       case "list_confirmations": {
         const d = new Date();
@@ -488,6 +494,16 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "update_import_source": return update("import_source", a.id, a.input);
       case "show_focus_mini": case "size_focus_mini": case "close_focus_mini": case "show_main_window": return null;
       case "archive_keep_setting": return archiveKeep;
+      case "ai_setup":
+        return {
+          access: aiAccess,
+          snippet: JSON.stringify({ mcpServers: { milo: { command: "/Applications/Milo.app/Contents/MacOS/milo", args: ["--mcp"] } } }, null, 2),
+          claudeFound: false,
+          claudeConnected: false,
+        };
+      case "set_ai_access": aiAccess = String(a.access); return null;
+      case "connect_claude_desktop": throw "Only in the desktop app";
+      case "data_version": return 0;
       case "set_archive_keep_setting": archiveKeep = a.days ?? null; return null;
       case "delete_forever": {
         const table = (tables as Record<string, Row[]>)[a.entity];

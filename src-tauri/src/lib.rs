@@ -9,6 +9,7 @@ mod history;
 mod ics;
 mod importer;
 mod insights;
+mod mcp;
 mod menubar;
 mod models;
 mod reminders;
@@ -37,6 +38,48 @@ pub(crate) fn show_main(app: &AppHandle) {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+    }
+}
+
+/// Where the app keeps its data, without the app running: the same folder Tauri gives
+/// (`app_data_dir`), or `MILO_DATA_DIR` when set (for tests).
+fn data_dir() -> Option<std::path::PathBuf> {
+    if let Some(d) = std::env::var_os("MILO_DATA_DIR") {
+        return Some(d.into());
+    }
+    let id = "app.milo.desktop";
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support"));
+    #[cfg(windows)]
+    let base = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share")));
+    base.map(|b| b.join(id))
+}
+
+/// `milo --mcp`: Milo as an MCP server for AI apps, without a window (see mcp.rs).
+pub fn run_mcp() -> i32 {
+    let Some(dir) = data_dir() else {
+        eprintln!("Milo: cannot find the data folder");
+        return 1;
+    };
+    let path = dir.join("milo.sqlite");
+    if !path.exists() && std::env::var_os("MILO_DATA_DIR").is_none() {
+        eprintln!("Milo: open Milo once before connecting an AI app ({} does not exist)", path.display());
+        return 1;
+    }
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("Milo: {e}");
+        return 1;
+    }
+    match db::open(&path).and_then(|c| mcp::serve(&c)) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("Milo: {e}");
+            1
+        }
     }
 }
 
@@ -309,6 +352,10 @@ pub fn run() {
             commands::similar_todos,
             commands::search,
             commands::export_csv,
+            commands::ai_setup,
+            commands::set_ai_access,
+            commands::connect_claude_desktop,
+            commands::data_version,
             commands::import_todos,
             commands::read_text_file,
             commands::focus_tasks,

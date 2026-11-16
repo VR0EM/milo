@@ -19,6 +19,9 @@ export const RELEASES: Release[] = [
       "Import a checklist from Obsidian or Notes into a course or list: headings become parts, list items to-dos, indented items steps, and ticked items stay done. Paste it or open a .md file.",
       "Insights compares with the week, month or year before: +2 h or −35 min beside each space, class, self-study and sleep.",
       "Export CSV in Insights: the time per space or every event of the period, as a file that opens in Excel.",
+      "Connect AI (Settings): let an AI app such as Claude Desktop read your calendar and to-dos, and if you allow it, add study blocks and to-dos or tick things off. Off until you choose; nothing is ever deleted.",
+      "Bars in Insights no longer cover the day names below them.",
+      "The archive in Settings shows the newest 50 with \"Show 50 more\" below, so it stays short however much is archived. Search and the filter still look through all of it.",
     ],
   },
   {

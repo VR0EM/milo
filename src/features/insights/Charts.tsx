@@ -50,7 +50,7 @@ export function ColumnChart({ columns, series, label, height = 180, totals = fal
 
   return (
     <div>
-      <div className="chart" role="img" aria-label={label} style={{ height }}>
+      <div className={totals ? "chart with-totals" : "chart"} role="img" aria-label={label} style={{ height }}>
         <div className="chart-axis">
           {axis.map((t) => (
             <span key={t} style={{ bottom: `${(t * 60 / top) * 100}%` }}>{t} h</span>
@@ -60,28 +60,31 @@ export function ColumnChart({ columns, series, label, height = 180, totals = fal
           {axis.slice(1).map((t) => (
             <div key={t} className="chart-grid" style={{ bottom: `${(t * 60 / top) * 100}%` }} />
           ))}
-          {columns.map((c, i) => (
-            <div
-              key={c.key}
-              className="chart-col"
-              tabIndex={0}
-              aria-label={`${c.title}: ${series.map((s, j) => `${s.name} ${fmtMinutes(c.values[j])}`).join(", ")}`}
-              onMouseEnter={() => setHover(i)}
-              onFocus={() => setHover(i)}
-              onBlur={() => setHover(null)}
-            >
-              {totals && c.values.some((v) => v > 0) && (
-                <span className="col-total">{fmtHoursShort(c.values.reduce((a, b) => a + b, 0))}</span>
-              )}
-              <div className="chart-stack">
-                {c.values.map((v, j) =>
-                  v > 0 ? (
-                    <div key={j} className="chart-seg" style={{ height: `${(v / top) * height}px`, ["--s" as string]: series[j].color }} />
-                  ) : null,
+          {columns.map((c, i) => {
+            const sum = c.values.reduce((a, b) => a + b, 0);
+            // Heights as a share of the plot, so a bar never runs past its own bottom line.
+            const pct = top ? Math.min(100, (sum / top) * 100) : 0;
+            return (
+              <div
+                key={c.key}
+                className="chart-col"
+                tabIndex={0}
+                aria-label={`${c.title}: ${series.map((s, j) => `${s.name} ${fmtMinutes(c.values[j])}`).join(", ")}`}
+                onMouseEnter={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onBlur={() => setHover(null)}
+              >
+                {totals && sum > 0 && (
+                  <span className="col-total" style={{ bottom: `calc(${pct}% + 3px)` }}>{fmtHoursShort(sum)}</span>
                 )}
+                <div className="chart-stack" style={{ height: `${pct}%` }}>
+                  {c.values.map((v, j) =>
+                    v > 0 ? <div key={j} className="chart-seg" style={{ flexGrow: v, ["--s" as string]: series[j].color }} /> : null,
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {hovered && hover !== null && (
             // Beside the column, inside the plot: never over the hovered bar or the block's heading.
             <div

@@ -127,6 +127,8 @@ overview of its time, tasks and what is coming up.
   gets the time per to-do by itself.
 - **Next event in the menu bar**, like *Chemistry lab in 25 min*, so time stays visible
   (on Windows: in the tray icon's tooltip).
+- **Connect AI:** let an AI app such as Claude Desktop read your calendar and to-dos and, if you
+  allow it, plan study blocks or tick things off (MCP). See [Connect AI](#connect-ai).
 - **Checklists from Obsidian or Notes:** paste Markdown or open a .md file; headings become
   parts, items to-dos, indented items steps.
 - **Quick notes from any app** with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd>; they wait in the Inbox.
@@ -166,6 +168,10 @@ things you can see and switch off:
 - if you choose it, the one-time download of the **suggestion model** (about 83 MB from Hugging
   Face) that helps sort notes in the Inbox. It then runs on your computer only.
 
+If you turn on *Settings › Connect AI*, an AI app you use (such as Claude Desktop) can read your
+calendar and to-dos, and with "Read and change" add and change them. What it reads goes to that
+AI service. It is off until you choose it.
+
 Your data is one SQLite file with daily backups next to it (and optionally a second folder):
 
 | System | Folder |
@@ -174,6 +180,21 @@ Your data is one SQLite file with daily backups next to it (and optionally a sec
 | Windows | `%APPDATA%\app.milo.desktop` |
 
 Everything can also be exported from *Settings › Import & export*.
+
+## Connect AI
+
+Milo is an [MCP](https://modelcontextprotocol.io) server for AI apps. Choose what they may do in
+*Settings › Connect AI* (nothing, read, or read and change), then press *Add Milo to Claude
+Desktop* and restart Claude Desktop. For another app, *Copy settings* gives what to paste, in this
+shape (with the path of Milo on your computer):
+
+```json
+{ "mcpServers": { "milo": { "command": "<path to the Milo program>", "args": ["--mcp"] } } }
+```
+
+The AI can look at the calendar and to-dos,
+search, see time per space, add and change events and to-dos, and archive them. It cannot
+delete anything; every change keeps the earlier version.
 
 ## Keyboard
 

@@ -18,6 +18,7 @@ import { SetupGate } from "./features/setup/SetupGuide";
 import { RoutineEditor } from "./features/today/RoutineEditor";
 import { useUi } from "./lib/store";
 import { useAppearance } from "./lib/useAppearance";
+import { useOutsideChanges } from "./lib/outsideChanges";
 import { checkAutomatically } from "./lib/updates";
 import { addDays, setClockPrefs, startOfWeek } from "./lib/time";
 
@@ -34,6 +35,7 @@ export default function App() {
   }, [weekStart]);
   useGlobalShortcuts();
   useAppearance();
+  useOutsideChanges();
   const autoUpdates = useUi((s) => s.prefs.autoUpdates);
   useEffect(() => {
     if (autoUpdates) checkAutomatically();

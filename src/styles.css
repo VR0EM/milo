@@ -454,6 +454,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .legend i { width: 10px; height: 10px; border-radius: 2px; background: var(--s); display: inline-block; }
 
 .chart { position: relative; display: grid; grid-template-columns: 40px 1fr; height: 180px; margin-top: 6px; }
+/* Room above the plot for the total over the tallest column. */
+.chart.with-totals { padding-top: 18px; }
 .chart-axis { position: relative; }
 .chart-axis span { position: absolute; right: 8px; transform: translateY(50%); font-size: calc(11px * var(--text-scale)); color: var(--muted); font-variant-numeric: tabular-nums; }
 .chart-plot { position: relative; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--line); }
@@ -462,7 +464,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .chart-col:hover, .chart-col:focus-visible { background: color-mix(in srgb, var(--text) 4%, transparent); }
 .chart-col:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .chart-stack { width: 100%; max-width: 28px; display: flex; flex-direction: column-reverse; gap: 2px; }
-.chart-seg { background: var(--s); width: 100%; }
+.chart-seg { background: var(--s); width: 100%; flex: 0 1 0; min-height: 2px; }
 .chart-stack .chart-seg:last-child { border-radius: 4px 4px 0 0; }
 .chart-x { display: flex; gap: 2px; margin-left: 40px; margin-top: 4px; height: 16px; }
 .chart-x span { flex: 1; text-align: center; font-size: calc(11px * var(--text-scale)); color: var(--muted); white-space: nowrap; overflow: visible; }
@@ -481,7 +483,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .inline select, .import-row select { background-color: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 28px; }
 
 /* ---------- archive ---------- */
-.archive-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+.archive-row { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+.archive-more { margin-top: 10px; }
 .archive-row:last-child { border-bottom: 0; }
 .archive-kind { font-size: calc(12px * var(--text-scale)); color: var(--muted); }
 .archive-main { min-width: 0; }
@@ -644,7 +647,7 @@ kbd { font: inherit; font-size: calc(12px * var(--text-scale)); border: 1px soli
 .hbar-track span { display: block; height: 100%; border-radius: 4px; background: var(--s); }
 .hbar-value { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
 .sleep-line { display: flex; align-items: center; padding-top: 10px; margin-top: 4px; border-top: 1px solid var(--line-soft); }
-.col-total { font-size: calc(11px * var(--text-scale)); color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 3px; white-space: nowrap; }
+.col-total { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; font-size: calc(11px * var(--text-scale)); color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 3px; white-space: nowrap; }
 @media (max-width: 1150px) { .insight-pair { grid-template-columns: 1fr; } }
 
 /* Narrow list (detail panel open): drop the type column, then the priority word. */
@@ -1097,6 +1100,7 @@ body:has(.order-list li.dragging) { cursor: grabbing; user-select: none; }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 .btn.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .archive-row .link { margin-right: 4px; }
+.archive-row .confirm { grid-column: 3 / -1; }
 
 /* The logo's tile follows the theme: white in light mode, dark slate in dark mode. */
 :root { --logo-tile: #ffffff; }

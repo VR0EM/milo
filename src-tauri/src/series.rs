@@ -424,7 +424,7 @@ mod tests {
         // Untouched future occurrences of the old repeat are gone, not piled up.
         let left: i64 = c.query_row("SELECT COUNT(*) FROM events WHERE series_id = ?1", [&first_series], |r| r.get(0)).unwrap();
         assert_eq!(left, 3);
-        let (archived, _) = crate::archive::list_archived(&c, "").unwrap();
+        let archived = crate::archive::list_archived(&c, "").unwrap();
         assert!(archived.iter().all(|i| i.entity != "event"));
 
         // Stopping after 12 March leaves 5 and 12 March.

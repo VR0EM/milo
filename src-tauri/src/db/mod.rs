@@ -34,6 +34,8 @@ const MIGRATIONS: &[&str] = &[
 
 pub fn open(path: &Path) -> Result<Connection> {
     let conn = Connection::open(path)?;
+    // An AI app (mcp.rs) may write at the same moment: wait for it instead of failing.
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     // With WAL, NORMAL is safe: a crash or power cut can lose at most the last moment of work,
     // never corrupt the file. It saves a disk flush on every single change.

@@ -716,3 +716,27 @@ The rest of the first feedback file (docs kept outside the repository):
 - **CSV** is written for Excel in Belgium: semicolons, decimal comma, CRLF and a BOM. The
   totals use the same `insights_for` as the screen, so the file and Insights agree. Events are
   local time; all-day events have no minutes.
+- **The archive comes in pages** (her question: an endless list in Settings). The database
+  returns 50 at a time, newest first, with the number that match and a count per kind for the
+  filter; "Show 50 more" asks for a longer page. Search and filter run in SQL over the whole
+  archive, so nothing is out of reach. Before, only events were capped (300) and the rest
+  came whole. No scroll box inside the page: two scrollbars nested is harder to follow.
+
+## Connect AI through MCP (0.4.1)
+
+- **The same program, another mode:** `milo --mcp` is an MCP server over stdio (JSON-RPC, one
+  message per line), written by hand in `mcp.rs` with serde_json: ten tools need no SDK or async
+  runtime, and nothing extra has to be bundled for Windows. The AI app starts it; it opens the
+  same SQLite file (WAL; both sides have a 5 s busy timeout).
+- **Her choice, checked on every call:** `ai_access` is off (default), read, or write. Writes run
+  in one immediate transaction through the normal repo functions, so earlier versions are kept
+  and Undo-by-history works. There is no delete tool; `archive` can be undone from the archive.
+- **Names, not ids:** tools take space and activity names (any case, or a unique part) and local
+  times like `2026-11-17T14:00`; errors list the valid names, so the AI can correct itself.
+  Date-only deadlines are stored as 23:59 local, as in the app.
+- **The app notices:** it polls `PRAGMA data_version` every 2 s while visible. Only writes from
+  another connection move it, so Milo's own changes never cause a refresh.
+- **Connecting:** "Add Milo to Claude Desktop" merges an `mcpServers.milo` entry into Claude's
+  settings file, keeps the first original beside it, and leaves a file it cannot parse alone.
+  The Microsoft Store version of Claude keeps that file in its package folder; both are looked
+  for. Other apps get a snippet to paste.

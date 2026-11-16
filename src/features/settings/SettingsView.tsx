@@ -13,6 +13,7 @@ import { Icon } from "../../components/Icon";
 import { HelpTip } from "../../components/HelpTip";
 import { ImportSettings } from "../import/ImportView";
 import { ArchiveSettings } from "../archive/ArchiveView";
+import { AiSettings } from "./AiSettings";
 
 export const ACCENTS: [Accent, string][] = [["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["plum", "Violet"], ["clay", "Coral"]];
 // Rounded uses the Mac's rounded system font; Windows has none, so there it looked exactly
@@ -40,7 +41,7 @@ function Row({ title, info, children }: { title: string; info?: React.ReactNode;
   );
 }
 
-const SECTIONS = ["appearance", "today", "calendar", "import", "archive", "data"];
+const SECTIONS = ["appearance", "today", "calendar", "import", "ai", "archive", "data"];
 
 /** A row of buttons for one choice. */
 function Choice<T extends string>({ value, label, options, onChange }: { value: T; label: string; options: [T, string][]; onChange: (v: T) => void }) {
@@ -406,6 +407,9 @@ export function SettingsView() {
 
         <Section id="import" title="Import &amp; export">
           <ImportSettings />
+        </Section>
+        <Section id="ai" title="Connect AI">
+          <AiSettings />
         </Section>
         <Section id="archive" title="Archive" info="Everything you archive stays here and can be brought back, until you delete it for good. Spaces and groups something still belongs to, and events from an imported calendar, always stay. Deleting happens after the daily backup, so a mistake can still be undone with Restore a backup.">
           <ArchiveSettings />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useUi } from "../../lib/store";
 import { daysFromToday, fmtMoment, fmtRelativeDays } from "../../lib/time";
@@ -35,11 +35,15 @@ function archivedWhen(iso: string) {
   return `archived ${fmtRelativeDays(n)}`;
 }
 
+/** How many rows show at first, and how many more each "Show more" adds. */
+const PAGE = 50;
+
 /** The archive, shown as a part of Settings. */
 export function ArchiveSettings() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Entity | "">("");
+  const [limit, setLimit] = useState(PAGE);
   const qc = useQueryClient();
 
   // Wait until typing pauses before searching.
@@ -47,16 +51,22 @@ export function ArchiveSettings() {
     const t = setTimeout(() => setQuery(text), 200);
     return () => clearTimeout(t);
   }, [text]);
+  // A new search or kind starts again with the first rows.
+  useEffect(() => setLimit(PAGE), [query, kind]);
 
   const { data } = useQuery({
-    queryKey: ["archive", query],
-    queryFn: () => api.listArchived(query),
+    queryKey: ["archive", query, kind, limit],
+    queryFn: () => api.listArchived(query, kind, limit),
     staleTime: 0,
     refetchOnMount: "always",
+    // Keep the rows on screen while more load, so the list does not jump.
+    placeholderData: keepPreviousData,
   });
-  const items = data?.items ?? [];
-  const kinds = [...new Set(items.map((i) => i.entity))];
-  const shown = kind ? items.filter((i) => i.entity === kind) : items;
+  const shown = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const kinds = data?.kinds ?? [];
+  const anything = kinds.length > 0 || total > 0;
+  const more = Math.min(PAGE, total - shown.length);
 
   // One row at a time asks "Delete for good?" in place; nothing goes on the first click.
   const [asking, setAsking] = useState<string | null>(null);
@@ -123,16 +133,19 @@ export function ArchiveSettings() {
               <button className="btn small" onClick={() => setEmptying(false)}>Keep</button>
             </span>
           ) : (
-            <button className="link" disabled={items.length === 0} onClick={() => setEmptying(true)}>Empty the archive…</button>
+            <button className="link" disabled={!anything && !query} onClick={() => setEmptying(true)}>Empty the archive…</button>
           )}
         </div>
         <div className="inline">
           <input className="search" type="search" placeholder="Search by name" aria-label="Search the archive" value={text} onChange={(e) => setText(e.target.value)} />
           <select aria-label="Show" value={kind} onChange={(e) => setKind(e.target.value as Entity | "")}>
             <option value="">Everything</option>
-            {kinds.map((k) => <option key={k} value={k}>{KIND[k]}</option>)}
+            {kinds.map((k) => <option key={k.entity} value={k.entity}>{KIND[k.entity]} ({k.count})</option>)}
+            {kind && !kinds.some((k) => k.entity === kind) && <option value={kind}>{KIND[kind]} (0)</option>}
           </select>
-          <span className="muted small">{shown.length} {shown.length === 1 ? "item" : "items"}</span>
+          <span className="muted small">
+            {total > shown.length ? `${shown.length} of ${total} items` : `${total} ${total === 1 ? "item" : "items"}`}
+          </span>
         </div>
 
         <div className="archive-list">
@@ -166,10 +179,10 @@ export function ArchiveSettings() {
               )}
             </div>
           ))}
-          {data && data.hiddenEvents > 0 && (
-            <p className="muted small">
-              {data.hiddenEvents} older archived events are not listed. Search by name to find them.
-            </p>
+          {more > 0 && (
+            <button className="btn archive-more" onClick={() => setLimit(shown.length + PAGE)}>
+              Show {more} more
+            </button>
           )}
         </div>
     </div>

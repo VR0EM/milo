@@ -401,9 +401,8 @@ pub fn update_semester(db: State<Db>, id: String, input: SemesterInput) -> Resul
 }
 
 #[tauri::command(async)]
-pub fn list_archived(db: State<Db>, query: String) -> Result<ArchiveList> {
-    let (items, hidden_events) = archive::list_archived(conn!(db), &query)?;
-    Ok(ArchiveList { items, hidden_events })
+pub fn list_archived(db: State<Db>, query: String, kind: String, limit: i64, offset: i64) -> Result<ArchivePage> {
+    archive::page(conn!(db), &query, &kind, limit, offset)
 }
 
 #[tauri::command(async)]
@@ -685,4 +684,54 @@ pub fn archive_keep_setting(db: State<Db>) -> Result<Option<i64>> {
 pub fn set_archive_keep_setting(db: State<Db>, days: Option<i64>) -> Result<()> {
     let v = days.filter(|d| *d > 0).map(|d| d.to_string());
     repo::set_setting(conn!(db), crate::archive::KEEP_SETTING, v.as_deref())
+}
+
+// ---------- AI apps (mcp.rs) ----------
+
+/// What Settings › Connect AI shows.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSetup {
+    /// "off", "read" or "write".
+    access: String,
+    /// The JSON an AI app needs to start Milo, ready to paste.
+    snippet: String,
+    claude_found: bool,
+    claude_connected: bool,
+}
+
+#[tauri::command(async)]
+pub fn ai_setup(db: State<Db>) -> Result<AiSetup> {
+    let access = repo::get_setting(conn!(db), crate::mcp::ACCESS_SETTING)?.unwrap_or_else(|| "off".into());
+    let snippet = serde_json::to_string_pretty(&serde_json::json!({"mcpServers": {"milo": crate::mcp::server_entry()?}})).unwrap_or_default();
+    let claude = crate::mcp::claude_config_path();
+    Ok(AiSetup {
+        access,
+        snippet,
+        claude_found: claude.is_some(),
+        claude_connected: claude.as_deref().is_some_and(crate::mcp::claude_connected),
+    })
+}
+
+#[tauri::command(async)]
+pub fn set_ai_access(db: State<Db>, access: String) -> Result<()> {
+    let value = match access.as_str() {
+        "off" => None,
+        "read" | "write" => Some(access.as_str()),
+        other => return Err(crate::error::AppError::Invalid(format!("Unknown access: {other}"))),
+    };
+    repo::set_setting(conn!(db), crate::mcp::ACCESS_SETTING, value)
+}
+
+#[tauri::command(async)]
+pub fn connect_claude_desktop() -> Result<()> {
+    let path = crate::mcp::claude_config_path()
+        .ok_or_else(|| crate::error::AppError::Invalid("Claude Desktop was not found on this computer".into()))?;
+    crate::mcp::connect_claude(&path)
+}
+
+/// Changes when another program (an AI app) wrote to the database; the app then refreshes.
+#[tauri::command(async)]
+pub fn data_version(db: State<Db>) -> Result<i64> {
+    Ok(conn!(db).query_row("PRAGMA data_version", [], |r| r.get(0))?)
 }

@@ -503,9 +503,19 @@ pub struct ArchivedItem {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ArchiveList {
+pub struct ArchivePage {
     pub items: Vec<ArchivedItem>,
-    pub hidden_events: i64,
+    /// How many match the search and kind, of which `items` is one page.
+    pub total: i64,
+    /// How many of each kind match the search, most first.
+    pub kinds: Vec<ArchiveKind>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveKind {
+    pub entity: String,
+    pub count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
