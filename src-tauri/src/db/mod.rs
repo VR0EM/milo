@@ -29,6 +29,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/011_space_icons.sql"),
     include_str!("migrations/012_todos.sql"),
     include_str!("migrations/013_location.sql"),
+    include_str!("migrations/014_focus_routines_reminders.sql"),
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -121,6 +122,13 @@ CREATE TABLE IF NOT EXISTS change_log (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS change_log_entity ON change_log(entity, entity_id, created_at);
+CREATE TABLE IF NOT EXISTS focus_session_tasks (
+  session_id TEXT NOT NULL REFERENCES focus_sessions(id),
+  task_id TEXT NOT NULL REFERENCES tasks(id),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  done_at TEXT,
+  PRIMARY KEY (session_id, task_id)
+);
 CREATE TABLE IF NOT EXISTS sections (
   id TEXT PRIMARY KEY,
   space_id TEXT NOT NULL REFERENCES spaces(id),
@@ -144,6 +152,9 @@ const REPAIR_COLUMNS: &[(&str, &str, &str)] = &[
     ("task_types", "space_id", "ALTER TABLE task_types ADD COLUMN space_id TEXT REFERENCES spaces(id)"),
     ("events", "location", "ALTER TABLE events ADD COLUMN location TEXT NOT NULL DEFAULT ''"),
     ("event_series", "location", "ALTER TABLE event_series ADD COLUMN location TEXT NOT NULL DEFAULT ''"),
+    ("events", "reminders", "ALTER TABLE events ADD COLUMN reminders TEXT"),
+    ("event_series", "reminders", "ALTER TABLE event_series ADD COLUMN reminders TEXT"),
+    ("routines", "space_id", "ALTER TABLE routines ADD COLUMN space_id TEXT REFERENCES spaces(id)"),
     ("routine_items", "parent_id", "ALTER TABLE routine_items ADD COLUMN parent_id TEXT REFERENCES routine_items(id)"),
 ];
 

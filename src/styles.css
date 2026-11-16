@@ -1125,7 +1125,7 @@ button.chip { cursor: pointer; font-family: inherit; }
 /* "+ Today" waits until the row is pointed at; a to-do already on Today always says so. */
 .todo:not(:hover):not(:focus-within) .today-chip:not(.on) { visibility: hidden; }
 
-input.todo-check { appearance: none; margin: 0; flex: none; width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--text) 38%, transparent);
+input.todo-check { appearance: none; margin: 0; padding: 0; min-height: 0; flex: none; width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--text) 38%, transparent);
   display: inline-grid; place-items: center; cursor: pointer; background: var(--surface); }
 .todo-check:hover { border-color: var(--accent); }
 .todo-check:checked { background: var(--accent); border-color: var(--accent); }
@@ -1266,3 +1266,33 @@ input.todo-check.small { width: 15px; height: 15px; }
 .search-when { flex: none; min-width: 9em; text-align: right; }
 .search-row .place, .search-row > .muted { flex: none; }
 @media (max-width: 1100px) { .search-when { min-width: 0; } }
+.reminder-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- focus ---------- */
+.focus-page .page-scroll { --content: 640px; }
+.focus-what, .focus-how, .focus-running { gap: 10px; }
+.focus-sub { font-size: calc(12px * var(--text-scale)); font-weight: 600; color: var(--muted); margin: 4px 0 0; }
+.focus-picks { display: flex; flex-direction: column; }
+.focus-pick { padding: 6px 4px; border-radius: 6px; gap: 10px; cursor: pointer; }
+.focus-pick:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.focus-pick-title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: calc(14px * var(--text-scale)); }
+.focus-pick.done .focus-pick-title { color: var(--muted); text-decoration: line-through; }
+.focus-picks.running { border-top: 1px solid var(--line-soft); padding-top: 6px; }
+.focus-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.focus-running .clock { padding: 10px 0 2px; }
+.eod { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+.eod dt { color: var(--muted); font-weight: 600; }
+.eod dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.title-review { max-height: 360px; overflow-y: auto; }
+.color-editor { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.color-list { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 320px; }
+.color-item { position: relative; }
+.color-swatch { display: block; width: 24px; height: 24px; border-radius: 50%; background: var(--c); border: 0; padding: 0; cursor: grab; touch-action: none; }
+.color-item.dragging .color-swatch { opacity: 0.4; }
+.color-item.drop .color-swatch { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.color-remove { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); color: var(--muted); font-size: 11px; line-height: 1; padding: 0; display: none; cursor: pointer; }
+.color-item:hover .color-remove, .color-item:focus-within .color-remove { display: grid; place-items: center; }
+.color-add { display: flex; align-items: center; gap: 6px; }
+.color-add label { position: relative; display: block; }
+.color-add input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.color-add .color-swatch { cursor: pointer; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); }

@@ -216,7 +216,7 @@ mod tests {
             c,
             EventInput {
                 space_id: space.into(), activity_id: activity.map(Into::into), title: "x".into(),
-                start_at: start, end_at: end, all_day: false, notes: String::new(), status: status.into(), task_id: None, location: String::new() },
+                start_at: start, end_at: end, all_day: false, notes: String::new(), status: status.into(), task_id: None, location: String::new(), reminders: None },
             "manual",
         )
         .unwrap();

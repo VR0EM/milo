@@ -15,6 +15,7 @@ export const NAV: [View, string, IconName][] = [
   ["today", "Today", "today"],
   ["calendar", "Calendar", "calendar"],
   ["tasks", "Tasks", "tasks"],
+  ["focus", "Focus", "focus"],
   ["insights", "Insights", "insights"],
   ["reminders", "Reminders", "reminders"],
 ];
@@ -26,7 +27,7 @@ function FocusIndicator() {
   if (!session) return null;
   const left = session.plannedMinutes * 60_000 - (now.getTime() - new Date(session.startedAt).getTime());
   return (
-    <button className="focus-indicator" onClick={() => useUi.getState().setView("today")}>
+    <button className="focus-indicator" onClick={() => useUi.getState().setView("focus")}>
       <Icon name="focus" />
       <span>Focus</span>
       <span className="tabular">{left >= 0 ? fmtClock(left) : `+${fmtClock(-left)}`}</span>

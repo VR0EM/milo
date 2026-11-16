@@ -122,7 +122,8 @@ overview of its time, tasks and what is coming up.
 
 ### And also
 
-- **Focus sessions** with a small always-on-top timer; a session fills in the calendar by itself.
+- **Focus** with a small always-on-top timer: pick to-dos, tick them off as you go, and the calendar
+  gets the time per to-do by itself.
 - **Next event in the menu bar**, like *Chemistry lab in 25 min*, so time stays visible
   (on Windows: in the tray icon's tooltip).
 - **Quick notes from any app** with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd>; they wait in the Inbox.
@@ -176,7 +177,7 @@ Everything can also be exported from *Settings › Import & export*.
 | Keys | Does |
 | --- | --- |
 | <kbd>⌘</kbd> <kbd>K</kbd> | Command menu |
-| <kbd>⌘</kbd> <kbd>1</kbd> … <kbd>5</kbd> | Today, Calendar, Tasks, Insights, Reminders |
+| <kbd>⌘</kbd> <kbd>1</kbd> … <kbd>6</kbd> | Today, Calendar, Tasks, Focus, Insights, Reminders |
 | <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd> | Write something down, from any app |
 | <kbd>N</kbd> | New event or task |
 | <kbd>D</kbd> <kbd>3</kbd> <kbd>W</kbd> <kbd>M</kbd> | Day, 3 days, week, month |

@@ -164,7 +164,7 @@ mod tests {
                 all_day,
                 notes: String::new(),
                 status: "planned".into(),
-                task_id: None, location: String::new() },
+                task_id: None, location: String::new(), reminders: None },
             "milo",
         )
         .unwrap();

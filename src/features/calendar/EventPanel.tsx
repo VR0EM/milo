@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { SidePanel } from "../../components/SidePanel";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { useAction, useActiveFocus, useArchiveWithUndo, useImportSources, useTasks, useUpdateEvent } from "../../lib/queries";
+import { useAction, useActiveFocus, useArchiveWithUndo, useImportSources, useReminderRules, useRoutineChecks, useRoutines, useTasks, useUpdateEvent } from "../../lib/queries";
 import { beginFocus } from "../../lib/focus";
 import { DateInput } from "../../components/DateInput";
 import { TimeField } from "../../components/TimeField";
@@ -148,52 +148,42 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
         </button>
       )}
 
+      {/* Her order: the time, then the day, then whether it is all day. */}
+      {event.allDay ? (
+        <div className="field-row">
+          <label className="field">
+            <span>From</span>
+            <DateInput value={toDateInput(start)} onChange={onAllDayStart} />
+          </label>
+          <label className="field">
+            <span>Until</span>
+            <DateInput value={toDateInput(lastDay)} min={toDateInput(start)} onChange={onUntil} />
+          </label>
+        </div>
+      ) : (
+        <>
+          <div className="field-row">
+            <label className="field">
+              <span>Start</span>
+              <TimeField value={toTimeInput(start)} onCommit={(t) => onStart(toDateInput(start), t)} />
+            </label>
+            <label className="field">
+              <span>End{!sameDay(start, end) ? " (next day)" : ""}</span>
+              <TimeField value={toTimeInput(end)} from={toTimeInput(start)} onCommit={onEnd} />
+            </label>
+          </div>
+          <label className="field">
+            <span>Date</span>
+            <DateInput value={toDateInput(start)} onChange={(v) => onStart(v, toTimeInput(start))} />
+          </label>
+        </>
+      )}
       <label className="check">
         <input type="checkbox" checked={event.allDay} onChange={(e) => setAllDay(e.target.checked)} />
         <span>All day</span>
       </label>
-      {event.allDay ? (
-      <div className="field-row">
-        <label className="field">
-          <span>From</span>
-          <DateInput value={toDateInput(start)} onChange={onAllDayStart} />
-        </label>
-        <label className="field">
-          <span>Until</span>
-          <DateInput value={toDateInput(lastDay)} min={toDateInput(start)} onChange={onUntil} />
-        </label>
-      </div>
-      ) : (
-      <>
-      <label className="field">
-        <span>Date</span>
-        <DateInput value={toDateInput(start)} onChange={(v) => onStart(v, toTimeInput(start))} />
-      </label>
-      <div className="field-row">
-        <label className="field">
-          <span>Start</span>
-          <TimeField value={toTimeInput(start)} onCommit={(t) => onStart(toDateInput(start), t)} />
-        </label>
-        <label className="field">
-          <span>End{!sameDay(start, end) ? " (next day)" : ""}</span>
-          <TimeField value={toTimeInput(end)} from={toTimeInput(start)} onCommit={onEnd} />
-        </label>
-      </div>
-      </>
-      )}
 
       {event.source !== "import" && <RepeatField key={event.seriesId ?? "none"} event={event} />}
-
-      <label className="field">
-        <span>Location</span>
-        <input
-          value={location}
-          placeholder="e.g. ELL.01.01"
-          onChange={(e) => setLocation(e.target.value)}
-          onBlur={() => location.trim() !== event.location && save({ location: location.trim() })}
-          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        />
-      </label>
 
       <label className="field">
         <span>Space</span>
@@ -220,6 +210,26 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
         </select>
       </label>
 
+      {!event.allDay && <ReminderField value={event.reminders} onChange={(reminders) => save({ reminders })} />}
+
+      <label className="field">
+        <span>Location</span>
+        <input
+          value={location}
+          placeholder="e.g. ELL.01.01"
+          onChange={(e) => setLocation(e.target.value)}
+          onBlur={() => location.trim() !== event.location && save({ location: location.trim() })}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        />
+      </label>
+
+      <label className="field grow">
+        <span>Description</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== event.notes && save({ notes })} />
+      </label>
+
+      <EventChecklist event={event} />
+
       <label className="check">
         <input
           type="checkbox"
@@ -227,11 +237,6 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
           onChange={(e) => save({ status: e.target.checked ? "skipped" : "planned" })}
         />
         <span>Did not happen</span>
-      </label>
-
-      <label className="field grow">
-        <span>Notes</span>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== event.notes && save({ notes })} />
       </label>
 
       {event.source === "import" && <ImportedNote event={event} />}
@@ -281,5 +286,75 @@ function ImportedNote({ event }: { event: CalEvent }) {
         <span>If you change it, your version is kept when the calendar syncs.</span>
       )}
     </div>
+  );
+}
+
+/** Minutes before; null = as set in Reminders, "" = none. */
+const REMIND_AT: [number, string][] = [[0, "At start"], [5, "5 min"], [10, "10 min"], [30, "30 min"], [60, "1 hour"]];
+
+/** "As set" (the general rule), "None", or one or more moments before the start. */
+function ReminderField({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
+  const rule = (useReminderRules().data ?? []).find((r) => r.kind === "event");
+  const chosen = value ? value.split(",").map(Number) : [];
+  const general = rule?.enabled ? `${rule.minutesBefore ?? 10} min before` : "off";
+  const toggle = (m: number) => {
+    const next = chosen.includes(m) ? chosen.filter((x) => x !== m) : [...chosen, m];
+    onChange(next.length ? next.sort((a, b) => a - b).join(",") : "");
+  };
+  return (
+    <fieldset className="field">
+      <legend>Reminder</legend>
+      <div className="reminder-chips" role="group" aria-label="Reminder">
+        <button type="button" className={`chip move-chip${value === null ? " sure" : ""}`} aria-pressed={value === null} title="The reminder for every event, set in Reminders" onClick={() => onChange(null)}>
+          As usual ({general})
+        </button>
+        {REMIND_AT.map(([m, label]) => (
+          <button type="button" key={m} className={`chip move-chip${chosen.includes(m) ? " sure" : ""}`} aria-pressed={chosen.includes(m)} onClick={() => toggle(m)}>
+            {label}
+          </button>
+        ))}
+        <button type="button" className={`chip move-chip${value === "" ? " sure" : ""}`} aria-pressed={value === ""} onClick={() => onChange("")}>
+          None
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/** The checklist of the routine that belongs to this event's space, ticked per day. */
+function EventChecklist({ event }: { event: CalEvent }) {
+  const routine = (useRoutines().data ?? []).find((r) => r.spaceId === event.spaceId);
+  const day = toDateInput(new Date(event.startAt));
+  const checked = useRoutineChecks(day).data ?? [];
+  const act = useAction("routineChecks");
+  if (!routine || !routine.items.length) return null;
+  const items = routine.items;
+  const top = items.filter((i) => !i.parentId || !items.some((p) => p.id === i.parentId));
+  const done = items.filter((i) => checked.includes(i.id)).length;
+  const row = (id: string, title: string, sub: boolean) => (
+    <li key={id} className={sub ? "sub" : undefined}>
+      <label className={`check routine-item${checked.includes(id) ? " on" : ""}`}>
+        <input
+          type="checkbox"
+          className="todo-check small"
+          checked={checked.includes(id)}
+          onChange={(e) => {
+            const v = e.target.checked;
+            act.mutate(() => api.setRoutineCheck(id, day, v));
+          }}
+        />
+        <span>{title}</span>
+      </label>
+    </li>
+  );
+  return (
+    <fieldset className="field">
+      <legend>
+        Checklist: {routine.name} <span className="muted small">{done} of {items.length}</span>
+      </legend>
+      <ul className="routine-list">
+        {top.flatMap((i) => [row(i.id, i.title, false), ...items.filter((c) => c.parentId === i.id).map((c) => row(c.id, c.title, true))])}
+      </ul>
+    </fieldset>
   );
 }

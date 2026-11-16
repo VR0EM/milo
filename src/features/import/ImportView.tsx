@@ -105,6 +105,8 @@ function CalendarLinks({ spaces }: { spaces: Space[] }) {
       setName("");
       setUrl("");
       setAdding(false);
+      // Straight on to where each title goes; the rest stays in the link's own space.
+      useUi.setState({ reviewTitles: true });
     }
   };
 
@@ -304,7 +306,8 @@ function TitleLinks({ spaces, activities }: { spaces: Space[]; activities: Activ
   const unmapped = useUnmappedTitles().data ?? [];
   const mappings = useTitleMappings().data ?? [];
   const refresh = useRefresh();
-  const [reviewing, setReviewing] = useState(false);
+  const reviewing = useUi((s) => s.reviewTitles);
+  const setReviewing = (v: boolean) => useUi.setState({ reviewTitles: v });
   const [rule, setRule] = useState(false);
   const titles = unmapped.map((u) => u.title);
   const suggestions = useQuery({
@@ -339,8 +342,8 @@ function TitleLinks({ spaces, activities }: { spaces: Space[]; activities: Activ
           <button className="link" onClick={() => setReviewing(!reviewing)}>{reviewing ? "Hide" : "Review"}</button>
         </div>
       )}
-      {reviewing && (
-        <ul className="rows">
+      {reviewing && unmapped.length > 0 && (
+        <ul className="rows title-review" aria-label="Imported titles without a link, most frequent first">
           {unmapped.map((u, i) => (
             <NewLink
               key={u.title}

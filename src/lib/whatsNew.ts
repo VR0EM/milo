@@ -12,6 +12,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.0",
+    date: "2026-11-16",
+    items: [
+      "Focus has its own tab. Pick the to-dos you will work on, tick them off as you go, and the calendar gets the time per to-do, named after it.",
+      "A routine can follow a space: \"Morning routine\" shows its checklist on Today while a Morning routine event runs (and half an hour before). Set it in the routine (Tasks › Lists).",
+      "The event panel follows the order you asked for: time, day, all day, then space, reminder, location, description and the checklist of its routine.",
+      "Each event can have reminders of its own (at the start, 5, 10, 30 minutes or an hour before), or none, or the usual one.",
+      "End of the day shows what you did, how much is planned for tomorrow and what is due then.",
+      "After adding a calendar link, its titles come up right away to give each one a space; the rest goes to the link's space.",
+      "Your own colours for spaces: add, remove and drag them in Settings › Appearance.",
+    ],
+  },
+  {
     version: "0.3.9",
     date: "2026-11-16",
     items: [

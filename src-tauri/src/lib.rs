@@ -307,6 +307,8 @@ pub fn run() {
             commands::suggest_in_space,
             commands::similar_todos,
             commands::search,
+            commands::focus_tasks,
+            commands::set_focus_task_done,
             commands::smart_model_status,
             commands::download_smart_model,
             commands::remove_smart_model,

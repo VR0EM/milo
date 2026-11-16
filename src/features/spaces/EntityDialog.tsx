@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { PALETTE, colorVar, isCustomColor } from "../../lib/colors";
+import { colorVar, isCustomColor } from "../../lib/colors";
 import { useArchiveWithUndo, useGroups, useSpaces } from "../../lib/queries";
 import { useUi, type Dialog } from "../../lib/store";
 import type { ActivityCategory, SpaceKind, SpaceRole } from "../../lib/types";
@@ -30,6 +30,7 @@ function Form({ dialog }: { dialog: Dialog }) {
   const activeSpaces = (useSpaces().data ?? []).filter((s) => !s.deletedAt);
 
   const item = dialog.item;
+  const palette = useUi((s) => s.prefs.spaceColors);
   const [name, setName] = useState(item?.name ?? "");
   const [color, setColor] = useState(dialog.kind === "space" ? (dialog.item?.color ?? "green") : "gray");
   const [groupId, setGroupId] = useState<string>(
@@ -117,7 +118,8 @@ function Form({ dialog }: { dialog: Dialog }) {
             <fieldset className="field">
               <legend>Colour</legend>
               <div className="swatches">
-                {PALETTE.map((c) => (
+                {/* Her palette (Settings › Appearance), and the space's own colour if it left it. */}
+                {(palette.includes(color) || isCustomColor(color) ? palette : [color, ...palette]).map((c) => (
                   <label key={c} title={c}>
                     <input type="radio" name="color" value={c} checked={color === c} onChange={() => setColor(c)} />
                     <span className="swatch big" style={{ ["--c" as string]: colorVar(c) }} />

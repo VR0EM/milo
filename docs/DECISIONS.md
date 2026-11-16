@@ -672,3 +672,29 @@ every window, takes away what gives the web page away:
 - **Scrollbars** show only while something scrolls (as on a phone or a Mac trackpad). They are not
   needed to scroll (wheel, trackpad, keys), but while scrolling they show where on the page one
   is. The bar keeps its place, so nothing shifts when it appears; it can still be grabbed.
+
+## Her feedback list, finished (0.4.0)
+
+The rest of the first feedback file (docs kept outside the repository):
+
+- **Focus is a tab** (between Tasks and Insights), no longer a panel on Today. She picks to-dos
+  (Today's first, others by search) and ticks them off during the session
+  (`focus_session_tasks`, migration 014). On stop, the time is split: start to the first tick
+  for that to-do, from there to the next, and the rest to the first one still open; pieces under
+  a minute join the next one. Each piece is an event named after its to-do and linked to it, so
+  the to-do shows its time spent. Without to-dos the event is named after the space, never
+  "Focus". The space follows the first to-do picked (unless it is in the Inbox).
+- **Routines can follow a space** (`routines.space_id`): shown in What now? and in the event
+  panel while an event of that space runs or starts within 30 minutes; ticks belong to the
+  event's day. Routines without a space keep their set times.
+- **Event panel order** as she asked: start and end, date, all day, then space, activity,
+  reminder, location, description, checklist.
+- **Reminders per event** (`events.reminders`): null = the general rule from Reminders, "" =
+  none, or minutes before ("0,30"). Repeats copy them. Focus events get none.
+- **End of the day**: to-dos done and productive time, how many things are planned tomorrow and
+  the first, and what is due tomorrow.
+- **Import**: after adding a calendar link, the titles without a link open at once in a scroll
+  box, most frequent first, with one-click space choices; the rest stays in the link's space.
+- **Space colours**: her own palette (a preference), drag to reorder, × to remove (spaces that
+  use a colour keep it), + to add.
+- Still to ask her: how the cut-off sentence about Deadlines on Today ended.

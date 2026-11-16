@@ -304,6 +304,7 @@ fn event_from(r: &Row) -> rusqlite::Result<Event> {
         all_day: r.get("all_day")?,
         notes: r.get("notes")?,
         location: r.get("location")?,
+        reminders: r.get("reminders")?,
         status: r.get("status")?,
         source: r.get("source")?,
         source_id: r.get("source_id")?,
@@ -314,6 +315,21 @@ fn event_from(r: &Row) -> rusqlite::Result<Event> {
         updated_at: r.get("updated_at")?,
         deleted_at: r.get("deleted_at")?,
     })
+}
+
+/// "10,0,10" -> "0,10": minutes before the start, each 0 to 1440, sorted, once. None stays None.
+pub fn clean_reminders(r: &Option<String>) -> Result<Option<String>> {
+    let Some(r) = r else { return Ok(None) };
+    let mut m: Vec<i64> = Vec::new();
+    for part in r.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        match part.parse::<i64>() {
+            Ok(n) if (0..=1440).contains(&n) => m.push(n),
+            _ => return Err(AppError::Invalid(format!("Not a reminder: {part}"))),
+        }
+    }
+    m.sort_unstable();
+    m.dedup();
+    Ok(Some(m.iter().map(i64::to_string).collect::<Vec<_>>().join(",")))
 }
 
 fn check_event(input: &EventInput) -> Result<()> {
@@ -346,8 +362,8 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
     check_event(&input)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, task_id, location, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
+        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, task_id, location, reminders, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?14, ?13, ?13)",
         params![
             id,
             input.space_id,
@@ -361,7 +377,8 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
             source,
             input.task_id,
             input.location.trim(),
-            ts
+            ts,
+            clean_reminders(&input.reminders)?
         ],
     )?;
     get_event(c, &id)
@@ -379,6 +396,7 @@ pub fn update_event(c: &Connection, id: &str, input: EventInput) -> Result<Event
         && before.all_day == input.all_day
         && before.notes == input.notes
         && before.location == input.location.trim()
+        && before.reminders == clean_reminders(&input.reminders)?
         && before.status == input.status
         && before.task_id == input.task_id;
     if same {
@@ -395,7 +413,7 @@ pub fn update_event_unlogged(c: &Connection, id: &str, input: EventInput) -> Res
     check_event(&input)?;
     changed(c.execute(
         "UPDATE events SET space_id = ?2, activity_id = ?3, title = ?4, start_at = ?5, end_at = ?6,
-         all_day = ?7, notes = ?8, status = ?9, updated_at = ?10, task_id = ?11, location = ?12,
+         all_day = ?7, notes = ?8, status = ?9, updated_at = ?10, task_id = ?11, location = ?12, reminders = ?13,
          locally_modified = (source = 'import') OR locally_modified WHERE id = ?1",
         params![
             id,
@@ -409,7 +427,8 @@ pub fn update_event_unlogged(c: &Connection, id: &str, input: EventInput) -> Res
             input.status,
             now(),
             input.task_id,
-            input.location.trim()
+            input.location.trim(),
+            clean_reminders(&input.reminders)?
         ],
     )?)?;
     get_event(c, id)
@@ -693,6 +712,7 @@ fn routine_from(r: &Row) -> rusqlite::Result<Routine> {
     Ok(Routine {
         id: r.get("id")?,
         name: r.get("name")?,
+        space_id: r.get("space_id")?,
         start_time: r.get("start_time")?,
         end_time: r.get("end_time")?,
         weekdays: r.get("weekdays")?,
@@ -738,9 +758,9 @@ pub fn create_routine(c: &Connection, input: RoutineInput) -> Result<Routine> {
     check_routine(&input)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO routines (id, name, start_time, end_time, weekdays, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-        params![id, non_empty(&input.name, "Name")?, input.start_time, input.end_time, input.weekdays, next_sort(c, "routines")?, ts],
+        "INSERT INTO routines (id, name, start_time, end_time, weekdays, space_id, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+        params![id, non_empty(&input.name, "Name")?, input.start_time, input.end_time, input.weekdays, input.space_id, next_sort(c, "routines")?, ts],
     )?;
     get_routine(c, &id)
 }
@@ -748,8 +768,8 @@ pub fn create_routine(c: &Connection, input: RoutineInput) -> Result<Routine> {
 pub fn update_routine(c: &Connection, id: &str, input: RoutineInput) -> Result<Routine> {
     check_routine(&input)?;
     changed(c.execute(
-        "UPDATE routines SET name = ?2, start_time = ?3, end_time = ?4, weekdays = ?5, updated_at = ?6 WHERE id = ?1",
-        params![id, non_empty(&input.name, "Name")?, input.start_time, input.end_time, input.weekdays, now()],
+        "UPDATE routines SET name = ?2, start_time = ?3, end_time = ?4, weekdays = ?5, space_id = ?7, updated_at = ?6 WHERE id = ?1",
+        params![id, non_empty(&input.name, "Name")?, input.start_time, input.end_time, input.weekdays, now(), input.space_id],
     )?)?;
     get_routine(c, id)
 }
@@ -843,7 +863,44 @@ pub fn start_focus(c: &Connection, input: FocusInput) -> Result<FocusSession> {
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7, ?7)",
         params![id, input.space_id, input.activity_id, input.task_id, input.title.trim(), input.planned_minutes, ts, input.event_id],
     )?;
+    let mut ids: Vec<&String> = input.task_ids.iter().chain(input.task_id.iter()).collect();
+    ids.dedup();
+    for (i, t) in ids.into_iter().enumerate() {
+        c.execute(
+            "INSERT OR IGNORE INTO focus_session_tasks (session_id, task_id, sort_order) VALUES (?1, ?2, ?3)",
+            params![id, t, i as i64],
+        )?;
+    }
     Ok(c.query_row("SELECT * FROM focus_sessions WHERE id = ?1", [&id], focus_from)?)
+}
+
+/// The to-dos picked for a session, in the order picked.
+pub fn focus_tasks(c: &Connection, session_id: &str) -> Result<Vec<FocusTask>> {
+    let mut s = c.prepare("SELECT task_id, done_at FROM focus_session_tasks WHERE session_id = ?1 ORDER BY sort_order")?;
+    let rows = s
+        .query_map([session_id], |r| Ok(FocusTask { task_id: r.get(0)?, done_at: r.get(1)? }))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Ticks a to-do off during a session (or back on): the to-do itself is done, and the moment is
+/// kept, so the session's time can be written per to-do.
+pub fn set_focus_task_done(c: &Connection, session_id: &str, task_id: &str, done: bool, at: &str) -> Result<Task> {
+    changed(c.execute(
+        "UPDATE focus_session_tasks SET done_at = ?3 WHERE session_id = ?1 AND task_id = ?2",
+        params![session_id, task_id, if done { Some(at) } else { None }],
+    )?)?;
+    let task = get_task(c, task_id)?;
+    if task.parts.is_empty() {
+        set_task_completed(c, task_id, done)
+    } else if done {
+        for p in task.parts.iter().filter(|p| p.done_at.is_none()) {
+            set_part_done(c, &p.id, true)?;
+        }
+        get_task(c, task_id)
+    } else {
+        Ok(task)
+    }
 }
 
 /// Ends the session and writes it to the calendar as an event with its real duration.
@@ -871,19 +928,72 @@ pub fn finish_focus_at(c: &Connection, id: &str, end: &str) -> Result<Event> {
             return get_event(c, planned);
         }
     }
-    let event = create_event(
-        c,
-        EventInput {
-            space_id: session.space_id,
-            activity_id: session.activity_id,
-            title: if session.title.is_empty() { "Focus".into() } else { session.title },
-            start_at: session.started_at,
-            end_at: ts.clone(),
-            all_day: false,
-            notes: String::new(),
-            status: "planned".into(), task_id: session.task_id, location: String::new() },
-        "focus",
-    )?;
+    // The calendar gets the time per to-do: from the start to the first one ticked off, from there
+    // to the next, and what is left goes to the first one still open. Without to-dos: one event,
+    // named after the session or its space (never just "Focus").
+    let space_name: String = c.query_row("SELECT name FROM spaces WHERE id = ?1", [&session.space_id], |r| r.get(0)).unwrap_or_default();
+    let fallback = if session.title.is_empty() { space_name } else { session.title.clone() };
+    let picked = focus_tasks(c, id)?;
+    let title_of = |task_id: &str| -> Result<String> {
+        let t = get_task(c, task_id)?;
+        Ok(if t.title.is_empty() { fallback.clone() } else { t.title })
+    };
+    let mut ticked: Vec<&FocusTask> = picked.iter().filter(|t| t.done_at.as_deref().is_some_and(|d| d > session.started_at.as_str() && d <= end)).collect();
+    ticked.sort_by(|a, b| a.done_at.cmp(&b.done_at));
+    let open_task = picked.iter().find(|t| t.done_at.is_none()).map(|t| t.task_id.clone()).or(session.task_id.clone());
+    let mut pieces: Vec<(String, String, Option<String>)> = Vec::new(); // (from, to, task)
+    let mut cursor = session.started_at.clone();
+    for t in ticked {
+        let at = t.done_at.clone().unwrap();
+        pieces.push((cursor.clone(), at.clone(), Some(t.task_id.clone())));
+        cursor = at;
+    }
+    pieces.push((cursor, ts.clone(), open_task));
+    // Under a minute is not worth an event of its own: it goes to the next piece.
+    let long = |a: &str, b: &str| -> bool {
+        match (chrono::DateTime::parse_from_rfc3339(a), chrono::DateTime::parse_from_rfc3339(b)) {
+            (Ok(a), Ok(b)) => (b - a).num_seconds() >= 60,
+            _ => true,
+        }
+    };
+    let mut events = Vec::new();
+    let mut carry: Option<String> = None;
+    for (i, (from, to, task)) in pieces.iter().enumerate() {
+        let from = carry.take().unwrap_or_else(|| from.clone());
+        let last = i + 1 == pieces.len();
+        if !long(&from, to) && !(last && events.is_empty()) {
+            carry = Some(from);
+            continue;
+        }
+        let title = match task {
+            Some(t) => title_of(t)?,
+            None => fallback.clone(),
+        };
+        events.push(create_event(
+            c,
+            EventInput {
+                space_id: session.space_id.clone(),
+                activity_id: session.activity_id.clone(),
+                title,
+                start_at: from,
+                end_at: to.clone(),
+                all_day: false,
+                notes: String::new(),
+                status: "planned".into(),
+                task_id: task.clone(),
+                location: String::new(),
+                reminders: Some(String::new()),
+            },
+            "focus",
+        )?);
+    }
+    if let (Some(from), Some(prev)) = (carry, events.last_mut()) {
+        // A short tail after the last tick belongs to the piece before it.
+        let _ = from;
+        c.execute("UPDATE events SET end_at = ?2, updated_at = ?2 WHERE id = ?1", params![prev.id, ts])?;
+        *prev = get_event(c, &prev.id)?;
+    }
+    let event = events.pop().expect("at least one piece is written");
     c.execute(
         "UPDATE focus_sessions SET ended_at = ?2, event_id = ?3, updated_at = ?2 WHERE id = ?1",
         params![id, ts, event.id],
@@ -1100,8 +1210,7 @@ mod tests {
             end_at: end.into(),
             all_day: false,
             notes: String::new(),
-            status: "planned".into(), task_id: None, location: String::new(),
-        }
+            status: "planned".into(), task_id: None, location: String::new(), reminders: None }
     }
 
     #[test]
@@ -1180,12 +1289,12 @@ mod tests {
     #[test]
     fn a_routine_step_can_have_steps() {
         let c = open_in_memory().unwrap();
-        let r = create_routine(&c, RoutineInput { name: "Morning".into(), start_time: "07:00".into(), end_time: "10:00".into(), weekdays: "1234567".into() }).unwrap();
+        let r = create_routine(&c, RoutineInput { name: "Morning".into(), start_time: "07:00".into(), end_time: "10:00".into(), weekdays: "1234567".into(), space_id: None }).unwrap();
         let r = create_routine_item(&c, &r.id, "Pack backpack", None).unwrap();
         let parent = r.items[0].id.clone();
         let r = create_routine_item(&c, &r.id, "Laptop", Some(&parent)).unwrap();
         assert_eq!(r.items[1].parent_id.as_deref(), Some(parent.as_str()));
-        let other = create_routine(&c, RoutineInput { name: "Evening".into(), start_time: "20:00".into(), end_time: "22:00".into(), weekdays: "1234567".into() }).unwrap();
+        let other = create_routine(&c, RoutineInput { name: "Evening".into(), start_time: "20:00".into(), end_time: "22:00".into(), weekdays: "1234567".into(), space_id: None }).unwrap();
         assert!(create_routine_item(&c, &other.id, "Teeth", Some(&parent)).is_err());
     }
 
@@ -1287,7 +1396,7 @@ mod tests {
     fn routines_and_checks() {
         let c = open_in_memory().unwrap();
         assert_eq!(list_routines(&c).unwrap().len(), 2);
-        let bad = |start: &str, days: &str| RoutineInput { name: "X".into(), start_time: start.into(), end_time: "09:00".into(), weekdays: days.into() };
+        let bad = |start: &str, days: &str| RoutineInput { name: "X".into(), start_time: start.into(), end_time: "09:00".into(), weekdays: days.into(), space_id: None };
         assert!(create_routine(&c, bad("7:00", "12345")).is_err());
         assert!(create_routine(&c, bad("07:00", "")).is_err());
         assert!(create_routine(&c, bad("09:00", "1")).is_err());
@@ -1334,8 +1443,7 @@ mod tests {
                 task_id: Some(task.id.clone()),
                 event_id: Some(block.id.clone()),
                 title: "Essay".into(),
-                planned_minutes: 120,
-            },
+                planned_minutes: 120, task_ids: Vec::new() },
         )
         .unwrap();
         c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:10:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
@@ -1347,6 +1455,37 @@ mod tests {
     }
 
     #[test]
+    fn focus_time_goes_to_the_todos_ticked_off() {
+        let c = open_in_memory().unwrap();
+        let todo = |title: &str| create_task(&c, TaskInput { space_id: "seed-space-personal".into(), type_id: None, title: title.into(), notes: String::new(), deadline_at: None, target_at: None, priority: None, section_id: None }).unwrap().id;
+        let (a, b, d) = (todo("Read chapter 4"), todo("Exercises 4.1"), todo("Summary"));
+        let s = start_focus(&c, FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, event_id: None, title: String::new(), planned_minutes: 60, task_ids: vec![a.clone(), b.clone(), d.clone()] }).unwrap();
+        c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
+        assert_eq!(focus_tasks(&c, &s.id).unwrap().len(), 3);
+        // Ticked off at 10:25 and 10:40; the rest of the time goes to the one still open.
+        assert!(set_focus_task_done(&c, &s.id, &a, true, "2020-01-01T10:25:00.000Z").unwrap().completed_at.is_some());
+        set_focus_task_done(&c, &s.id, &b, true, "2020-01-01T10:40:00.000Z").unwrap();
+        finish_focus_at(&c, &s.id, "2020-01-01T11:00:00.000Z").unwrap();
+        let events = list_events(&c, "2020-01-01T00:00:00.000Z", "2020-01-02T00:00:00.000Z").unwrap();
+        let got: Vec<(&str, &str, &str, Option<&str>)> = events.iter().map(|e| (e.title.as_str(), &e.start_at[11..16], &e.end_at[11..16], e.task_id.as_deref())).collect();
+        assert_eq!(got, [
+            ("Read chapter 4", "10:00", "10:25", Some(a.as_str())),
+            ("Exercises 4.1", "10:25", "10:40", Some(b.as_str())),
+            ("Summary", "10:40", "11:00", Some(d.as_str())),
+        ]);
+        assert!(events.iter().all(|e| e.reminders.as_deref() == Some("")), "no reminders for time already spent");
+    }
+
+    #[test]
+    fn a_focus_without_todos_is_named_after_its_space() {
+        let c = open_in_memory().unwrap();
+        let s = start_focus(&c, FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, event_id: None, title: String::new(), planned_minutes: 30, task_ids: Vec::new() }).unwrap();
+        c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
+        let e = finish_focus_at(&c, &s.id, "2020-01-01T10:30:00.000Z").unwrap();
+        assert_eq!(e.title, "Personal");
+    }
+
+    #[test]
     fn focus_session_becomes_an_event() {
         let c = open_in_memory().unwrap();
         let input = || FocusInput {
@@ -1355,8 +1494,7 @@ mod tests {
             task_id: None,
             event_id: None,
             title: String::new(),
-            planned_minutes: 25,
-        };
+            planned_minutes: 25, task_ids: Vec::new() };
         let s = start_focus(&c, input()).unwrap();
         assert!(start_focus(&c, input()).is_err(), "only one session at a time");
         assert_eq!(active_focus(&c).unwrap().unwrap().id, s.id);
@@ -1364,7 +1502,7 @@ mod tests {
         // pretend it started 30 minutes ago
         c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
         let e = finish_focus(&c, &s.id).unwrap();
-        assert_eq!((e.source.as_str(), e.title.as_str()), ("focus", "Focus"));
+        assert_eq!((e.source.as_str(), e.title.as_str()), ("focus", "Personal"));
         assert_eq!(e.start_at, "2020-01-01T10:00:00.000Z");
         assert!(active_focus(&c).unwrap().is_none());
         assert!(finish_focus(&c, &s.id).is_err(), "cannot finish twice");

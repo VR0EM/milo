@@ -115,6 +115,7 @@ pub fn delete_forever(c: &Connection, entity: &str, id: &str) -> Result<()> {
                 c.execute("DELETE FROM task_parts WHERE task_id = ?1", [id])?;
                 c.execute("UPDATE events SET task_id = NULL WHERE task_id = ?1", [id])?;
                 c.execute("UPDATE focus_sessions SET task_id = NULL WHERE task_id = ?1", [id])?;
+                c.execute("DELETE FROM focus_session_tasks WHERE task_id = ?1", [id])?;
                 // An older trial table some databases still have.
                 if has_table(c, "proposals")? {
                     c.execute("DELETE FROM proposals WHERE task_id = ?1", [id])?;
@@ -198,7 +199,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: "Dentist".into(),
                 start_at: "2026-11-11T08:00:00.000Z".into(), end_at: "2026-11-11T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() },
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new(), reminders: None },
             "manual",
         )
         .unwrap();
@@ -225,7 +226,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: "Lecture".into(),
                 start_at: "2030-01-01T08:00:00.000Z".into(), end_at: "2030-01-01T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() },
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new(), reminders: None },
             "manual",
         )
         .unwrap();
@@ -242,7 +243,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: title.into(),
                 start_at: "2026-11-11T08:00:00.000Z".into(), end_at: "2026-11-11T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() },
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new(), reminders: None },
             "manual",
         )
         .unwrap()

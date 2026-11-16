@@ -210,8 +210,10 @@ function Courses({ onDone }: { onDone: () => void }) {
     names.push(line);
   }
   const used = new Set(spaces.map((s) => s.color));
-  const free = PALETTE.filter((c) => c !== "gray" && !used.has(c));
-  const colours = free.length ? free : PALETTE.filter((c) => c !== "gray");
+  // Her palette (Settings › Appearance), the colours not used yet first.
+  const palette = useUi.getState().prefs.spaceColors.filter((c) => c !== "gray");
+  const free = palette.filter((c) => !used.has(c));
+  const colours = free.length ? free : palette.length ? palette : PALETTE.filter((c) => c !== "gray");
   const planned = names.map((name, n) => ({ name, color: colours[n % colours.length] }));
 
   const save = async (e: React.FormEvent) => {

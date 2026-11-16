@@ -1,4 +1,5 @@
 import { fmtHour } from "../../lib/time";
+import { PALETTE, colorVar } from "../../lib/colors";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, autostart, files, inDesktop, onModelProgress } from "../../lib/api";
@@ -136,6 +137,94 @@ function TodayBlocks() {
   );
 }
 
+/** Her palette for spaces: drag to reorder, × to remove, + to add her own. */
+function SpaceColors() {
+  const colors = useUi((s) => s.prefs.spaceColors);
+  const setPrefs = useUi((s) => s.setPrefs);
+  const [adding, setAdding] = useState("#3fa7d6");
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const moveTo = (from: number, to: number) => {
+    if (to === from) return;
+    const next = [...colors];
+    const [c] = next.splice(from, 1);
+    next.splice(to, 0, c);
+    setPrefs({ spaceColors: next });
+  };
+  // The swatch under the pointer, by distance to each swatch's centre (the list wraps).
+  const slotAt = (x: number, y: number) => {
+    const items = [...(listRef.current?.querySelectorAll<HTMLElement>("li.color-item") ?? [])];
+    let best = 0, dist = Infinity;
+    items.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (d < dist) { dist = d; best = i; }
+    });
+    return best;
+  };
+  const press = (e: React.PointerEvent, from: number) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    let over = from;
+    setDrag({ from, over });
+    const onMove = (m: PointerEvent) => { over = slotAt(m.clientX, m.clientY); setDrag({ from, over }); };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDrag(null);
+      moveTo(from, over);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  return (
+    <div className="color-editor">
+      <ul className="color-list" ref={listRef}>
+        {colors.map((c, i) => (
+          <li key={c} className={`color-item${drag?.from === i ? " dragging" : ""}${drag && drag.over === i && drag.from !== i ? " drop" : ""}`}>
+            <button
+              type="button"
+              className="color-swatch"
+              style={{ ["--c" as string]: colorVar(c) }}
+              aria-label={`${c}: drag to move, or use the arrow keys`}
+              title="Drag to move"
+              onPointerDown={(e) => press(e, i)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft" && i > 0) { e.preventDefault(); moveTo(i, i - 1); }
+                if (e.key === "ArrowRight" && i < colors.length - 1) { e.preventDefault(); moveTo(i, i + 1); }
+              }}
+            />
+            {colors.length > 1 && (
+              <button type="button" className="color-remove" aria-label={`Remove ${c}`} title="Remove" onClick={() => setPrefs({ spaceColors: colors.filter((x) => x !== c) })}>
+                ×
+              </button>
+            )}
+          </li>
+        ))}
+        <li className="color-add">
+          <label title="Choose a colour to add">
+            <input type="color" aria-label="A colour to add" value={adding} onChange={(e) => setAdding(e.target.value)} />
+            <span className="color-swatch" style={{ ["--c" as string]: adding }} />
+          </label>
+          <button
+            type="button"
+            className="btn small"
+            disabled={colors.includes(adding.toLowerCase())}
+            onClick={() => setPrefs({ spaceColors: [...colors, adding.toLowerCase()] })}
+          >
+            + Add
+          </button>
+        </li>
+      </ul>
+      {colors.join() !== PALETTE.join() && (
+        <button type="button" className="link" onClick={() => setPrefs({ spaceColors: [...PALETTE] })}>Back to Milo's colours</button>
+      )}
+    </div>
+  );
+}
+
 /** A settings block that folds open and shut. Which ones are open is remembered. */
 function Section({ id, title, info, children }: { id: string; title: string; info?: React.ReactNode; children: React.ReactNode }) {
   const open = useUi((s) => s.settingsOpen.includes(id));
@@ -213,6 +302,9 @@ export function SettingsView() {
                 />
               </label>
             </div>
+          </Row>
+          <Row title="Space colours" info="The colours offered when you make or edit a space. Drag one to move it, × removes it (spaces that use it keep it), + adds your own.">
+            <SpaceColors />
           </Row>
           <Row title="Typeface">
             <div className="font-picker" role="radiogroup" aria-label="Typeface">

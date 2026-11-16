@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { DayToggles } from "../../components/DayToggles";
 import { TimeField } from "../../components/TimeField";
-import { useAction, useArchiveWithUndo, useRoutines } from "../../lib/queries";
+import { useAction, useArchiveWithUndo, useRoutines, useSpaces } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import type { Routine, RoutineInput, RoutineItem } from "../../lib/types";
 
@@ -18,6 +18,7 @@ function Editor({ routine }: { routine: Routine }) {
   const ref = useRef<HTMLDialogElement>(null);
   const act = useAction("routines");
   const archive = useArchiveWithUndo();
+  const spaces = useSpaces().data ?? [];
   const [name, setName] = useState(routine.name);
   const [newItem, setNewItem] = useState("");
   const [under, setUnder] = useState("");
@@ -35,6 +36,7 @@ function Editor({ routine }: { routine: Routine }) {
         startTime: routine.startTime,
         endTime: routine.endTime,
         weekdays: routine.weekdays,
+        spaceId: routine.spaceId,
         ...patch,
       }),
     );
@@ -61,6 +63,18 @@ function Editor({ routine }: { routine: Routine }) {
           />
         </label>
 
+        <label className="field">
+          <span>Shows on Today</span>
+          <select value={routine.spaceId ?? ""} onChange={(e) => save({ spaceId: e.target.value || null })}>
+            <option value="">At set times</option>
+            {spaces.filter((s) => !s.deletedAt || s.id === routine.spaceId).map((s) => (
+              <option key={s.id} value={s.id}>During events of {s.name}</option>
+            ))}
+          </select>
+        </label>
+
+        {!routine.spaceId && (
+        <>
         <div className="field-row">
           <label className="field">
             <span>From</span>
@@ -76,6 +90,8 @@ function Editor({ routine }: { routine: Routine }) {
           <legend>Days</legend>
           <DayToggles value={routine.weekdays} onChange={(weekdays) => save({ weekdays })} />
         </fieldset>
+        </>
+        )}
 
         <fieldset className="field parts">
           <legend>Steps</legend>

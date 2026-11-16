@@ -246,6 +246,16 @@ pub fn set_routine_check(db: State<Db>, item_id: String, day: String, checked: b
 pub fn active_focus(db: State<Db>) -> Result<Option<FocusSession>> {
     repo::active_focus(conn!(db))
 }
+/// The to-dos picked for a focus session.
+#[tauri::command(async)]
+pub fn focus_tasks(db: State<Db>, session_id: String) -> Result<Vec<FocusTask>> {
+    repo::focus_tasks(conn!(db), &session_id)
+}
+/// Ticks a to-do off during a focus session, or back on.
+#[tauri::command(async)]
+pub fn set_focus_task_done(db: State<Db>, session_id: String, task_id: String, done: bool) -> Result<Task> {
+    tx!(db, |c| repo::set_focus_task_done(c, &session_id, &task_id, done, &crate::db::now()))
+}
 #[tauri::command(async)]
 pub fn start_focus(app: AppHandle, db: State<Db>, input: FocusInput) -> Result<FocusSession> {
     let s = tx!(db, |c| repo::start_focus(c, input))?;

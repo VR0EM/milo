@@ -116,6 +116,8 @@ export interface CalEvent {
   notes: string;
   /** Where it takes place ("ELL.01.01"), or empty. */
   location: string;
+  /** Minutes before the start to remind ("0,10"); null: as set in Reminders; "": none. */
+  reminders: string | null;
   status: EventStatus;
   source: string;
   sourceId: string | null;
@@ -131,7 +133,7 @@ export interface CalEvent {
 export type EventInput = Pick<
   CalEvent,
   "spaceId" | "activityId" | "title" | "startAt" | "endAt" | "allDay" | "notes" | "status"
-> & { taskId?: string | null; location?: string };
+> & { taskId?: string | null; location?: string; reminders?: string | null };
 
 export type RepeatFreq = "daily" | "weekly" | "monthly";
 export interface RepeatRule {
@@ -228,13 +230,15 @@ export interface RoutineItem {
 export interface Routine {
   id: string;
   name: string;
+  /** Follows the events of this space instead of its set times. */
+  spaceId: string | null;
   startTime: string; // 'HH:MM'
   endTime: string; // earlier than startTime means it runs past midnight
   weekdays: string; // '1' = Monday ... '7' = Sunday
   sortOrder: number;
   items: RoutineItem[];
 }
-export type RoutineInput = Pick<Routine, "name" | "startTime" | "endTime" | "weekdays">;
+export type RoutineInput = Pick<Routine, "name" | "startTime" | "endTime" | "weekdays"> & { spaceId?: string | null };
 
 export interface FocusSession {
   id: string;
@@ -250,7 +254,14 @@ export interface FocusSession {
 export type FocusInput = Pick<FocusSession, "spaceId" | "activityId" | "taskId" | "title" | "plannedMinutes"> & {
   /** A planned block this session fills; it takes the real times when the session ends. */
   eventId?: string | null;
+  /** The to-dos to work on, ticked off during the session. */
+  taskIds?: string[];
 };
+/** A to-do picked for a focus session, and when it was ticked off during it. */
+export interface FocusTask {
+  taskId: string;
+  doneAt: string | null;
+}
 
 export type ReminderKind = "event" | "times" | "interval" | "focus";
 
@@ -374,4 +385,5 @@ export const toInput = (e: CalEvent): EventInput => ({
   status: e.status,
   taskId: e.taskId,
   location: e.location,
+  reminders: e.reminders,
 });

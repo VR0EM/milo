@@ -38,8 +38,8 @@ const tables: Record<string, Row[]> = {
   task: [],
   task_part: [],
   routine: [
-    { ...base("seed-routine-morning", 0), name: "Morning", startTime: "07:00", endTime: "10:00", weekdays: "1234567" },
-    { ...base("seed-routine-evening", 1), name: "Evening", startTime: "21:00", endTime: "23:30", weekdays: "1234567" },
+    { ...base("seed-routine-morning", 0), spaceId: null, name: "Morning", startTime: "07:00", endTime: "10:00", weekdays: "1234567" },
+    { ...base("seed-routine-evening", 1), spaceId: null, name: "Evening", startTime: "21:00", endTime: "23:30", weekdays: "1234567" },
   ],
   routine_item: [],
   focus: [],
@@ -53,6 +53,8 @@ const tables: Record<string, Row[]> = {
   ],
 };
 const checks = new Set<string>();
+/** The to-dos picked per focus session (focus_session_tasks). */
+const focusTasks = new Map<string, { taskId: string; doneAt: string | null }[]>();
 const confirmed = new Map<string, string>();
 
 const routineView = (id: string): Row => {
@@ -278,7 +280,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           .filter((e) => !e.deletedAt && e.startAt < a.to && e.endAt > a.from)
           .sort((x, y) => x.startAt.localeCompare(y.startAt))
           .map((r) => ({ ...r }));
-      case "create_event": checkEvent(a.input); return create("event", { taskId: null, location: "", ...a.input }, { source: "manual", sourceId: null, locallyModified: false, seriesId: null });
+      case "create_event": checkEvent(a.input); return create("event", { taskId: null, location: "", reminders: null, ...a.input }, { source: "manual", sourceId: null, locallyModified: false, seriesId: null });
       case "update_event": checkEvent(a.input); remember("event", a.id, a.input); return update("event", a.id, a.input);
       case "list_task_types": return tables.task_type.map((r) => ({ ...r }));
       case "create_task_type": return create("task_type", a.input);
@@ -310,7 +312,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       }
       case "list_routines":
         return tables.routine.filter((r) => !r.deletedAt).sort((x, y) => x.startTime.localeCompare(y.startTime)).map((r) => routineView(r.id));
-      case "create_routine": return routineView(create("routine", a.input).id);
+      case "create_routine": return routineView(create("routine", { spaceId: null, ...a.input }).id);
       case "update_routine": return routineView(update("routine", a.id, a.input).id);
       case "create_routine_item":
         if (!String(a.title).trim()) throw "Title cannot be empty";
@@ -327,9 +329,25 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         const f = tables.focus.find((x) => !x.endedAt && !x.deletedAt);
         return f ? { ...f } : null;
       }
-      case "start_focus":
+      case "start_focus": {
         if (tables.focus.some((x) => !x.endedAt && !x.deletedAt)) throw "A focus session is already running";
-        return create("focus", { ...a.input, eventId: a.input.eventId ?? null }, { startedAt: ts(), endedAt: null });
+        const { taskIds = [], ...input } = a.input;
+        const f = create("focus", { ...input, eventId: input.eventId ?? null }, { startedAt: ts(), endedAt: null });
+        const ids = [...new Set([...taskIds, ...(input.taskId ? [input.taskId] : [])])];
+        focusTasks.set(f.id, ids.map((taskId: string) => ({ taskId, doneAt: null })));
+        return f;
+      }
+      case "focus_tasks": return (focusTasks.get(a.sessionId) ?? []).map((t) => ({ ...t }));
+      case "set_focus_task_done": {
+        const t = (focusTasks.get(a.sessionId) ?? []).find((x) => x.taskId === a.taskId);
+        if (!t) throw "Not found";
+        t.doneAt = a.done ? ts() : null;
+        const task = taskView(a.taskId);
+        if (!task.parts.length) return taskView(update("task", a.taskId, { completedAt: a.done ? ts() : null }).id);
+        if (a.done) for (const p of task.parts.filter((p: Row) => !p.doneAt)) update("task_part", p.id, { doneAt: ts() });
+        syncTask(a.taskId);
+        return taskView(a.taskId);
+      }
       case "finish_focus": {
         const f = tables.focus.find((x) => x.id === a.id)!;
         const end = new Date(Math.max(Date.now(), new Date(f.startedAt).getTime() + 1)).toISOString();
@@ -339,11 +357,26 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           Object.assign(f, { endedAt: end });
           return update("event", planned.id, { startAt: f.startedAt, endAt: end });
         }
-        const ev = create("event", {
-          spaceId: f.spaceId, activityId: f.activityId, title: f.title || "Focus", startAt: f.startedAt, endAt: end,
-          allDay: false, notes: "", status: "planned", taskId: f.taskId ?? null,
-        }, { source: "focus", seriesId: null });
-        Object.assign(f, { endedAt: end, eventId: ev.id });
+        // As finish_focus_at in repo.rs: the time per to-do ticked off, the rest to the first open one.
+        const spaceName = tables.space.find((x) => x.id === f.spaceId)?.name ?? "";
+        const fallback = f.title || spaceName;
+        const picked = focusTasks.get(f.id) ?? [];
+        const ticked = picked.filter((t) => t.doneAt).sort((x, y) => x.doneAt!.localeCompare(y.doneAt!));
+        const open = picked.find((t) => !t.doneAt)?.taskId ?? f.taskId ?? null;
+        const pieces: [string, string, string | null][] = [];
+        let cursor = f.startedAt;
+        for (const t of ticked) { pieces.push([cursor, t.doneAt!, t.taskId]); cursor = t.doneAt!; }
+        pieces.push([cursor, end, open]);
+        let ev: Row | null = null;
+        for (const [from, to, taskId] of pieces) {
+          if (new Date(to).getTime() - new Date(from).getTime() < 60_000 && ev) continue;
+          const title = taskId ? tables.task.find((t) => t.id === taskId)?.title || fallback : fallback;
+          ev = create("event", {
+            spaceId: f.spaceId, activityId: f.activityId, title, startAt: from, endAt: to,
+            allDay: false, notes: "", location: "", reminders: "", status: "planned", taskId,
+          }, { source: "focus", seriesId: null });
+        }
+        Object.assign(f, { endedAt: end, eventId: ev!.id });
         return ev;
       }
       case "list_series": return tables.series.filter((r) => !r.deletedAt).map((r) => ({ id: r.id, rule: r.rule, firstDate: r.firstDate }));

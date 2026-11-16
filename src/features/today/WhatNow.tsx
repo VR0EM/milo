@@ -4,7 +4,7 @@ import { beginFocus } from "../../lib/focus";
 import { api } from "../../lib/api";
 import { useAction, useActiveFocus, useActivities, useAllSpaces, useRoutineChecks, useRoutines, useTasks } from "../../lib/queries";
 import { useUi } from "../../lib/store";
-import { daysFromToday, fmtDuration, fmtHm, fmtRelativeDays, fmtTime, startOfDay, toDateInput } from "../../lib/time";
+import { daysFromToday, fmtDuration, fmtRelativeDays, fmtTime, startOfDay, toDateInput } from "../../lib/time";
 import { todayList } from "../../lib/today";
 import type { CalEvent, Routine, Task } from "../../lib/types";
 import { activeRoutine } from "./routines";
@@ -42,15 +42,15 @@ function reason(t: Task, now: Date) {
  */
 export function WhatNow({ now, live }: { now: Date; live: CalEvent[] }) {
   const routines = useRoutines().data ?? [];
-  const running = activeRoutine(routines, now);
+  const running = activeRoutine(routines, now, live);
   const [later, setLater] = useState<string | null>(null);
   if (running && later !== running.routine.id + running.day) {
-    return <RoutineNow routine={running.routine} day={running.day} onSkip={() => setLater(running.routine.id + running.day)} />;
+    return <RoutineNow routine={running.routine} day={running.day} until={running.until} onSkip={() => setLater(running.routine.id + running.day)} />;
   }
   return <Suggestion now={now} live={live} />;
 }
 
-function RoutineNow({ routine, day, onSkip }: { routine: Routine; day: string; onSkip: () => void }) {
+function RoutineNow({ routine, day, until, onSkip }: { routine: Routine; day: string; until: Date; onSkip: () => void }) {
   const checked = useRoutineChecks(day).data ?? [];
   const act = useAction("routineChecks");
   const items = routine.items;
@@ -79,7 +79,7 @@ function RoutineNow({ routine, day, onSkip }: { routine: Routine; day: string; o
     <section className="block what-now">
       <div className="block-head">
         <h2>What now?</h2>
-        <span className="muted small">{routine.name} until {fmtHm(routine.endTime)}</span>
+        <span className="muted small">{routine.name} until {fmtTime(until)}</span>
         <span className="spacer" />
         <button className="link" onClick={() => useUi.setState({ routineEditId: routine.id })}>Edit</button>
       </div>

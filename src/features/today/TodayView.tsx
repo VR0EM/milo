@@ -13,7 +13,6 @@ import { GettingStarted } from "./GettingStarted";
 import { WhatsNewCard } from "../whatsnew/WhatsNew";
 import { useNow } from "../../lib/useNow";
 import { deadlineLine } from "../tasks/TasksView";
-import { FocusPanel } from "./FocusPanel";
 import { TodayTodos } from "./TodayTodos";
 import { WhatNow } from "./WhatNow";
 
@@ -49,7 +48,7 @@ export function TodayView() {
 
   return (
     <>
-      <main className="page">
+      <main className="page full">
         <header className="toolbar">
           <h1>
             {greeting(now)}
@@ -62,7 +61,6 @@ export function TodayView() {
           {order.filter((b) => !hidden.includes(b)).map((b) => <Fragment key={b}>{blocks[b]}</Fragment>)}
         </div>
       </main>
-      <FocusPanel />
     </>
   );
 }

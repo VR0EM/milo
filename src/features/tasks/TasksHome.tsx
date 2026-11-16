@@ -187,11 +187,12 @@ export function fmtDays(weekdays: string) {
 }
 
 function RoutineCard({ routine }: { routine: Routine }) {
+  const space = useAllSpaces().data?.find((s) => s.id === routine.spaceId);
   return (
     <button className="list-card routine-card" onClick={() => useUi.setState({ routineEditId: routine.id })}>
       <span className="list-card-name">{routine.name}</span>
       <span className="muted small">
-        Routine · {fmtHm(routine.startTime)}–{fmtHm(routine.endTime)} · {fmtDays(routine.weekdays)}
+        {space ? `Routine · during ${space.name} events` : `Routine · ${fmtHm(routine.startTime)}–${fmtHm(routine.endTime)} · ${fmtDays(routine.weekdays)}`}
       </span>
     </button>
   );

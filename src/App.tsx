@@ -13,6 +13,7 @@ import { TasksView } from "./features/tasks/TasksHome";
 import { Sidebar } from "./features/spaces/Sidebar";
 import { SpaceView } from "./features/spaces/SpaceView";
 import { SearchView } from "./features/search/SearchView";
+import { FocusView } from "./features/focus/FocusView";
 import { SetupGate } from "./features/setup/SetupGuide";
 import { RoutineEditor } from "./features/today/RoutineEditor";
 import { useUi } from "./lib/store";
@@ -40,7 +41,7 @@ export default function App() {
   return (
     <div className="app" key={`${timeFormat}-${weekStart}`}>
       <Sidebar />
-      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : view === "space" ? <SpaceView /> : view === "search" ? <SearchView /> : <CalendarView />}
+      {view === "today" ? <TodayView /> : view === "tasks" ? <TasksView /> : view === "insights" ? <InsightsView /> : view === "reminders" ? <RemindersView /> : view === "settings" ? <SettingsView /> : view === "space" ? <SpaceView /> : view === "search" ? <SearchView /> : view === "focus" ? <FocusView /> : <CalendarView />}
       <EntityDialog />
       <RoutineEditor />
       <SetupGate />

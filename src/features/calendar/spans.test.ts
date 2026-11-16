@@ -10,7 +10,7 @@ const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 const allDay = (title: string, from: number, days: number): CalEvent => ({
   id: title, spaceId: "s", activityId: null, title,
   startAt: addDays(monday, from).toISOString(), endAt: addDays(monday, from + days).toISOString(),
-  allDay: true, notes: "", location: "", status: "planned", source: "milo", sourceId: null, locallyModified: false,
+  allDay: true, notes: "", location: "", reminders: null, status: "planned", source: "milo", sourceId: null, locallyModified: false,
   taskId: null, seriesId: null, createdAt: "", updatedAt: "", deletedAt: null,
 });
 

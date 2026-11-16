@@ -91,6 +91,7 @@ pub fn restore(c: &Connection, change_id: &str) -> Result<(String, String)> {
                 status: maybe(&v, "status").unwrap_or_else(|| "planned".into()),
                 task_id: maybe(&v, "taskId"),
                 location: text(&v, "location"),
+                reminders: maybe(&v, "reminders"),
             };
             remember(c, "event", &entity_id, &repo::get_event(c, &entity_id)?, true)?;
             repo::update_event_unlogged(c, &entity_id, input)?;
@@ -131,7 +132,7 @@ mod tests {
                 all_day: false,
                 notes: "room B1".into(),
                 status: "planned".into(),
-                task_id: None, location: String::new() },
+                task_id: None, location: String::new(), reminders: None },
             "manual",
         )
         .unwrap()
@@ -142,7 +143,7 @@ mod tests {
         repo::update_event(
             c,
             id,
-            EventInput { space_id: e.space_id, activity_id: e.activity_id, title: title.into(), start_at: start.into(), end_at: e.end_at, all_day: e.all_day, notes: String::new(), status: e.status, task_id: e.task_id, location: String::new() },
+            EventInput { space_id: e.space_id, activity_id: e.activity_id, title: title.into(), start_at: start.into(), end_at: e.end_at, all_day: e.all_day, notes: String::new(), status: e.status, task_id: e.task_id, location: String::new(), reminders: None },
         )
         .unwrap();
     }
@@ -189,7 +190,7 @@ mod tests {
         let e = old_event(&c);
         let same = EventInput {
             space_id: e.space_id.clone(), activity_id: None, title: e.title.clone(), start_at: e.start_at.clone(),
-            end_at: e.end_at.clone(), all_day: false, notes: e.notes.clone(), status: e.status.clone(), task_id: None, location: String::new() };
+            end_at: e.end_at.clone(), all_day: false, notes: e.notes.clone(), status: e.status.clone(), task_id: None, location: String::new(), reminders: None };
         repo::update_event(&c, &e.id, same).unwrap();
         assert!(list(&c, "event", &e.id).unwrap().is_empty());
     }

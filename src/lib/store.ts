@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { addDays, startOfDay, startOfWeek } from "./time";
+import { PALETTE } from "./colors";
 import type { Activity, CalEvent, Group, Space, SpaceKind, TaskType } from "./types";
 
 /** The calendar never zooms out further than all 24 hours on screen (see WeekGrid); this is only a floor. */
@@ -16,7 +17,7 @@ export type Dialog =
   | { kind: "activity"; item?: Activity }
   | { kind: "task_type"; item?: TaskType; spaceId?: string };
 
-export type View = "today" | "calendar" | "tasks" | "insights" | "reminders" | "settings" | "space" | "search";
+export type View = "today" | "calendar" | "tasks" | "focus" | "insights" | "reminders" | "settings" | "space" | "search";
 export type Theme = "system" | "light" | "dark";
 export type Accent = "blue" | "teal" | "green" | "plum" | "clay" | "custom";
 export type Font = "system" | "rounded" | "humanist" | "serif";
@@ -60,6 +61,8 @@ export interface Prefs {
   defaultSpaceId: string | null;
   /** To-dos picked for an earlier day and not finished: ask each morning, keep them on Today, or let them go. */
   yesterdayMode: "ask" | "keep" | "drop";
+  /** The colours offered for spaces, in her order: palette keys ("teal") or her own ("#a1b2c3"). */
+  spaceColors: string[];
 }
 export type TodayBlock = "todos" | "day" | "whatnow" | "confirm" | "deadlines" | "wrapup";
 export const TODAY_BLOCKS: [TodayBlock, string][] = [
@@ -81,6 +84,7 @@ export const DEFAULT_PREFS: Prefs = {
   lastSeenVersion: __APP_VERSION__,
   defaultSpaceId: null,
   yesterdayMode: "ask",
+  spaceColors: [...PALETTE],
 };
 /** The space new things go to: the one chosen as default, else the one used last. */
 export const preferredSpace = (s: { prefs: Prefs; lastSpaceId: string | null }) => s.prefs.defaultSpaceId ?? s.lastSpaceId;
@@ -151,6 +155,8 @@ interface UiState {
   pickTodayOpen: boolean;
   /** What the search page looks for. */
   searchQuery: string;
+  /** The list of imported titles without a link is open (Settings › Import & export). */
+  reviewTitles: boolean;
   /** The search page, on these words. */
   openSearch: (query?: string) => void;
   showCompleted: boolean;
@@ -243,6 +249,7 @@ export const useUi = create<UiState>()(
       openTasks: (tasksList) => set({ view: "tasks", tasksList, selectedTaskId: null, selectedEventId: null }),
       pickTodayOpen: false,
       searchQuery: "",
+      reviewTitles: false,
       openSearch: (query) =>
         set((s) => ({ view: "search", searchQuery: query ?? s.searchQuery, commandOpen: false, selectedTaskId: null, selectedEventId: null })),
       shortcutsOpen: false,

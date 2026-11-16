@@ -8,7 +8,7 @@ import type {
   Activity, ActivityInput, CalEvent, Entity, EventInput, Group, GroupInput, Space, SpaceInput, Task, TaskInput, TaskType,
   ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
-  FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
+  FocusInput, FocusSession, FocusTask, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
   EventSeries, RepeatRule, Change, Section, ModelStatus, SearchResults, Similar, SpaceSuggestion,
 } from "./types";
 
@@ -86,6 +86,8 @@ export const api = {
   startFocus: (input: FocusInput) => call<FocusSession>("start_focus", { input }),
   finishFocus: (id: string) => call<CalEvent>("finish_focus", { id }),
   discardFocus: (id: string) => call<void>("discard_focus", { id }),
+  focusTasks: (sessionId: string) => call<FocusTask[]>("focus_tasks", { sessionId }),
+  setFocusTaskDone: (sessionId: string, taskId: string, done: boolean) => call<Task>("set_focus_task_done", { sessionId, taskId, done }),
 
   listReminderRules: () => call<ReminderRule[]>("list_reminder_rules"),
   createReminderRule: (input: ReminderRuleInput) => call<ReminderRule>("create_reminder_rule", { input }),

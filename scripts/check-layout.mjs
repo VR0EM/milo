@@ -151,8 +151,9 @@ for (const [w, h, textSize] of [[1440, 900, "default"], [1000, 600, "default"], 
   await page.evaluate(() => [...document.querySelectorAll(".t-title")].find((e) => e.textContent.trim() === "Lab report titration")?.click());
   await wait(500);
   counts.allTodos = await check(page, `${size} All to-dos`);
-  await key("4"); counts.insights = await check(page, `${size} Insights`);
-  await key("5"); counts.reminders = await check(page, `${size} Reminders`);
+  await key("4"); counts.focus = await check(page, `${size} Focus`);
+  await key("5"); counts.insights = await check(page, `${size} Insights`);
+  await key("6"); counts.reminders = await check(page, `${size} Reminders`);
   // A space of each kind: a course, a list, and time only.
   for (const name of ["Chemistry", "Errands", "Work"]) {
     await page.evaluate((n) => [...document.querySelectorAll(".space-open")].find((e) => e.textContent.trim() === n)?.click(), name);

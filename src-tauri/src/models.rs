@@ -85,6 +85,8 @@ pub struct Event {
     pub notes: String,
     /// Where it takes place ("ELL.01.01"), or empty.
     pub location: String,
+    /// Minutes before the start to remind ("0,10"); None: as set in Reminders; "": none.
+    pub reminders: Option<String>,
     pub status: String,
     pub source: String,
     pub source_id: Option<String>,
@@ -116,6 +118,8 @@ pub struct EventInput {
     pub task_id: Option<String>,
     #[serde(default)]
     pub location: String,
+    #[serde(default)]
+    pub reminders: Option<String>,
 }
 
 fn default_status() -> String {
@@ -219,6 +223,8 @@ pub struct RoutineItem {
 pub struct Routine {
     pub id: String,
     pub name: String,
+    /// Follows the events of this space instead of its set times.
+    pub space_id: Option<String>,
     pub start_time: String,
     pub end_time: String,
     pub weekdays: String,
@@ -233,6 +239,8 @@ pub struct RoutineInput {
     pub start_time: String,
     pub end_time: String,
     pub weekdays: String,
+    #[serde(default)]
+    pub space_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -262,6 +270,18 @@ pub struct FocusInput {
     #[serde(default)]
     pub title: String,
     pub planned_minutes: i64,
+    /// The to-dos to work on, ticked off during the session.
+    #[serde(default)]
+    pub task_ids: Vec<String>,
+}
+
+/// A to-do picked for a focus session.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusTask {
+    pub task_id: String,
+    /// When it was ticked off during the session.
+    pub done_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

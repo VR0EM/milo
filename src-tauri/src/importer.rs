@@ -735,7 +735,7 @@ END:VCALENDAR";
         let input = EventInput {
             space_id: a.space_id.clone(), activity_id: None, title: "Analysis (my time)".into(),
             start_at: "2030-01-07T09:00:00.000Z".into(), end_at: "2030-01-07T10:00:00.000Z".into(),
-            all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() };
+            all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new(), reminders: None };
         repo::update_event(&c, &a.id, input.clone()).unwrap();
         let r = apply(&c, &s, &occ(&renamed), true).unwrap();
         assert_eq!(r.kept, 1);

@@ -46,8 +46,47 @@ fn just_passed(now: DateTime<Local>, t: NaiveTime) -> bool {
     diff >= Duration::zero() && diff < Duration::minutes(GRACE_MINUTES)
 }
 
-pub fn collect_due(c: &Connection, now: DateTime<Local>) -> Result<Vec<Due>> {
+/// Events with reminders of their own ("10" or "0,30"): due when one of their moments just passed.
+/// Logged under the general events rule (the log needs a rule), with the minutes in the
+/// occurrence, so each one fires once.
+fn own_event_reminders(c: &Connection, now: DateTime<Local>) -> Result<Vec<Due>> {
+    let Some(rule_id) = c
+        .query_row("SELECT id FROM reminder_rules WHERE kind = 'event' ORDER BY sort_order LIMIT 1", [], |r| r.get::<_, String>(0))
+        .optional()?
+    else {
+        return Ok(Vec::new());
+    };
+    // Starting within the next day, or a moment ago (a reminder "at the start").
+    let mut s = c.prepare(
+        "SELECT id, title, start_at, reminders FROM events
+         WHERE deleted_at IS NULL AND status != 'skipped' AND all_day = 0 AND reminders IS NOT NULL AND reminders != ''
+           AND start_at > ?1 AND start_at <= ?2",
+    )?;
+    let rows = s
+        .query_map([iso(now - Duration::minutes(GRACE_MINUTES)), iso(now + Duration::minutes(1441))], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut due = Vec::new();
+    for (id, title, start_at, list) in rows {
+        let Ok(start) = DateTime::parse_from_rfc3339(&start_at).map(|d| d.with_timezone(&Local)) else { continue };
+        for m in list.split(',').filter_map(|m| m.trim().parse::<i64>().ok()) {
+            let at = start - Duration::minutes(m);
+            if at <= now && now - at < Duration::minutes(GRACE_MINUTES) {
+                due.push(Due {
+                    rule_id: rule_id.clone(),
+                    occurrence: format!("{id}@{start_at}#{m}"),
+                    title: if title.is_empty() { "Event".into() } else { title.clone() },
+                    body: if m == 0 { "Starts now".into() } else { format!("Starts at {} (in {m} min)", start.format("%H:%M")) },
+                });
+            }
+        }
+    }
+    Ok(due)
+}
+
+pub fn collect_due(c: &Connection, now: DateTime<Local>) -> Result<Vec<Due>> {
+    let mut due = own_event_reminders(c, now)?;
     let weekday = now.weekday().number_from_monday().to_string();
     let date = now.format("%Y-%m-%d").to_string();
 
@@ -60,7 +99,7 @@ pub fn collect_due(c: &Connection, now: DateTime<Local>) -> Result<Vec<Due>> {
                 let mut s = c.prepare(
                     "SELECT id, title, start_at FROM events
                      WHERE deleted_at IS NULL AND status != 'skipped' AND all_day = 0 AND source != 'focus'
-                       AND start_at > ?1 AND start_at <= ?2",
+                       AND reminders IS NULL AND start_at > ?1 AND start_at <= ?2",
                 )?;
                 let rows = s
                     .query_map([&from, &to], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))?
@@ -224,7 +263,7 @@ mod tests {
                 end_at: iso(start + Duration::hours(1)),
                 all_day: false,
                 notes: String::new(),
-                status: "planned".into(), task_id: None, location: String::new() },
+                status: "planned".into(), task_id: None, location: String::new(), reminders: None },
             "manual",
         )
         .unwrap();
@@ -234,6 +273,34 @@ mod tests {
         assert_eq!(due.len(), 1);
         assert_eq!((due[0].title.as_str(), due[0].body.as_str()), ("Analysis", "Starts at 14:00"));
         assert!(tick(&c, at(13, 51)).unwrap().is_empty(), "never twice");
+    }
+
+    #[test]
+    fn an_event_can_have_reminders_of_its_own() {
+        let c = open_in_memory().unwrap();
+        let mk = |title: &str, reminders: Option<&str>| {
+            repo::create_event(
+                &c,
+                EventInput {
+                    space_id: "seed-space-personal".into(), activity_id: None, title: title.into(),
+                    start_at: iso(at(10, 0)), end_at: iso(at(11, 0)), all_day: false, notes: String::new(),
+                    status: "planned".into(), task_id: None, location: String::new(), reminders: reminders.map(Into::into),
+                },
+                "manual",
+            )
+            .unwrap()
+        };
+        mk("Own", Some("30,0"));
+        mk("None", Some(""));
+        mk("General", None);
+        enable(&c, "seed-reminder-events");
+        let titles = |h: u32, m: u32| -> Vec<String> { let mut t: Vec<String> = tick(&c, at(h, m)).unwrap().into_iter().map(|d| d.title).collect(); t.sort(); t };
+        assert_eq!(titles(9, 30), ["Own"], "30 minutes before, its own");
+        assert_eq!(titles(9, 50), ["General"], "the general rule: 10 minutes before");
+        assert_eq!(titles(10, 0), ["Own"], "at the start");
+        assert!(titles(10, 1).is_empty(), "each once; a reminder of none stays silent");
+        assert_eq!(repo::clean_reminders(&Some(" 10, 0,10".into())).unwrap().as_deref(), Some("0,10"));
+        assert!(repo::clean_reminders(&Some("soon".into())).is_err());
     }
 
     #[test]
@@ -264,7 +331,7 @@ mod tests {
         assert!(tick(&c, Local.with_ymd_and_hms(2026, 11, 12, 8, 31, 0).unwrap()).unwrap().is_empty());
 
         // A focus session that reached its length is announced once.
-        let s = repo::start_focus(&c, crate::models::FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, event_id: None, title: "Essay".into(), planned_minutes: 25 }).unwrap();
+        let s = repo::start_focus(&c, crate::models::FocusInput { space_id: "seed-space-personal".into(), activity_id: None, task_id: None, event_id: None, title: "Essay".into(), planned_minutes: 25, task_ids: Vec::new() }).unwrap();
         assert!(tick(&c, Local::now()).unwrap().iter().all(|d| !d.title.starts_with("Focus")), "not yet");
         c.execute("UPDATE focus_sessions SET started_at = '2020-01-01T10:00:00.000Z' WHERE id = ?1", [&s.id]).unwrap();
         let done: Vec<_> = tick(&c, Local::now()).unwrap().into_iter().filter(|d| d.title.starts_with("Focus")).collect();
