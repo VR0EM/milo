@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { api } from "../../lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, files } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { useArchiveWithUndo, useImportSources, useInsights, useSemesters, useSpaces, useAction } from "../../lib/queries";
+import { delta } from "../../lib/compare";
 import { useUi, type InsightsPeriod } from "../../lib/store";
 import { addDays, startOfWeek, toDateInput } from "../../lib/time";
 import type { Insights, Semester, Space } from "../../lib/types";
@@ -106,6 +107,7 @@ export function InsightsView() {
             </>
           )}
           {period && <span className="period-label">{period.label}</span>}
+          {period && <ExportCsv period={period} />}
         </div>
 
         {period ? (
@@ -123,6 +125,47 @@ export function InsightsView() {
         {kind === "semester" && <Semesters semesters={semesters} />}
       </div>
     </main>
+  );
+}
+
+/** "Export CSV": the period as a file for Excel, every event or the totals per space. */
+function ExportCsv({ period }: { period: Period }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("mousedown", away);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const run = async (what: "events" | "totals") => {
+    setOpen(false);
+    const from = toDateInput(period.from), to = toDateInput(period.to);
+    const notify = useUi.getState().notify;
+    try {
+      const path = await files.save(`milo-${what === "events" ? "events" : "time-per-space"}-${from}.csv`, { name: "CSV for Excel", extensions: ["csv"] });
+      if (!path) return;
+      await api.exportCsv(path, from, to, what);
+      notify({ text: `Saved ${path.split(/[\\/]/).pop()}` });
+    } catch (e) {
+      notify({ text: `Could not export: ${e}` });
+    }
+  };
+  return (
+    <div className="add-menu export-csv" ref={ref}>
+      <button className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Export CSV</button>
+      {open && (
+        <div className="menu" role="menu">
+          <button role="menuitem" onClick={() => run("totals")}>Time per space</button>
+          <button role="menuitem" onClick={() => run("events")}>Every event</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -188,6 +231,10 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
   const session = data.productiveSessions ? productive / data.productiveSessions : 0;
   const prevSession = before?.productiveSessions ? (before.totals.class + before.totals.selfStudy) / before.productiveSessions : undefined;
   const spaceById = new Map(spaces.map((s) => [s.id, s]));
+  const lastLabel = kind === "week" ? "last week" : kind === "year" ? "last year" : "last month";
+  const prevSpace = new Map((before?.spaces ?? []).map((s) => [s.spaceId, s.class + s.selfStudy + s.other + s.sleep]));
+  /** Compared with the period before, 0 for a space that had nothing then. */
+  const was = (spaceId: string) => (before ? prevSpace.get(spaceId) ?? 0 : undefined);
 
   const columns = useMemo<Column[]>(() => {
     const n = data.buckets.length;
@@ -262,8 +309,16 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
           title="Time per space"
           table={
             <table className="data-table">
-              <thead><tr><th>Space</th><th>Total</th></tr></thead>
-              <tbody>{perSpace.map((s) => <tr key={s.spaceId}><td>{spaceById.get(s.spaceId)?.name ?? "Unknown"}</td><td>{fmtMinutes(s.total)}</td></tr>)}</tbody>
+              <thead><tr><th>Space</th><th>Total</th>{before && <th>Since {lastLabel}</th>}</tr></thead>
+              <tbody>
+                {perSpace.map((s) => (
+                  <tr key={s.spaceId}>
+                    <td>{spaceById.get(s.spaceId)?.name ?? "Unknown"}</td>
+                    <td>{fmtMinutes(s.total)}</td>
+                    {before && <td>{delta(s.total, was(s.spaceId), fmtMinutes)}</td>}
+                  </tr>
+                ))}
+              </tbody>
             </table>
           }
         >
@@ -276,6 +331,7 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
                   <span className="hbar-label ellipsis">{space?.name ?? "Unknown"}</span>
                   <span className="hbar-track"><span style={{ width: `${(s.total / maxSpace) * 100}%` }} /></span>
                   <span className="hbar-value">{fmtMinutes(s.total)}</span>
+                  {before && <span className="hbar-delta" title={`Compared with ${lastLabel}`}>{delta(s.total, was(s.spaceId), fmtMinutes)}</span>}
                 </li>
               );
             })}
@@ -284,11 +340,12 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
 
         <Block title="Class and sleep">
           <ul className="hbars">
-            {[["Class", data.totals.class, STUDY[0].color], ["Self-study", data.totals.selfStudy, STUDY[1].color]].map(([name, value, color]) => (
-              <li key={name as string} style={{ ["--s" as string]: color as string }}>
-                <span className="hbar-label">{name as string}</span>
-                <span className="hbar-track"><span style={{ width: `${((value as number) / split) * 100}%` }} /></span>
-                <span className="hbar-value">{fmtMinutes(value as number)}</span>
+            {([["Class", data.totals.class, before?.totals.class, STUDY[0].color], ["Self-study", data.totals.selfStudy, before?.totals.selfStudy, STUDY[1].color]] as const).map(([name, value, then, color]) => (
+              <li key={name} style={{ ["--s" as string]: color }}>
+                <span className="hbar-label">{name}</span>
+                <span className="hbar-track"><span style={{ width: `${(value / split) * 100}%` }} /></span>
+                <span className="hbar-value">{fmtMinutes(value)}</span>
+                {before && <span className="hbar-delta" title={`Compared with ${lastLabel}`}>{delta(value, then, fmtMinutes)}</span>}
               </li>
             ))}
           </ul>
@@ -296,6 +353,9 @@ function ReportBody({ data, before, kind, spaces }: { data: Insights; before: In
             <span>Average sleep</span>
             <span className="spacer" />
             <strong>{data.sleepAverage !== null ? `${fmtMinutes(data.sleepAverage)} / night` : "–"}</strong>
+            {before && data.sleepAverage !== null && before.sleepAverage !== null && (
+              <span className="hbar-delta" title={`Compared with ${lastLabel}`}>{delta(data.sleepAverage, before.sleepAverage, fmtMinutes)}</span>
+            )}
           </div>
           {data.nights.length > 0 ? (
             <ColumnChart columns={nights} series={SLEEP} label="Sleep per night" height={90} />

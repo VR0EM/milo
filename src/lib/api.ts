@@ -50,6 +50,12 @@ export const api = {
     call<SpaceSuggestion[]>("suggest_in_space", { spaceId, what, texts }),
   /** For each [id, text]: an open to-do it seems to repeat, or null. */
   similarTodos: (items: [string, string][]) => call<(Similar | null)[]>("similar_todos", { items }),
+  /** The to-dos of a Markdown checklist, made in a space (parts, to-dos, steps). */
+  importTodos: (spaceId: string, todos: { title: string; done: boolean; section: string | null; steps: { title: string; done: boolean }[] }[]) =>
+    call<{ taskIds: string[]; newSectionIds: string[]; steps: number }>("import_todos", { spaceId, todos }),
+  readTextFile: (path: string) => call<string>("read_text_file", { path }),
+  /** A CSV file for Excel of [from, to): every event, or the totals per space. */
+  exportCsv: (path: string, from: string, to: string, what: "events" | "totals") => call<void>("export_csv", { path, from, to, what }),
   /** Every event (any date) and to-do (also done) with these words. */
   search: (query: string) => call<SearchResults>("search", { query }),
   smartModelStatus: () => call<ModelStatus>("smart_model_status"),
@@ -185,10 +191,10 @@ export const files = {
     const picked = await open({ directory: true, multiple: false });
     return typeof picked === "string" ? picked : null;
   },
-  async save(defaultPath: string): Promise<string | null> {
+  async save(defaultPath: string, filter: { name: string; extensions: string[] } = { name: "JSON", extensions: ["json"] }): Promise<string | null> {
     if (!inTauri) throw "Files can only be saved in the desktop app";
     const { save } = await import("@tauri-apps/plugin-dialog");
-    return save({ defaultPath, filters: [{ name: "JSON", extensions: ["json"] }] });
+    return save({ defaultPath, filters: [filter] });
   },
 };
 

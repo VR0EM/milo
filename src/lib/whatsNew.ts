@@ -12,6 +12,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.1",
+    date: "2026-11-16",
+    items: [
+      "Cmd+Z (Ctrl+Z on Windows) undoes the last change that offered Undo, also after its notice is gone: moving, archiving, rescheduling, importing.",
+      "Import a checklist from Obsidian or Notes into a course or list: headings become parts, list items to-dos, indented items steps, and ticked items stay done. Paste it or open a .md file.",
+      "Insights compares with the week, month or year before: +2 h or −35 min beside each space, class, self-study and sleep.",
+      "Export CSV in Insights: the time per space or every event of the period, as a file that opens in Excel.",
+    ],
+  },
+  {
     version: "0.4.0",
     date: "2026-11-16",
     items: [

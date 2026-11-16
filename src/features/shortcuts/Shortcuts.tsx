@@ -24,6 +24,14 @@ export function useGlobalShortcuts() {
         useUi.setState({ commandOpen: !s.commandOpen });
         return;
       }
+      // Cmd+Z: undo the last change Milo made (moving, archiving, …). In a text field it
+      // undoes typing, as always.
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && !isTyping(e)) {
+        if (document.querySelector("dialog[open]")) return;
+        e.preventDefault();
+        useUi.getState().undoLast();
+        return;
+      }
       // Cmd+F: the search page, over everything of any date.
       if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
         if (document.querySelector("dialog[open]")) return;
@@ -75,6 +83,7 @@ export function ShortcutsDialog() {
           <tr><td>{k(CAPTURE_KEY)}</td><td>Write something down, from any app (lands in the Inbox)</td></tr>
           <tr><td>{k(`${MOD_LABEL}K`)}</td><td>Commands: go anywhere, find a task, event or space, or type a date</td></tr>
           <tr><td>{k(`${MOD_LABEL}F`)}</td><td>Search all events and to-dos, of any date</td></tr>
+          <tr><td>{k(`${MOD_LABEL}Z`)}</td><td>Undo the last change (also the ones before it)</td></tr>
           <tr><td>{k("?")}</td><td>This overview</td></tr>
           <tr><td>{k("Esc")}</td><td>Close a dialog, or clear the selection</td></tr>
           <tr><td colSpan={2}><h3>Calendar</h3></td></tr>

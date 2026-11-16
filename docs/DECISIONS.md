@@ -698,3 +698,21 @@ The rest of the first feedback file (docs kept outside the repository):
 - **Space colours**: her own palette (a preference), drag to reorder, × to remove (spaces that
   use a colour keep it), + to add.
 - Still to ask her: how the cut-off sentence about Deadlines on Today ended.
+
+## Undo, checklist import, comparison, CSV (0.4.1)
+
+- **Ctrl+Z** replays the undo of the latest notice that had one (`undoStack` in the UI store,
+  the last 20, this session only). It does nothing while typing in a field, where the field's
+  own undo applies, and says "Nothing to undo" when the list is empty. No redo: every undo is
+  itself a normal change.
+- **Markdown import** is parsed in the frontend (`markdownImport.ts`) so the preview and the
+  import are the same thing; Rust only writes (`import_todos`, one transaction). Headings are
+  parts in a course and ignored in a list; a part with the same name is reused. Deeper levels
+  than steps are flattened into steps, because Milo has three levels. Wikilinks, links and
+  emphasis are stripped. `read_text_file` only reads .md, .markdown and .txt up to 2 MB.
+- **Comparison** is with the period just before (previous week, month, year), shown as a quiet
+  delta in text, never colour alone and never red/green (it is not a score). Semesters are not
+  compared: they differ in length and content.
+- **CSV** is written for Excel in Belgium: semicolons, decimal comma, CRLF and a BOM. The
+  totals use the same `insights_for` as the screen, so the file and Insights agree. Events are
+  local time; all-day events have no minutes.

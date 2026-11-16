@@ -259,6 +259,25 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           .sort((x, y) => Number(y.inTitle) - Number(x.inTitle) || Number(!!x.completedAt) - Number(!!y.completedAt) || (x.deadlineAt ?? "9999").localeCompare(y.deadlineAt ?? "9999"));
         return { events: events.slice(0, 100), tasks: tasks.slice(0, 100) };
       }
+      case "import_todos": {
+        const space = tables.space.find((x) => x.id === a.spaceId);
+        const out = { taskIds: [] as string[], newSectionIds: [] as string[], steps: 0 };
+        for (const t of a.todos as Row[]) {
+          let sectionId: string | null = null;
+          if (t.section && space?.kind === "project") {
+            const found = tables.section.find((x) => !x.deletedAt && x.spaceId === a.spaceId && x.name.toLowerCase() === t.section.toLowerCase());
+            sectionId = found?.id ?? null;
+            if (!sectionId) { const made = create("section", { spaceId: a.spaceId, name: t.section }); sectionId = made.id; out.newSectionIds.push(made.id); }
+          }
+          const task = create("task", { spaceId: a.spaceId, typeId: null, title: t.title, notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId }, { completedAt: null, sourceId: null, locallyModified: false, todayOn: null });
+          for (const s of t.steps) { create("task_part", { taskId: task.id, title: s.title, weight: 1, doneAt: s.done ? ts() : null }); out.steps++; }
+          if (t.steps.length) syncTask(task.id); else if (t.done) update("task", task.id, { completedAt: ts() });
+          out.taskIds.push(task.id);
+        }
+        return out;
+      }
+      case "read_text_file": throw "Files can only be opened in the desktop app";
+      case "export_csv": throw "Files can only be saved in the desktop app";
       case "similar_todos": {
         const open = tables.task.filter((t) => !t.deletedAt && !t.completedAt && t.title);
         return (a.items as [string, string][]).map(([id, text]) => {

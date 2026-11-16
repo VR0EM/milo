@@ -159,6 +159,34 @@ pub fn search(db: State<Db>, query: String) -> Result<crate::search::SearchResul
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     crate::search::search(conn!(db), &query, &now)
 }
+/// A CSV file of a period for Excel: `what` is "events" (one line per event) or "totals" (per space).
+#[tauri::command(async)]
+pub fn export_csv(db: State<Db>, path: String, from: String, to: String, what: String) -> Result<()> {
+    let content = match what.as_str() {
+        "events" => crate::csv_export::events(conn!(db), &from, &to)?,
+        "totals" => crate::csv_export::totals(conn!(db), &from, &to)?,
+        other => return Err(crate::error::AppError::Invalid(format!("Cannot export {other}"))),
+    };
+    crate::csv_export::write(&path, &content)
+}
+/// Makes the to-dos of a Markdown checklist in a space.
+#[tauri::command(async)]
+pub fn import_todos(db: State<Db>, space_id: String, todos: Vec<ImportTodo>) -> Result<ImportedTodos> {
+    tx!(db, |c| repo::import_todos(c, &space_id, todos))
+}
+/// The text of a Markdown or text file she picked (at most 2 MB).
+#[tauri::command(async)]
+pub fn read_text_file(path: String) -> Result<String> {
+    let p = std::path::Path::new(&path);
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    if !["md", "markdown", "txt"].contains(&ext.as_str()) {
+        return Err(crate::error::AppError::Invalid("Choose a .md or .txt file".into()));
+    }
+    if std::fs::metadata(p)?.len() > 2 * 1024 * 1024 {
+        return Err(crate::error::AppError::Invalid("This file is too large for a checklist".into()));
+    }
+    Ok(std::fs::read_to_string(p)?)
+}
 /// For each note (id, text): an open to-do it seems to repeat.
 #[tauri::command(async)]
 pub fn similar_todos(db: State<Db>, s: State<crate::suggest::Suggester>, items: Vec<(String, String)>) -> Result<Vec<Option<crate::suggest::Similar>>> {

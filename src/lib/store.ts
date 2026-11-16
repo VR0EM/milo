@@ -200,11 +200,17 @@ interface UiState {
   setLastSpace: (id: string) => void;
   openDialog: (d: Dialog | null) => void;
   notify: (n: Notice | null) => void;
+  /** Recent changes that can be undone, newest last (Ctrl/Cmd+Z, or Undo on the notice). */
+  undoStack: { text: string; undo: () => void }[];
+  /** Undoes the newest change; says so, or that there is nothing to undo. */
+  undoLast: () => void;
+  /** Undoes this one change (the notice's Undo button) and takes it off the list. */
+  runUndo: (undo: () => void) => void;
 }
 
 export const useUi = create<UiState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       view: "calendar",
       selectedTaskId: null,
       showCompleted: false,
@@ -300,7 +306,27 @@ export const useUi = create<UiState>()(
         })),
       setLastSpace: (lastSpaceId) => set({ lastSpaceId }),
       openDialog: (dialog) => set({ dialog }),
-      notify: (notice) => set({ notice }),
+      // Every notice with an Undo also goes on the undo list (the last 20 changes).
+      notify: (notice) =>
+        set((s) => ({
+          notice,
+          undoStack: notice?.undo ? [...s.undoStack, { text: notice.text, undo: notice.undo }].slice(-20) : s.undoStack,
+        })),
+      undoStack: [],
+      undoLast: () => {
+        const stack = get().undoStack;
+        const last = stack[stack.length - 1];
+        if (!last) {
+          set({ notice: { text: "Nothing to undo" } });
+          return;
+        }
+        set({ undoStack: stack.slice(0, -1), notice: { text: `Undone: ${last.text.charAt(0).toLowerCase()}${last.text.slice(1)}` } });
+        last.undo();
+      },
+      runUndo: (undo) => {
+        set((s) => ({ undoStack: s.undoStack.filter((u) => u.undo !== undo), notice: null }));
+        undo();
+      },
     }),
     {
       name: "milo-ui",

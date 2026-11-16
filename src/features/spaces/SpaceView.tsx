@@ -12,6 +12,7 @@ import { openContextMenu, type MenuItem } from "../../components/ContextMenu";
 import { fmtMinutes } from "../insights/Charts";
 import { TaskPanel } from "../tasks/TaskPanel";
 import { AddTodo, Choices, TodoRow } from "../tasks/Todo";
+import { MarkdownImport } from "../tasks/MarkdownImport";
 
 const AHEAD_DAYS = 14;
 const BACK_DAYS = 30;
@@ -52,6 +53,7 @@ export function SpaceView() {
   const space = spaces.find((s) => s.id === spaceId);
   const tasks = useMemo(() => allTasks.filter((t) => t.spaceId === spaceId), [allTasks, spaceId]);
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
+  const [importing, setImporting] = useState(false);
 
   if (!space || space.deletedAt) {
     return (
@@ -85,8 +87,12 @@ export function SpaceView() {
             <span className="h1-note">{note}</span>
           </h1>
           <div className="toolbar-actions">
+            {(space.kind === "project" || space.kind === "list") && (
+              <button className="btn" onClick={() => setImporting(true)}>Import a checklist</button>
+            )}
             <button className="btn" onClick={() => useUi.getState().openDialog({ kind: "space", item: space })}>Edit</button>
           </div>
+          {importing && <MarkdownImport space={space} onClose={() => setImporting(false)} />}
         </header>
 
         <div className="page-scroll">

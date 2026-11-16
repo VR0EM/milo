@@ -83,7 +83,8 @@ priorities. Earlier versions of a to-do can be brought back.
 
 ### Insights
 Productive time per day, time per space, class against self-study, and sleep. By week, month
-or semester, each chart with a table view.
+or semester, each chart with a table view, compared with the period before, and exported as
+CSV for Excel.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/insights-dark.png">
@@ -126,6 +127,8 @@ overview of its time, tasks and what is coming up.
   gets the time per to-do by itself.
 - **Next event in the menu bar**, like *Chemistry lab in 25 min*, so time stays visible
   (on Windows: in the tray icon's tooltip).
+- **Checklists from Obsidian or Notes:** paste Markdown or open a .md file; headings become
+  parts, items to-dos, indented items steps.
 - **Quick notes from any app** with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd>; they wait in the Inbox.
 - **Reminders** before events, at set times, or every so often (water, a break), and checks
   like medication taken.
@@ -179,6 +182,7 @@ Everything can also be exported from *Settings › Import & export*.
 | <kbd>⌘</kbd> <kbd>K</kbd> | Command menu |
 | <kbd>⌘</kbd> <kbd>1</kbd> … <kbd>6</kbd> | Today, Calendar, Tasks, Focus, Insights, Reminders |
 | <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>Space</kbd> | Write something down, from any app |
+| <kbd>⌘</kbd> <kbd>Z</kbd> | Undo the last change |
 | <kbd>N</kbd> | New event or task |
 | <kbd>D</kbd> <kbd>3</kbd> <kbd>W</kbd> <kbd>M</kbd> | Day, 3 days, week, month |
 | <kbd>T</kbd> · <kbd>G</kbd> | Today · go to a date |

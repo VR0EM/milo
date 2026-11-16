@@ -73,10 +73,7 @@ function Notice() {
       {notice.undo && (
         <button
           className="link"
-          onClick={() => {
-            notice.undo?.();
-            notify(null);
-          }}
+          onClick={() => notice.undo && useUi.getState().runUndo(notice.undo)}
         >
           Undo
         </button>

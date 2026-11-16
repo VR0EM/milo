@@ -5,6 +5,7 @@ use crate::db::{new_id, now};
 use crate::error::{AppError, Result};
 use crate::models::*;
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use std::collections::HashMap;
 
 fn non_empty(value: &str, field: &str) -> Result<String> {
     let v = value.trim();
@@ -601,6 +602,57 @@ pub fn update_task_unlogged(c: &Connection, id: &str, input: TaskInput) -> Resul
         params![id, input.space_id, input.type_id, input.title.trim(), input.notes, input.deadline_at, input.target_at, input.priority, section_in(c, &input)?, now()],
     )?)?;
     get_task(c, id)
+}
+
+/// Makes the to-dos of a Markdown checklist in a space, in order: parts by name (an existing
+/// part with the same name is used), to-dos with their state, and steps.
+pub fn import_todos(c: &Connection, space_id: &str, todos: Vec<ImportTodo>) -> Result<ImportedTodos> {
+    let kind: String = c
+        .query_row("SELECT kind FROM spaces WHERE id = ?1 AND deleted_at IS NULL", [space_id], |r| r.get(0))
+        .optional()?
+        .ok_or(AppError::NotFound)?;
+    let mut sections: HashMap<String, String> = list_sections(c)?
+        .into_iter()
+        .filter(|x| x.space_id == space_id)
+        .map(|x| (x.name.to_lowercase(), x.id))
+        .collect();
+    let mut out = ImportedTodos { task_ids: Vec::new(), new_section_ids: Vec::new(), steps: 0 };
+    for t in todos {
+        let title = t.title.trim();
+        if title.is_empty() {
+            continue;
+        }
+        let section_id = match t.section.as_deref().map(str::trim).filter(|s| !s.is_empty() && kind == "project") {
+            Some(name) => Some(match sections.get(&name.to_lowercase()) {
+                Some(id) => id.clone(),
+                None => {
+                    let made = create_section(c, space_id, name)?;
+                    sections.insert(name.to_lowercase(), made.id.clone());
+                    out.new_section_ids.push(made.id.clone());
+                    made.id
+                }
+            }),
+            None => None,
+        };
+        let task = create_task(
+            c,
+            TaskInput { space_id: space_id.into(), type_id: None, title: title.into(), notes: String::new(), deadline_at: None, target_at: None, priority: None, section_id },
+        )?;
+        let steps: Vec<&ImportStep> = t.steps.iter().filter(|s| !s.title.trim().is_empty()).collect();
+        for s in &steps {
+            let with = create_task_part(c, &task.id, TaskPartInput { title: s.title.trim().into(), weight: 1.0 })?;
+            if s.done {
+                let part = with.parts.last().map(|p| p.id.clone()).unwrap_or_default();
+                set_part_done(c, &part, true)?;
+            }
+            out.steps += 1;
+        }
+        if steps.is_empty() && t.done {
+            set_task_completed(c, &task.id, true)?;
+        }
+        out.task_ids.push(task.id);
+    }
+    Ok(out)
 }
 
 /// Puts a to-do on Today (`day` is the local date) or takes it off (`None`). Not a change worth
@@ -1284,6 +1336,32 @@ mod tests {
         assert_eq!(set_task_today(&c, &t.id, None).unwrap().today_on, None);
         // No version is kept for it.
         assert!(crate::history::list(&c, "task", &t.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_markdown_checklist_becomes_parts_todos_and_steps() {
+        let c = open_in_memory().unwrap();
+        let course = create_space(&c, SpaceInput { group_id: None, name: "Networking".into(), color: "teal".into(), role: "normal".into(), icon: None, kind: Some("project".into()) }).unwrap();
+        create_section(&c, &course.id, "01 VLANs").unwrap();
+        let todo = |title: &str, done: bool, section: Option<&str>, steps: &[(&str, bool)]| ImportTodo {
+            title: title.into(), done, section: section.map(Into::into),
+            steps: steps.iter().map(|(t, d)| ImportStep { title: (*t).into(), done: *d }).collect(),
+        };
+        let r = import_todos(&c, &course.id, vec![
+            todo("Read chapter 1", true, Some("01 vlans"), &[]),
+            todo("Lab 1", false, Some("01 VLANs"), &[("Topology", true), ("Configuration", false)]),
+            todo("Exercises OSPF", false, Some("02 Routing"), &[]),
+            todo("  ", false, None, &[]),
+        ]).unwrap();
+        assert_eq!((r.task_ids.len(), r.new_section_ids.len(), r.steps), (3, 1, 2), "an existing part is used again");
+        let tasks: Vec<Task> = r.task_ids.iter().map(|id| get_task(&c, id).unwrap()).collect();
+        assert!(tasks[0].completed_at.is_some());
+        assert_eq!(tasks[1].parts.iter().map(|p| p.done_at.is_some()).collect::<Vec<_>>(), [true, false]);
+        assert!(tasks[1].completed_at.is_none());
+        assert_eq!(tasks[0].section_id, tasks[1].section_id);
+        // In a list there are no parts: the headings are left out.
+        let list = import_todos(&c, "seed-space-personal", vec![todo("Milk", false, Some("Shop"), &[])]).unwrap();
+        assert!(list.new_section_ids.is_empty() && get_task(&c, &list.task_ids[0]).unwrap().section_id.is_none());
     }
 
     #[test]

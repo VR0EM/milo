@@ -442,6 +442,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .segmented button { border-radius: 6px; }
 .segmented button.on { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
 .period-label { font-weight: 600; min-width: 0; }
+.export-csv { margin-left: auto; }
 .insights-scroll { --content: 900px; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .stat { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--raised); box-shadow: var(--shadow); }
@@ -1296,3 +1297,11 @@ input.todo-check.small { width: 15px; height: 15px; }
 .color-add label { position: relative; display: block; }
 .color-add input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .color-add .color-swatch { cursor: pointer; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); }
+.dialog.md-import { width: min(560px, calc(100vw - 48px)); }
+.md-import textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: calc(12.5px * var(--text-scale)); min-height: 150px; }
+.md-open { align-self: flex-start; }
+.md-preview { border: 1px solid var(--line-soft); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.md-preview ul { display: flex; flex-direction: column; gap: 3px; }
+.md-preview li.done { color: var(--muted); text-decoration: line-through; }
+.hbar-delta { flex: none; min-width: 4.5em; text-align: right; color: var(--muted); font-size: calc(11.5px * var(--text-scale)); font-variant-numeric: tabular-nums; }
+.hbars li:has(.hbar-delta) { grid-template-columns: minmax(70px, 120px) 1fr auto auto; }

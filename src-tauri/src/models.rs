@@ -275,6 +275,32 @@ pub struct FocusInput {
     pub task_ids: Vec<String>,
 }
 
+/// A to-do read from a Markdown checklist, with its steps.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportTodo {
+    pub title: String,
+    pub done: bool,
+    /// The part of the course (a heading); ignored outside a course.
+    pub section: Option<String>,
+    #[serde(default)]
+    pub steps: Vec<ImportStep>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportStep {
+    pub title: String,
+    pub done: bool,
+}
+/// What an import made, so it can be undone as a whole.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedTodos {
+    pub task_ids: Vec<String>,
+    pub new_section_ids: Vec<String>,
+    pub steps: usize,
+}
+
 /// A to-do picked for a focus session.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

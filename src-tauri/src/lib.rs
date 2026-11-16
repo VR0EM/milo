@@ -1,6 +1,7 @@
 mod archive;
 mod backup;
 mod commands;
+mod csv_export;
 mod db;
 mod error;
 mod export;
@@ -307,6 +308,9 @@ pub fn run() {
             commands::suggest_in_space,
             commands::similar_todos,
             commands::search,
+            commands::export_csv,
+            commands::import_todos,
+            commands::read_text_file,
             commands::focus_tasks,
             commands::set_focus_task_done,
             commands::smart_model_status,
