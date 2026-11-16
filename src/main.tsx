@@ -5,7 +5,11 @@ import App from "./App";
 import { MiniTimer } from "./features/today/MiniTimer";
 import { CaptureWindow } from "./features/capture/CaptureWindow";
 import { files, onDataChanged, windowKind } from "./lib/api";
+import { feelLikeAnApp } from "./lib/appFeel";
 import "./styles.css";
+
+// No browser menus, reloads or "back" buttons: Milo is an app, not a web page.
+feelLikeAnApp();
 
 // Local database: data never goes stale on its own, so no background refetching.
 const queryClient = new QueryClient({

@@ -111,6 +111,9 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); overflow: hidden; -webkit-user-select: none; user-select: none; cursor: default; }
+/* An app window: the window itself never bounces or is pulled past its edge. */
+html, body { overscroll-behavior: none; }
+img, svg, a { -webkit-user-drag: none; }
 input, textarea, select, button { font: inherit; color: inherit; }
 input, textarea { -webkit-user-select: text; user-select: text; }
 ul { list-style: none; margin: 0; padding: 0; }
@@ -119,10 +122,15 @@ h1, h2, p { margin: 0; }
 ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 input, textarea, select { caret-color: var(--accent); }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
-* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text) 18%, transparent) transparent; }
+/* Scrollbars show only while something scrolls (appFeel.ts adds .is-scrolling), as on a phone or
+   a Mac trackpad. The wheel, the trackpad and the keys work as always; the bar keeps its place,
+   so nothing moves when it appears. */
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.is-scrolling { scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 16%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 28%, transparent); }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+.is-scrolling::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--text) 20%, transparent); }
+.is-scrolling::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 30%, transparent); }
 ::-webkit-scrollbar-track { background: transparent; }
 @media (prefers-reduced-motion: no-preference) {
   .btn, .nav button, .link, .side-row, .tr, .deadline-row, .segmented button, .event { transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out; }
@@ -1148,7 +1156,7 @@ input.todo-check.small { width: 15px; height: 15px; }
 .todo-add input { flex: 1; min-width: 0; background: none; border: 1px solid transparent; border-radius: 7px; padding: 6px 8px; min-height: 32px; color: var(--text); }
 .todo-add input:hover { border-color: var(--line-soft); }
 .todo-add input:focus { border-color: var(--line); background: var(--surface); outline: none; }
-.inline-link { font-size: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.inline-link { font-size: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 /* The overview */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }

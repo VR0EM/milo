@@ -655,3 +655,20 @@ months ahead, five at most.
   done, nearest deadline first.
 - Cmd+K shows Coming, Earlier and To-dos (five each) and "Show all results"; Cmd/Ctrl+F opens the
   search page with filters (all / events / to-dos, any time / coming / earlier, space).
+
+## An app, not a web page (0.3.9)
+
+Feedback: right-click showed the browser's menu with "Reload". `src/lib/appFeel.ts`, loaded in
+every window, takes away what gives the web page away:
+
+- The browser's right-click menu (Reload, Inspect), except in text fields, where cut, copy and
+  paste stay. Milo's own menus (spaces, parts) are unchanged. In development, Alt+right-click
+  still opens the browser menu and Cmd/Ctrl+R still reloads.
+- Browser keys: reload (F5, Cmd/Ctrl+R), print, save, view source, open, find next (F3), caret
+  browsing (F7), and Alt+Left/Right and the mouse's side buttons for "back" and "forward".
+- Dragging a ghost image of a button or icon, the middle-click scroll circle on Windows, and the
+  whole window bouncing past its edge.
+- Buttons keep the hand (tried the arrow, as in most desktop apps; she prefers the hand).
+- **Scrollbars** show only while something scrolls (as on a phone or a Mac trackpad). They are not
+  needed to scroll (wheel, trackpad, keys), but while scrolling they show where on the page one
+  is. The bar keeps its place, so nothing shifts when it appears; it can still be grabbed.

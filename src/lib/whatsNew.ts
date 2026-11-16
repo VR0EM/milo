@@ -18,6 +18,7 @@ export const RELEASES: Release[] = [
       "Search everything with Cmd+F (Ctrl+F on Windows): every event, also long ago, and every to-do, also done. It looks in titles, notes, rooms and steps.",
       "A weekly class shows once in the results, with how often, the last time and the next time.",
       "Cmd+K finds events of any date too, and offers to show all results.",
+      "Milo behaves more like an app: no browser menu on right-click, no reloading or printing the page by accident, and scrollbars only while you scroll.",
     ],
   },
   {
