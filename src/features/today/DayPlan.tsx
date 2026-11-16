@@ -102,7 +102,7 @@ export function DayPlan({ now, events, spaceById }: { now: Date; events: CalEven
                   <span className="day-time tabular">{start < dayStart ? `until ${fmtTime(end)}` : fmtTime(start)}</span>
                   <SpaceMark icon={space?.icon} />
                   <span className="day-title">{e.title || "Untitled"}</span>
-                  <span className="muted small day-space">{space?.name}</span>
+                  {e.location ? <span className="small day-space place">{e.location}</span> : <span className="muted small day-space">{space?.name}</span>}
                   <span className="spacer" />
                   <span className="muted small tabular">
                     {running

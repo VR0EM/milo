@@ -198,8 +198,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: "Dentist".into(),
                 start_at: "2026-11-11T08:00:00.000Z".into(), end_at: "2026-11-11T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
-            },
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() },
             "manual",
         )
         .unwrap();
@@ -226,8 +225,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: "Lecture".into(),
                 start_at: "2030-01-01T08:00:00.000Z".into(), end_at: "2030-01-01T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
-            },
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() },
             "manual",
         )
         .unwrap();
@@ -244,8 +242,7 @@ mod tests {
             EventInput {
                 space_id: "seed-space-personal".into(), activity_id: None, title: title.into(),
                 start_at: "2026-11-11T08:00:00.000Z".into(), end_at: "2026-11-11T09:00:00.000Z".into(),
-                all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
-            },
+                all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() },
             "manual",
         )
         .unwrap()

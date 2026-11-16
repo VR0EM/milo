@@ -48,6 +48,7 @@ export function NextUp() {
           <span className="next-up-title">{next.title || "Untitled"}</span>
           <span className="next-up-when">
             {running ? `until ${fmtTime(end)}` : `${day} · ${fmtRange(start, end)}`}
+            {next.location && <> · <span className="place">{next.location}</span></>}
           </span>
         </span>
         {soon && <span className="next-up-until">{fmtUntil(next, now)}</span>}

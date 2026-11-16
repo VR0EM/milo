@@ -4,10 +4,11 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
-import { useTaskAction } from "../../lib/queries";
+import { useAction, useTaskAction, useUpdateTask } from "../../lib/queries";
+import { looksLikeAppointment } from "../../lib/quickNote";
 import { useUi } from "../../lib/store";
 import { daysFromToday, fmtMoment, fmtTime, toDateInput } from "../../lib/time";
-import { INBOX_ID, type Space, type Task, type TaskType } from "../../lib/types";
+import { INBOX_ID, type Space, type SpaceSuggestion, type Task, type TaskType } from "../../lib/types";
 import { Icon } from "../../components/Icon";
 
 /** Ticking a to-do with steps finishes the steps that are left; unticking a step reopens it. */
@@ -86,9 +87,16 @@ interface RowProps {
   todayChip?: boolean;
   /** Steps under it, to tick off right here. */
   steps?: boolean;
+  /** For a note in the Inbox: the courses or lists it may belong to, one click each. */
+  suggestion?: SpaceSuggestion;
+  spaceById?: Map<string, Space>;
+  /** For a note that reads like an appointment: the space an event for it would go to. */
+  eventSpaceId?: string | null;
+  /** Anything else under the row, such as choices for a part. */
+  below?: React.ReactNode;
 }
 
-export function TodoRow({ task, space, type, showSpace, todayChip = true, steps }: RowProps) {
+export function TodoRow({ task, space, type, showSpace, todayChip = true, steps, suggestion, spaceById, eventSpaceId, below }: RowProps) {
   const selectedId = useUi((s) => s.selectedTaskId);
   const setToday = useSetToday();
   const [, tick] = useState(0);
@@ -130,8 +138,109 @@ export function TodoRow({ task, space, type, showSpace, todayChip = true, steps 
           </button>
         )}
       </div>
+      {eventSpaceId && spaceById && looksLikeAppointment(task) && (
+        <CalendarOffer task={task} space={spaceById.get(eventSpaceId)} />
+      )}
+      {suggestion && spaceById && suggestion.choices.length > 0 && (
+        <MoveChoices task={task} suggestion={suggestion} spaceById={spaceById} />
+      )}
+      {below}
       {open && <Steps task={task} />}
     </li>
+  );
+}
+
+/**
+ * "Move to: Chemistry · Physics · Personal": where a note in the Inbox may belong. The first is
+ * filled in when Milo is sure; nothing moves until she clicks. Moving teaches the next guess.
+ */
+function MoveChoices({ task, suggestion, spaceById }: { task: Task; suggestion: SpaceSuggestion; spaceById: Map<string, Space> }) {
+  const update = useUpdateTask();
+  const move = (spaceId: string) => {
+    const name = spaceById.get(spaceId)?.name ?? "that space";
+    update(task.id, { spaceId, sectionId: null });
+    useUi.getState().notify({ text: `Moved to ${name}`, undo: () => update(task.id, { spaceId: INBOX_ID, sectionId: null }) });
+  };
+  return (
+    <div className="todo-move" role="group" aria-label={`Move ${task.title || "this note"} to`}>
+      <span className="muted small">Move to</span>
+      {suggestion.choices.map((c, i) => {
+        const s = spaceById.get(c.spaceId);
+        if (!s) return null;
+        return (
+          <button
+            key={c.spaceId}
+            className={`chip move-chip${i === 0 && suggestion.sure ? " sure" : ""}`}
+            style={{ ["--c" as string]: colorVar(s.color) }}
+            title={i === 0 && suggestion.why ? `Suggested: ${suggestion.why}` : undefined}
+            onClick={() => move(c.spaceId)}
+          >
+            <i className="chip-dot" />
+            {s.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One-click choices with a label: "Part: 02 Titration · 03 Redox". The first is filled in when sure. */
+export function Choices({ label, items, sure, why, onPick }: {
+  label: string;
+  items: { id: string; name: string; color?: string }[];
+  sure?: boolean;
+  why?: string | null;
+  onPick: (id: string) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="todo-move" role="group" aria-label={label}>
+      <span className="muted small">{label}</span>
+      {items.map((it, i) => (
+        <button
+          key={it.id}
+          type="button"
+          className={`chip move-chip${i === 0 && sure ? " sure" : ""}`}
+          style={it.color ? { ["--c" as string]: colorVar(it.color) } : undefined}
+          title={i === 0 && why ? `Suggested: ${why}` : undefined}
+          onClick={() => onPick(it.id)}
+        >
+          {it.color && <i className="chip-dot" />}
+          {it.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "tandarts" on Tuesday at 14:30 is an appointment: one click puts it in the calendar instead. */
+function CalendarOffer({ task, space }: { task: Task; space?: Space }) {
+  const act = useAction("events", "tasks");
+  const minutes = useUi((s) => s.prefs.eventMinutes);
+  if (!space || !task.deadlineAt) return null;
+  const start = new Date(task.deadlineAt);
+  const put = () =>
+    act.mutate(async () => {
+      const ev = await api.createEvent({
+        spaceId: space.id, activityId: null, title: task.title, notes: task.notes, allDay: false, status: "planned",
+        startAt: start.toISOString(), endAt: new Date(start.getTime() + minutes * 60_000).toISOString(),
+      });
+      await api.setArchived("task", task.id, true);
+      useUi.getState().notify({
+        text: `In the calendar: ${fmtMoment(start)}, ${space.name}`,
+        undo: () => act.mutate(async () => {
+          await api.setArchived("event", ev.id, true);
+          await api.setArchived("task", task.id, false);
+        }),
+      });
+    });
+  return (
+    <div className="todo-move">
+      <button className="chip move-chip" style={{ ["--c" as string]: colorVar(space.color) }} onClick={put}>
+        <i className="chip-dot" />
+        Put in the calendar · {fmtMoment(start)} · {space.name}
+      </button>
+    </div>
   );
 }
 

@@ -8,6 +8,7 @@ import { useUi } from "../../lib/store";
 import { toDateInput } from "../../lib/time";
 import { dueSoon, leftOver, todayList } from "../../lib/today";
 import { INBOX_ID, type Space, type Task } from "../../lib/types";
+import { parseNote } from "../../lib/quickNote";
 import { AddTodo, SpaceChip, TodoRow, dueText, isOnToday, useSetToday } from "../tasks/Todo";
 
 export function TodayTodos({ now }: { now: Date }) {
@@ -19,9 +20,9 @@ export function TodayTodos({ now }: { now: Date }) {
   const done = list.filter((t) => t.completedAt).length;
   const inbox = tasks.filter((t) => t.spaceId === INBOX_ID && !t.completedAt && !list.includes(t)).length;
 
-  const add = (title: string) =>
+  const add = (text: string) =>
     act.mutate(async () => {
-      const t = await api.createTask({ spaceId: INBOX_ID, typeId: null, title, notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: null });
+      const t = await api.addInbox(parseNote(text));
       return api.setTaskToday(t.id, toDateInput(new Date()));
     });
 

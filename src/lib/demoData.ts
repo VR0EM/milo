@@ -34,8 +34,11 @@ export async function seedDemo() {
     [3, an.id, S, 14, 0, 15, 30, "Exercises ch. 5"], [4, pr.id, C, 9, 0, 11, 0, "Programming - Lecture"],
     [4, ch.id, C, 13, 0, 15, 0, "Chemistry - Lecture"], [5, "seed-space-personal", null, 11, 0, 13, 0, "Brunch with Sam"],
   ];
+  // Classes have a room, as in a school timetable.
+  const ROOMS: Record<string, string> = { "Analysis 2": "VIA.01.27", Physics: "NOO.05.007", Chemistry: "ELL.01.01", Programming: "ELL.02.03" };
   for (const [d, spaceId, activityId, h1, m1, h2, m2, title] of rows) {
-    await api.createEvent({ spaceId, activityId, title, startAt: at(d, h1, m1), endAt: at(d, h2, m2), allDay: false, notes: "", status: "planned" });
+    const room = activityId === C || activityId === L ? Object.entries(ROOMS).find(([k]) => title.startsWith(k) || title.toLowerCase().startsWith(k.toLowerCase()))?.[1] ?? "" : "";
+    await api.createEvent({ spaceId, activityId, title, startAt: at(d, h1, m1), endAt: at(d, h2, m2), allDay: false, notes: "", status: "planned", location: room });
   }
   for (let n = 0; n < 7; n++) {
     await api.createEvent({ spaceId: "seed-space-sleep", activityId: null, title: "Sleep", startAt: at(n - 1, 23, 30), endAt: at(n, 7, 15), allDay: false, notes: "", status: "planned" });
@@ -67,8 +70,8 @@ export async function seedDemo() {
   const post = (await api.listTasks()).find((t) => t.title.startsWith("Pick up package"))!;
   await api.setTaskToday(post.id, todayKey);
 
-  const note1 = await api.addInbox("Ask Lotte for the notes");
-  await api.addInbox("Look up the bus to the exam hall");
+  const note1 = await api.addInbox({ title: "Ask Lotte for the notes", deadlineAt: null, steps: [] });
+  await api.addInbox({ title: "Look up the bus to the exam hall", deadlineAt: null, steps: [] });
   await api.setTaskToday(note1.id, todayKey);
 
   const t1 = await api.createTask({ spaceId: an.id, typeId: "seed-type-theory", title: "Chapters 4-6", notes: "", deadlineAt: due(9), targetAt: due(6), priority: "medium" });

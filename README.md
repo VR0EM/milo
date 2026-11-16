@@ -155,10 +155,12 @@ After that, Milo offers new versions itself (*Settings › Data & app*).
 ## Privacy
 
 Milo has no account and no server. It never sends your data anywhere. It only goes online for
-two things you can see and switch off:
+things you can see and switch off:
 
-- the **calendar links** you add (to fetch your timetable or deadlines), and
-- the **update check**, which asks GitHub for the newest version number.
+- the **calendar links** you add (to fetch your timetable or deadlines),
+- the **update check**, which asks GitHub for the newest version number, and
+- if you choose it, the one-time download of the **suggestion model** (about 83 MB from Hugging
+  Face) that helps sort notes in the Inbox. It then runs on your computer only.
 
 Your data is one SQLite file with daily backups next to it (and optionally a second folder):
 

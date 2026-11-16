@@ -224,8 +224,7 @@ mod tests {
                 end_at: iso(start + Duration::hours(1)),
                 all_day: false,
                 notes: String::new(),
-                status: "planned".into(), task_id: None,
-            },
+                status: "planned".into(), task_id: None, location: String::new() },
             "manual",
         )
         .unwrap();

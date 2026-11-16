@@ -9,9 +9,9 @@ const spaces = [space("school"), space("sleep", "sleep")];
 const at = (h: number, m = 0) => new Date(2026, 10, 16, h, m);
 const ev = (title: string, from: Date, to: Date, extra: Partial<CalEvent> = {}): CalEvent => ({
   id: title, spaceId: "school", activityId: null, title, startAt: from.toISOString(), endAt: to.toISOString(),
-  allDay: false, notes: "", status: "planned", source: "milo", sourceId: null, locallyModified: false,
+  allDay: false, notes: "", location: "", status: "planned", source: "milo", sourceId: null, locallyModified: false,
   taskId: null, seriesId: null, createdAt: "", updatedAt: "", deletedAt: null, ...extra,
-});
+} as CalEvent);
 
 describe("pickNext", () => {
   const lesson = ev("Lesson", at(9), at(12));

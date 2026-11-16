@@ -44,9 +44,11 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
   const titleRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(event.title);
   const [notes, setNotes] = useState(event.notes);
-  // Changed from elsewhere (a restored version, an undo): show the new text.
+  const [location, setLocation] = useState(event.location);
+  // Changed from elsewhere (a restored version, an undo, a sync): show the new text.
   useEffect(() => setTitle(event.title), [event.title]);
   useEffect(() => setNotes(event.notes), [event.notes]);
+  useEffect(() => setLocation(event.location), [event.location]);
 
   useEffect(() => {
     if (focusTitle) {
@@ -131,6 +133,7 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
 
       <p className="panel-sub">
         {fmtLongDay(start)} · {event.allDay ? (sameDay(start, lastDay) ? "All day" : `until ${fmtLongDay(lastDay)}`) : fmtDuration(end.getTime() - start.getTime())}
+        {event.location && <> · <span className="place">{event.location}</span></>}
       </p>
 
       {task && (
@@ -180,6 +183,17 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
       )}
 
       {event.source !== "import" && <RepeatField key={event.seriesId ?? "none"} event={event} />}
+
+      <label className="field">
+        <span>Location</span>
+        <input
+          value={location}
+          placeholder="e.g. ELL.01.01"
+          onChange={(e) => setLocation(e.target.value)}
+          onBlur={() => location.trim() !== event.location && save({ location: location.trim() })}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        />
+      </label>
 
       <label className="field">
         <span>Space</span>

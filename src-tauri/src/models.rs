@@ -83,6 +83,8 @@ pub struct Event {
     pub end_at: String,
     pub all_day: bool,
     pub notes: String,
+    /// Where it takes place ("ELL.01.01"), or empty.
+    pub location: String,
     pub status: String,
     pub source: String,
     pub source_id: Option<String>,
@@ -112,6 +114,8 @@ pub struct EventInput {
     pub status: String,
     #[serde(default)]
     pub task_id: Option<String>,
+    #[serde(default)]
+    pub location: String,
 }
 
 fn default_status() -> String {

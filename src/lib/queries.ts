@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { useUi } from "./store";
+import { noteHints } from "./noteHints";
 import { INBOX_ID, toInput, toTaskInput, type CalEvent, type Entity, type EventInput, type Space, type Task, type TaskInput } from "./types";
 
 const report = (e: unknown) => useUi.getState().notify({ text: String(e), error: true });
@@ -92,6 +93,43 @@ export function useSetArchived() {
 
 export const useTasks = () => useQuery({ queryKey: ["tasks"], queryFn: api.listTasks });
 export const useTaskTypes = () => useQuery({ queryKey: ["taskTypes"], queryFn: api.listTaskTypes });
+/** Courses or lists for notes in the Inbox; asked again when anything she filed changes. */
+export function useSpaceSuggestions(tasks: Task[], forEvents = false) {
+  const version = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks }).dataUpdatedAt;
+  const texts = tasks.map((t) => noteHints(t.title, new Date(), []).rest || t.title);
+  return useQuery({
+    queryKey: ["suggest", forEvents, texts, version],
+    queryFn: () => api.suggestSpaces(texts, forEvents),
+    enabled: texts.length > 0,
+    placeholderData: keepPreviousData,
+    select: (list) => new Map(tasks.map((t, i) => [t.id, list[i]])),
+  });
+}
+/** Within a course: the part or type each to-do may belong to. */
+export function useInSpaceSuggestions(spaceId: string | null, what: "section" | "type", tasks: Task[], on = true) {
+  const version = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks }).dataUpdatedAt;
+  const texts = tasks.map((t) => t.title);
+  return useQuery({
+    queryKey: ["suggest", what, spaceId, texts, version],
+    queryFn: () => api.suggestInSpace(spaceId!, what, texts),
+    enabled: on && !!spaceId && texts.length > 0,
+    placeholderData: keepPreviousData,
+    select: (list) => new Map(tasks.map((t, i) => [t.id, list[i]])),
+  });
+}
+/** Open to-dos that these notes seem to repeat. */
+export function useSimilar(tasks: Task[]) {
+  const version = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks }).dataUpdatedAt;
+  const items: [string, string][] = tasks.map((t) => [t.id, t.title]);
+  return useQuery({
+    queryKey: ["similar", items, version],
+    queryFn: () => api.similarTodos(items),
+    enabled: items.length > 0,
+    placeholderData: keepPreviousData,
+    select: (list) => new Map(tasks.map((t, i) => [t.id, list[i]])),
+  });
+}
+export const useSmartModel = () => useQuery({ queryKey: ["smartModel"], queryFn: api.smartModelStatus });
 export const useSections = () => useQuery({ queryKey: ["sections"], queryFn: api.listSections });
 
 /**

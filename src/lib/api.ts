@@ -9,10 +9,12 @@ import type {
   ArchivedItem, BackupFile, Confirmation, Insights, Semester, SemesterInput,
   CsvPreview, ImportSource, ImportSourceInput, SyncReport, TitleMapping, TitleMappingInput, UnmappedTitle,
   FocusInput, FocusSession, ReminderRule, ReminderRuleInput, Routine, RoutineInput,
-  EventSeries, RepeatRule, Change, Section,
+  EventSeries, RepeatRule, Change, Section, ModelStatus, Similar, SpaceSuggestion,
 } from "./types";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
+/** Inside the desktop app (not the browser preview). */
+export const inDesktop = inTauri;
 
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return inTauri ? invoke<T>(cmd, args) : mockInvoke<T>(cmd, args ?? {});
@@ -40,6 +42,17 @@ export const api = {
   listTaskTypes: () => call<TaskType[]>("list_task_types"),
   createTaskType: (name: string, spaceId: string | null = null) => call<TaskType>("create_task_type", { input: { name, spaceId } }),
   updateTaskType: (id: string, name: string, spaceId: string | null) => call<TaskType>("update_task_type", { id, input: { name, spaceId } }),
+
+  /** For each note, up to three courses or lists it may belong to. */
+  suggestSpaces: (texts: string[], forEvents = false) => call<SpaceSuggestion[]>("suggest_spaces", { texts, forEvents }),
+  /** Within a course: the part ("section") or type ("type") each to-do may belong to. */
+  suggestInSpace: (spaceId: string, what: "section" | "type", texts: string[]) =>
+    call<SpaceSuggestion[]>("suggest_in_space", { spaceId, what, texts }),
+  /** For each [id, text]: an open to-do it seems to repeat, or null. */
+  similarTodos: (items: [string, string][]) => call<(Similar | null)[]>("similar_todos", { items }),
+  smartModelStatus: () => call<ModelStatus>("smart_model_status"),
+  downloadSmartModel: () => call<void>("download_smart_model"),
+  removeSmartModel: () => call<void>("remove_smart_model"),
 
   listSections: () => call<Section[]>("list_sections"),
   createSection: (spaceId: string, name: string) => call<Section>("create_section", { spaceId, name }),
@@ -118,8 +131,9 @@ export const api = {
   listSeries: () => call<EventSeries[]>("list_series"),
   setRepeat: (id: string, rule: RepeatRule | null) => call<CalEvent>("set_repeat", { id, rule }),
 
-  /** A quick note: a to-do in the Inbox. */
-  addInbox: (text: string) => call<Task>("add_inbox", { text }),
+  /** A quick note: a to-do in the Inbox, with what parseNote() read from it. */
+  addInbox: (note: { title: string; deadlineAt: string | null; steps: string[] }) =>
+    call<Task>("add_inbox", { text: note.title, deadlineAt: note.deadlineAt, steps: note.steps }),
   reorderSpaces: (ids: string[]) => call<void>("reorder_spaces", { ids }),
   /** Into another group (or none), with that list's new order. */
   moveSpace: (id: string, groupId: string | null, ids: string[]) => call<void>("move_space", { id, groupId, ids }),
@@ -173,6 +187,13 @@ export const files = {
     return save({ defaultPath, filters: [{ name: "JSON", extensions: ["json"] }] });
   },
 };
+
+/** Progress of the suggestion model download, in bytes. */
+export async function onModelProgress(fn: (done: number, total: number) => void) {
+  if (!inTauri) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<[number, number]>("model-download", (e) => fn(e.payload[0], e.payload[1]));
+}
 
 /** Called when the background sync changed data, so the screens refresh. */
 export async function onDataChanged(fn: () => void) {

@@ -32,6 +32,31 @@ export type SpaceInput = Pick<Space, "groupId" | "name" | "color" | "role"> & {
   kind?: Exclude<SpaceKind, "inbox">;
 };
 
+/** A course or list a note may belong to, with how likely (0..1). */
+export interface SpaceChoice {
+  spaceId: string;
+  p: number;
+}
+/** Up to three choices, most likely first; `sure` when the first is likely and clearly ahead. */
+export interface SpaceSuggestion {
+  choices: SpaceChoice[];
+  sure: boolean;
+  /** Why the first choice, in a few words. */
+  why: string | null;
+}
+/** An open to-do that a note seems to repeat. */
+export interface Similar {
+  taskId: string;
+  title: string;
+  spaceId: string;
+}
+/** The optional suggestion model (Settings › Calendar & lists). */
+export interface ModelStatus {
+  installed: boolean;
+  downloading: boolean;
+  bytes: number;
+}
+
 /** A part of a course ("02 Titration"). */
 export interface Section {
   id: string;
@@ -60,6 +85,8 @@ export interface CalEvent {
   endAt: string;
   allDay: boolean;
   notes: string;
+  /** Where it takes place ("ELL.01.01"), or empty. */
+  location: string;
   status: EventStatus;
   source: string;
   sourceId: string | null;
@@ -75,7 +102,7 @@ export interface CalEvent {
 export type EventInput = Pick<
   CalEvent,
   "spaceId" | "activityId" | "title" | "startAt" | "endAt" | "allDay" | "notes" | "status"
-> & { taskId?: string | null };
+> & { taskId?: string | null; location?: string };
 
 export type RepeatFreq = "daily" | "weekly" | "monthly";
 export interface RepeatRule {
@@ -317,4 +344,5 @@ export const toInput = (e: CalEvent): EventInput => ({
   notes: e.notes,
   status: e.status,
   taskId: e.taskId,
+  location: e.location,
 });

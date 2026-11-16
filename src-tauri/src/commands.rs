@@ -127,6 +127,53 @@ pub fn update_task(db: State<Db>, id: String, input: TaskInput) -> Result<Task> 
 pub fn set_task_today(db: State<Db>, id: String, day: Option<String>) -> Result<Task> {
     tx!(db, |c| repo::set_task_today(c, &id, day.as_deref()))
 }
+// ---------- space suggestions ----------
+
+/// For each note, up to three courses or lists it may belong to (see suggest.rs).
+#[tauri::command(async)]
+pub fn suggest_spaces(
+    db: State<Db>,
+    s: State<crate::suggest::Suggester>,
+    texts: Vec<String>,
+    for_events: Option<bool>,
+) -> Result<Vec<crate::suggest::Suggestion>> {
+    let events = for_events.unwrap_or(false);
+    let key = crate::suggest::data_key(conn!(db))?;
+    s.suggest(&texts, events, key, || crate::suggest::history(conn!(db), chrono::Utc::now(), events))
+}
+/// Within a course: which part (`what` = "section") or type ("type") each to-do may belong to.
+#[tauri::command(async)]
+pub fn suggest_in_space(
+    db: State<Db>,
+    s: State<crate::suggest::Suggester>,
+    space_id: String,
+    what: String,
+    texts: Vec<String>,
+) -> Result<Vec<crate::suggest::Suggestion>> {
+    let (labels, examples) = crate::suggest::labels_history(conn!(db), &space_id, &what, chrono::Utc::now())?;
+    s.suggest_among(&texts, labels, &examples)
+}
+/// For each note (id, text): an open to-do it seems to repeat.
+#[tauri::command(async)]
+pub fn similar_todos(db: State<Db>, s: State<crate::suggest::Suggester>, items: Vec<(String, String)>) -> Result<Vec<Option<crate::suggest::Similar>>> {
+    s.similar(conn!(db), &items)
+}
+#[tauri::command(async)]
+pub fn smart_model_status(s: State<crate::suggest::Suggester>) -> crate::suggest::ModelStatus {
+    s.status()
+}
+/// The one-time download (~83 MB). Progress goes out as "model-download" events.
+#[tauri::command(async)]
+pub fn download_smart_model(app: AppHandle, s: State<crate::suggest::Suggester>) -> Result<()> {
+    s.download(|done, total| {
+        let _ = app.emit("model-download", (done, total));
+    })
+}
+#[tauri::command(async)]
+pub fn remove_smart_model(s: State<crate::suggest::Suggester>) -> Result<()> {
+    s.remove()
+}
+
 #[tauri::command(async)]
 pub fn list_sections(db: State<Db>) -> Result<Vec<Section>> {
     repo::list_sections(conn!(db))
@@ -471,8 +518,8 @@ pub fn set_repeat(db: State<Db>, id: String, rule: Option<RepeatRule>) -> Result
 /// Saves a quick note in the Inbox. The main window hears about it, also when the note came
 /// from the small capture window.
 #[tauri::command(async)]
-pub fn add_inbox(app: AppHandle, db: State<Db>, text: String) -> Result<Task> {
-    let task = tx!(db, |c| repo::add_inbox(c, &text))?;
+pub fn add_inbox(app: AppHandle, db: State<Db>, text: String, deadline_at: Option<String>, steps: Option<Vec<String>>) -> Result<Task> {
+    let task = tx!(db, |c| repo::add_inbox(c, &text, deadline_at, &steps.unwrap_or_default()))?;
     let _ = app.emit("data-changed", ());
     Ok(task)
 }

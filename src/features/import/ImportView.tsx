@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { pickDefaultSpace } from "../../lib/spaces";
 import { api, files } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
@@ -10,7 +10,7 @@ import {
 } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { daysFromToday, fmtRelativeDays, fmtTime, toDateInput } from "../../lib/time";
-import type { Activity, CsvPreview, ImportSource, Space, SyncReport, TitleMapping } from "../../lib/types";
+import type { Activity, CsvPreview, ImportSource, Space, SpaceSuggestion, SyncReport, TitleMapping } from "../../lib/types";
 
 const notify = (text: string) => useUi.getState().notify({ text });
 /** Errors stay on screen until dismissed. */
@@ -306,6 +306,13 @@ function TitleLinks({ spaces, activities }: { spaces: Space[]; activities: Activ
   const refresh = useRefresh();
   const [reviewing, setReviewing] = useState(false);
   const [rule, setRule] = useState(false);
+  const titles = unmapped.map((u) => u.title);
+  const suggestions = useQuery({
+    queryKey: ["suggest", "titles", titles],
+    queryFn: () => api.suggestSpaces(titles, true),
+    enabled: reviewing && titles.length > 0,
+  }).data;
+  const spaceById = new Map(spaces.map((s) => [s.id, s]));
 
   return (
     <section className="block">
@@ -334,8 +341,17 @@ function TitleLinks({ spaces, activities }: { spaces: Space[]; activities: Activ
       )}
       {reviewing && (
         <ul className="rows">
-          {unmapped.map((u) => (
-            <NewLink key={u.title} title={u.title} count={u.count} spaces={spaces} activities={activities} onDone={refresh} />
+          {unmapped.map((u, i) => (
+            <NewLink
+              key={u.title}
+              title={u.title}
+              count={u.count}
+              spaces={spaces}
+              activities={activities}
+              onDone={refresh}
+              suggestion={suggestions?.[i]}
+              spaceById={spaceById}
+            />
           ))}
         </ul>
       )}
@@ -384,11 +400,14 @@ function ActivitySelect({ activities, value, onChange }: { activities: Activity[
   );
 }
 
-function NewLink({ title, count, spaces, activities, onDone }: {
+function NewLink({ title, count, spaces, activities, onDone, suggestion, spaceById }: {
   title: string; count: number; spaces: Space[]; activities: Activity[]; onDone: () => void;
+  suggestion?: SpaceSuggestion; spaceById: Map<string, Space>;
 }) {
   const [spaceId, setSpaceId] = useState("");
   const [activityId, setActivityId] = useState("");
+  const link = (id: string) =>
+    api.createTitleMapping({ pattern: title, matchType: "exact", spaceId: id, activityId: activityId || null }).then(onDone, fail);
   return (
     <li className="row mapping-row">
       <span className="row-title ellipsis" title={title}>{title}</span>
@@ -398,17 +417,28 @@ function NewLink({ title, count, spaces, activities, onDone }: {
         {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
       </select>
       <ActivitySelect activities={activities} value={activityId} onChange={setActivityId} />
-      <button
-        className="btn"
-        disabled={!spaceId}
-        onClick={() =>
-          api
-            .createTitleMapping({ pattern: title, matchType: "exact", spaceId, activityId: activityId || null })
-            .then(onDone, fail)
-        }
-      >
+      <button className="btn" disabled={!spaceId} onClick={() => link(spaceId)}>
         Link
       </button>
+      {suggestion && suggestion.choices.length > 0 && (
+        <div className="todo-move link-choices" role="group" aria-label={`Link ${title} to`}>
+          {suggestion.choices.map((c, i) => {
+            const s = spaceById.get(c.spaceId);
+            return s ? (
+              <button
+                key={c.spaceId}
+                className={`chip move-chip${i === 0 && suggestion.sure ? " sure" : ""}`}
+                style={{ ["--c" as string]: colorVar(s.color) }}
+                title={i === 0 && suggestion.why ? `Suggested: ${suggestion.why}` : undefined}
+                onClick={() => link(c.spaceId)}
+              >
+                <i className="chip-dot" />
+                {s.name}
+              </button>
+            ) : null;
+          })}
+        </div>
+      )}
     </li>
   );
 }

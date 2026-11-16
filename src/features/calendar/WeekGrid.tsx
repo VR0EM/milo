@@ -576,6 +576,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                   >
                     <div className="event-title">{ev?.title || (ev ? "Untitled" : seg.item.id === "task-drop" ? dragTask?.title || "Untitled task" : "New event")}</div>
                     {height >= 36 && <div className="event-time">{fmtRange(seg.item.start, seg.item.end)}</div>}
+                    {height >= 52 && ev?.location && <div className="event-time event-place">{ev.location}</div>}
                     {ev && seg.startsHere && (
                       <div className="handle top" onPointerDown={(e) => { e.stopPropagation(); select(ev.id); beginDrag(e, "start", ev); }} />
                     )}

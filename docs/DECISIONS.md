@@ -576,3 +576,66 @@ a daily list. Milo had tasks, inbox notes and routine items as three separate th
 - **Task types per course**: `task_types.space_id` (null = all courses), set in Settings.
 - What now? suggests from Today's open to-dos first, and from all open ones only when nothing
   was picked.
+
+## Space suggestions without a language model (0.3.8)
+
+Notes in the Inbox get up to three "Move to" choices; nothing moves until she clicks. The
+problem is described in `docs/lokale-assistent-probleem.md`; four outside opinions and two
+measurement rounds led here.
+
+- **No generative model.** A 1.7B model was slow and made the laptop warm, and still placed 30%
+  of new notes in the wrong space: where a note belongs is knowledge about her, not language.
+- **Two scorers, in Rust** (`src-tauri/src/suggest.rs`), next to SQLite, the same on macOS and
+  Windows:
+  - *Words*: naive Bayes over words and 3–5 letter pieces of her own titles (to-dos, events,
+    space names, parts of courses), older titles counting less (half after 70 days). Always on.
+    On its own it is too unsure to suggest anything as certain.
+  - *Model2Vec* (`potion-multilingual-128M`, int8, MIT): a fixed table of vectors per piece of a
+    word, downloaded once (~83 MB) from a pinned version, checked by size and SHA-256. A note's
+    vector is the mean of its pieces; the space comes from the 9 nearest titles she filed.
+    0.06 ms per note, no runtime besides the `tokenizers` crate.
+- **Measured** on 190 test notes played in order (predict, reveal, learn), starting from only the
+  space names: with Model2Vec 62–65% filled in by itself, 2–3% of those wrong, and for the rest
+  the right space among the three choices 96% of the time. Words only: 6% wrong and 11% missed,
+  hence never "sure". e5-small (~120 MB) scored the same; EmbeddingGemma 2 (~206 MB, 18 ms, needs
+  ONNX Runtime) about halved the errors and is the upgrade path if her real use shows too many
+  misses. A shipped word list helped little once its test words were removed. The timetable as a
+  signal could not be measured on these notes and is not used yet.
+- **"Sure"** = p ≥ 0.8 and 0.4 ahead of the next, only with the model. Even then the first choice
+  is only highlighted; she still clicks.
+- **Learning** needs no separate store: a moved note is a to-do with a title and a space, so the
+  next suggestion includes it. The index is rebuilt when any task, event, space or part changes.
+- The browser preview mirrors the words scorer with `src/lib/systemOne.ts`.
+
+Later the same week:
+
+- **"Sure" needs two of her own titles.** Her test data showed one look-alike ("Studeren python",
+  once put in Personal by default) making "Write python" a sure Personal. Requiring two close
+  titles of the winner that she filed herself (not imported) cut sure-but-wrong from 3% to 1% on
+  the test notes; the right space within one click stayed at 95%. Imported items count 0.3.
+  At most 3 nearest titles per space count, so a big space does not win by size alone.
+- **Quick notes are read** (`src/lib/quickNote.ts`): the day and time become the deadline, a list
+  after a colon becomes steps. A note with a set time and no deadline word offers "Put in the
+  calendar" (to the suggested space only when sure, else the default space).
+- **Parts and types** are suggested within a course with the same scorer (`suggest_in_space`).
+- **Repeated notes**: the same numbers, and every word of the shorter title in the longer one
+  (or, with the model, cosine ≥ 0.83). Strict, because a false "already there" is worse than a
+  missed one: "hoofdstuk 4" and "hoofdstuk 5" score 0.87 in the model but are not the same.
+- **Imported titles** without a link get the same one-click choices; for events every space
+  but the Inbox can be chosen (Work, Sleep), for to-dos only courses and lists.
+
+## Location (0.3.8)
+
+Feedback: the room of a class was nowhere to be seen. The import did read LOCATION, but put it
+as a first line "Location: …" in the notes, which only show when an event is opened.
+
+- `events.location` and `event_series.location` (migration 013). Existing events whose notes
+  start with "Location: " get that line moved into the field; the rest of the notes stays.
+- The ICS import fills the field; a changed room comes along with the next sync, and a room she
+  typed herself is kept (as with every field she changes). Imported to-dos have no place of their
+  own, so for them the room stays the first line of the notes.
+- Shown where it helps to find the way: on the event block (when there is room), in Your day,
+  under Next up, beside the date in the event panel, and in the menu bar before the event starts
+  ("Lab in 25 min · ELL.01.01"); not while it runs, as she is there then.
+- Tried on a real school timetable (186 lessons, kept out of the repository): every lesson got its
+  room, no notes kept a "Location:" line, and a second sync changed nothing.

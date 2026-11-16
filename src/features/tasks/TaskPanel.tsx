@@ -4,11 +4,11 @@ import { api } from "../../lib/api";
 import { TimeField } from "../../components/TimeField";
 import { DateInput } from "../../components/DateInput";
 import { PRIORITIES, PriorityMark } from "../../components/PriorityMark";
-import { useArchiveWithUndo, useEvents, useImportSources, useSections, useTaskAction, useUpdateTask } from "../../lib/queries";
+import { useArchiveWithUndo, useEvents, useImportSources, useInSpaceSuggestions, useSections, useTaskAction, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { addDays, fmtDuration, fmtRange, fromInputs, startOfDay, toDateInput, toTimeInput } from "../../lib/time";
 import { INBOX_ID, type CalEvent, type Space, type Task, type TaskInput, type TaskPart, type TaskType } from "../../lib/types";
-import { isOnToday, useSetToday } from "./Todo";
+import { Choices, isOnToday, useSetToday } from "./Todo";
 import { deadlineLine } from "./TasksView";
 import { EarlierVersions } from "../history/EarlierVersions";
 
@@ -61,6 +61,13 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
   );
   const inboxListed = spaceChoices.some((s) => s.id === INBOX_ID);
   const typeChoices = types.filter((t) => t.id === task.typeId || (!t.deletedAt && (!t.spaceId || t.spaceId === task.spaceId)));
+  const inCourse = spaces.find((s) => s.id === task.spaceId)?.kind === "project" && !task.completedAt && !!task.title;
+  const partHint = useInSpaceSuggestions(task.spaceId, "section", [task], inCourse && !task.sectionId && sections.length > 0).data?.get(task.id);
+  const typeHint = useInSpaceSuggestions(task.spaceId, "type", [task], inCourse && !task.typeId).data?.get(task.id);
+  const hint = (s: typeof partHint, names: Map<string, string>) =>
+    s?.choices.slice(0, 2).map((c) => ({ id: c.spaceId, name: names.get(c.spaceId) ?? "" })).filter((c) => c.name) ?? [];
+  const typeNames = new Map(typeChoices.map((t) => [t.id, t.name]));
+  const partNames = new Map(sections.map((x) => [x.id, x.name]));
 
   const addPart = () => {
     const text = newPart.trim();
@@ -118,6 +125,7 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
           </select>
         </label>
       </div>
+      {!task.typeId && <Choices label="Type?" items={hint(typeHint, typeNames)} sure={typeHint?.sure} why={typeHint?.why} onPick={(id) => save({ typeId: id })} />}
       {sections.length > 0 && (
         <label className="field">
           <span>Part of the course</span>
@@ -127,6 +135,7 @@ function TaskForm({ task, spaces, types }: { task: Task; spaces: Space[]; types:
           </select>
         </label>
       )}
+      {!task.sectionId && <Choices label="Part?" items={hint(partHint, partNames)} sure={partHint?.sure} why={partHint?.why} onPick={(id) => save({ sectionId: id })} />}
 
       <div className="field">
         <span>Priority</span>

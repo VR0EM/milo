@@ -28,6 +28,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/010_change_log.sql"),
     include_str!("migrations/011_space_icons.sql"),
     include_str!("migrations/012_todos.sql"),
+    include_str!("migrations/013_location.sql"),
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -71,11 +72,12 @@ fn init(mut conn: Connection) -> Result<Connection> {
 
 /// Brings any database (also a restored older backup) up to the current schema.
 pub fn migrate(conn: &mut Connection) -> Result<()> {
-    // Migration 012 moves the open inbox notes over, so their table must be there even on a
-    // database that skipped the real 009 (see `repair`).
+    // Migrations 012 and 013 use tables from 009 (inbox notes, repeats), so these must be there
+    // even on a database that skipped the real 009 (see `repair`).
     let current: usize = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if (9..12).contains(&current) {
+    if (9..13).contains(&current) {
         conn.execute_batch(INBOX_TABLE)?;
+        conn.execute_batch(SERIES_TABLE)?;
     }
     migrate_to(conn, MIGRATIONS.len())?;
     repair(conn)
@@ -90,7 +92,7 @@ CREATE TABLE IF NOT EXISTS inbox_items (
   updated_at TEXT NOT NULL,
   deleted_at TEXT
 );";
-const REPAIR_TABLES: &str = "
+const SERIES_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS event_series (
   id TEXT PRIMARY KEY,
   freq TEXT NOT NULL,
@@ -109,7 +111,8 @@ CREATE TABLE IF NOT EXISTS event_series (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT
-);
+);";
+const REPAIR_TABLES: &str = "
 CREATE TABLE IF NOT EXISTS change_log (
   id TEXT PRIMARY KEY,
   entity TEXT NOT NULL,
@@ -139,6 +142,8 @@ const REPAIR_COLUMNS: &[(&str, &str, &str)] = &[
     ("tasks", "section_id", "ALTER TABLE tasks ADD COLUMN section_id TEXT REFERENCES sections(id)"),
     ("tasks", "today_on", "ALTER TABLE tasks ADD COLUMN today_on TEXT"),
     ("task_types", "space_id", "ALTER TABLE task_types ADD COLUMN space_id TEXT REFERENCES spaces(id)"),
+    ("events", "location", "ALTER TABLE events ADD COLUMN location TEXT NOT NULL DEFAULT ''"),
+    ("event_series", "location", "ALTER TABLE event_series ADD COLUMN location TEXT NOT NULL DEFAULT ''"),
     ("routine_items", "parent_id", "ALTER TABLE routine_items ADD COLUMN parent_id TEXT REFERENCES routine_items(id)"),
 ];
 
@@ -149,6 +154,7 @@ const REPAIR_COLUMNS: &[(&str, &str, &str)] = &[
 fn repair(conn: &mut Connection) -> Result<()> {
     let tx = conn.transaction()?;
     tx.execute_batch(INBOX_TABLE)?;
+    tx.execute_batch(SERIES_TABLE)?;
     tx.execute_batch(REPAIR_TABLES)?;
     for (table, column, ddl) in REPAIR_COLUMNS {
         let present: i64 = tx.query_row(
@@ -236,6 +242,28 @@ mod tests {
     }
 
     #[test]
+    fn an_imported_place_moves_out_of_the_notes() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        migrate_to(&mut conn, 12).unwrap();
+        let ts = "2026-11-03T08:00:00.000Z";
+        for (id, notes) in [("a", "Location: ELL.01.01\n\nLabo"), ("b", "Location: Aula A"), ("c", "Bring a calculator")] {
+            conn.execute(
+                "INSERT INTO events (id, space_id, title, start_at, end_at, notes, created_at, updated_at) VALUES (?1, 'seed-space-personal', 'x', ?2, ?2, ?3, ?2, ?2)",
+                params![id, ts, notes],
+            )
+            .unwrap();
+        }
+        migrate(&mut conn).unwrap();
+        let read = |id: &str| -> (String, String) {
+            conn.query_row("SELECT location, notes FROM events WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
+        };
+        assert_eq!(read("a"), ("ELL.01.01".into(), "Labo".into()));
+        assert_eq!(read("b"), ("Aula A".into(), "".into()));
+        assert_eq!(read("c"), ("".into(), "Bring a calculator".into()));
+    }
+
+    #[test]
     fn open_inbox_notes_become_todos_in_the_inbox() {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.pragma_update(None, "foreign_keys", "ON").unwrap();
@@ -281,7 +309,7 @@ mod tests {
         // The data is untouched, and the repaired parts work.
         let title: String = conn.query_row("SELECT title FROM events WHERE id = 'e1'", [], |r| r.get(0)).unwrap();
         assert_eq!(title, "Physics - HOC");
-        crate::repo::add_inbox(&conn, "works").unwrap();
+        crate::repo::add_inbox(&conn, "works", None, &[]).unwrap();
         // Running it again changes nothing.
         migrate(&mut conn).unwrap();
     }

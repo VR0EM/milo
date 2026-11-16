@@ -73,6 +73,7 @@ struct Series {
     activity_id: Option<String>,
     title: String,
     notes: String,
+    location: String,
     generated_until: NaiveDate,
 }
 
@@ -131,9 +132,9 @@ impl Series {
                 let start = iso(start);
                 if start.as_str() > cut {
                     c.execute(
-                        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, series_id, created_at, updated_at)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'planned', 'manual', ?9, ?10, ?10)",
-                        params![new_id(), self.space_id, self.activity_id, self.title, start, iso(end), self.all_day, self.notes, self.id, ts],
+                        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, location, status, source, series_id, created_at, updated_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'planned', 'manual', ?10, ?11, ?11)",
+                        params![new_id(), self.space_id, self.activity_id, self.title, start, iso(end), self.all_day, self.notes, self.location, self.id, ts],
                     )?;
                     n += 1;
                 }
@@ -147,7 +148,7 @@ impl Series {
 fn load(c: &Connection, id: &str) -> Result<Option<Series>> {
     let row = c
         .query_row(
-            "SELECT id, freq, interval, weekdays, first_date, until_date, start_time, minutes, all_day, space_id, activity_id, title, notes, generated_until
+            "SELECT id, freq, interval, weekdays, first_date, until_date, start_time, minutes, all_day, space_id, activity_id, title, notes, generated_until, location
              FROM event_series WHERE id = ?1 AND deleted_at IS NULL",
             [id],
             |r| {
@@ -163,11 +164,12 @@ fn load(c: &Connection, id: &str) -> Result<Option<Series>> {
                     r.get::<_, String>(11)?,
                     r.get::<_, String>(12)?,
                     r.get::<_, String>(13)?,
+                    r.get::<_, String>(14)?,
                 ))
             },
         )
         .optional()?;
-    let Some((id, rule, first, start_time, minutes, all_day, space_id, activity_id, title, notes, generated)) = row else {
+    let Some((id, rule, first, start_time, minutes, all_day, space_id, activity_id, title, notes, generated, location)) = row else {
         return Ok(None);
     };
     Ok(Some(Series {
@@ -181,6 +183,7 @@ fn load(c: &Connection, id: &str) -> Result<Option<Series>> {
         activity_id,
         title,
         notes,
+        location,
         generated_until: parse_date(&generated)?,
     }))
 }
@@ -268,6 +271,7 @@ pub fn set_repeat(c: &Connection, event_id: &str, rule: Option<RepeatRule>, now_
         activity_id: event.activity_id.clone(),
         title: event.title.clone(),
         notes: event.notes.clone(),
+        location: event.location.clone(),
         generated_until: first,
     };
     let today = now_utc.with_timezone(&Local).date_naive();
@@ -275,8 +279,8 @@ pub fn set_repeat(c: &Connection, event_id: &str, rule: Option<RepeatRule>, now_
     let ts = now();
     c.execute(
         "INSERT INTO event_series (id, freq, interval, weekdays, first_date, until_date, start_time, minutes, all_day,
-           space_id, activity_id, title, notes, generated_until, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)",
+           space_id, activity_id, title, notes, generated_until, location, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?16, ?15, ?15)",
         params![
             series.id,
             series.rule.freq,
@@ -292,7 +296,8 @@ pub fn set_repeat(c: &Connection, event_id: &str, rule: Option<RepeatRule>, now_
             series.title,
             series.notes,
             target.format("%Y-%m-%d").to_string(),
-            ts
+            ts,
+            series.location
         ],
     )?;
     c.execute("UPDATE events SET series_id = ?2, updated_at = ?3 WHERE id = ?1", params![event.id, series.id, ts])?;
@@ -341,8 +346,7 @@ mod tests {
                 all_day: false,
                 notes: String::new(),
                 status: "planned".into(),
-                task_id: None,
-            },
+                task_id: None, location: String::new() },
             "manual",
         )
         .unwrap()

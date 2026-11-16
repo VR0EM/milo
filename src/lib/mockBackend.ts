@@ -2,6 +2,7 @@
 // Data lives in memory for the lifetime of the page.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { SystemOne, sameThing } from "./systemOne";
 type Row = Record<string, any>;
 
 const ts = () => new Date().toISOString();
@@ -196,6 +197,45 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
         const kind = row?.kind === "inbox" ? "inbox" : (a.input.kind ?? row?.kind ?? "list");
         return update("space", a.id, { ...a.input, kind });
       }
+      case "suggest_spaces": {
+        // As suggest.rs without the model: words learned from her titles, never sure.
+        const spaces = tables.space.filter((s) => !s.deletedAt && (a.forEvents ? s.kind !== "inbox" : s.kind === "project" || s.kind === "list"));
+        const ids = spaces.map((s) => s.id);
+        const model = new SystemOne([
+          ...spaces.map((s) => ({ text: s.name, label: s.id, weight: 3 })),
+          ...tables.section.filter((x) => !x.deletedAt && ids.includes(x.spaceId)).map((x) => ({ text: x.name, label: x.spaceId })),
+          ...[...tables.task, ...tables.event].filter((t) => !t.deletedAt && t.title && ids.includes(t.spaceId)).map((t) => ({ text: t.title, label: t.spaceId })),
+        ], { threshold: 0 });
+        return (a.texts as string[]).map((text) => {
+          const d = model.decide(text, ids);
+          if (!d.ranked.length) return { choices: [], sure: false, why: null };
+          return { choices: d.ranked.slice(0, 3).map((r) => ({ spaceId: r.label, p: r.p })), sure: false, why: d.why.length ? `“${d.why.join("”, “")}” before` : null };
+        });
+      }
+      case "suggest_in_space": {
+        const labels = a.what === "section"
+          ? tables.section.filter((x) => !x.deletedAt && x.spaceId === a.spaceId)
+          : tables.task_type.filter((x) => !x.deletedAt && (!x.spaceId || x.spaceId === a.spaceId));
+        const key = a.what === "section" ? "sectionId" : "typeId";
+        const ids = labels.map((l) => l.id);
+        const model = new SystemOne([
+          ...labels.map((l) => ({ text: l.name, label: l.id })),
+          ...tables.task.filter((t) => !t.deletedAt && t.title && ids.includes(t[key]) && (a.what === "type" || t.spaceId === a.spaceId)).map((t) => ({ text: t.title, label: t[key] })),
+        ], { threshold: 0 });
+        return (a.texts as string[]).map((text) => {
+          const d = model.decide(text, ids);
+          return { choices: d.ranked.slice(0, 3).map((r) => ({ spaceId: r.label, p: r.p })), sure: false, why: null };
+        });
+      }
+      case "similar_todos": {
+        const open = tables.task.filter((t) => !t.deletedAt && !t.completedAt && t.title);
+        return (a.items as [string, string][]).map(([id, text]) => {
+          const hit = open.find((t) => t.id !== id && sameThing(text, t.title));
+          return hit ? { taskId: hit.id, title: hit.title, spaceId: hit.spaceId } : null;
+        });
+      }
+      case "smart_model_status": return { installed: false, downloading: false, bytes: 82_661_403 };
+      case "download_smart_model": case "remove_smart_model": throw "The suggestion model only works in the desktop app";
       case "list_sections": return tables.section.filter((r) => !r.deletedAt).sort((x, y) => x.sortOrder - y.sortOrder).map((r) => ({ ...r }));
       case "create_section": return create("section", { spaceId: a.spaceId, name: String(a.name).trim() });
       case "update_section": return update("section", a.id, { name: String(a.name).trim() });
@@ -208,7 +248,7 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
           .filter((e) => !e.deletedAt && e.startAt < a.to && e.endAt > a.from)
           .sort((x, y) => x.startAt.localeCompare(y.startAt))
           .map((r) => ({ ...r }));
-      case "create_event": checkEvent(a.input); return create("event", { taskId: null, ...a.input }, { source: "manual", sourceId: null, locallyModified: false, seriesId: null });
+      case "create_event": checkEvent(a.input); return create("event", { taskId: null, location: "", ...a.input }, { source: "manual", sourceId: null, locallyModified: false, seriesId: null });
       case "update_event": checkEvent(a.input); remember("event", a.id, a.input); return update("event", a.id, a.input);
       case "list_task_types": return tables.task_type.map((r) => ({ ...r }));
       case "create_task_type": return create("task_type", a.input);
@@ -280,7 +320,11 @@ export async function mockInvoke<T>(cmd: string, a: Row): Promise<T> {
       case "set_repeat": return setRepeat(a.id, a.rule);
       case "add_inbox":
         if (!String(a.text).trim()) throw "Note cannot be empty";
-        return mockInvoke("create_task", { input: { spaceId: "seed-space-inbox", typeId: null, title: String(a.text).trim(), notes: "", deadlineAt: null, targetAt: null, priority: null, sectionId: null } });
+        return (async () => {
+          let t: any = await mockInvoke("create_task", { input: { spaceId: "seed-space-inbox", typeId: null, title: String(a.text).trim(), notes: "", deadlineAt: a.deadlineAt ?? null, targetAt: null, priority: null, sectionId: null } });
+          for (const s of (a.steps ?? []) as string[]) t = await mockInvoke("create_task_part", { taskId: t.id, input: { title: s } });
+          return t;
+        })();
       case "open_capture": case "hide_capture": return null;
       case "list_changes":
         return tables.change.filter((c) => c.entity === a.entity && c.entityId === a.id)

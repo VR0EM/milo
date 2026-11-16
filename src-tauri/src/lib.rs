@@ -13,6 +13,7 @@ mod models;
 mod reminders;
 mod repo;
 mod series;
+mod suggest;
 
 use db::Db;
 use std::sync::Mutex;
@@ -99,6 +100,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("milo.sqlite"))?;
             app.manage(Db(Mutex::new(conn)));
+            app.manage(suggest::Suggester::new(&dir));
 
             let open = MenuItem::with_id(app, "open", "Open Milo", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Milo", true, None::<&str>)?;
@@ -300,6 +302,12 @@ pub fn run() {
             commands::list_tasks,
             commands::set_task_today,
             commands::list_sections,
+            commands::suggest_spaces,
+            commands::suggest_in_space,
+            commands::similar_todos,
+            commands::smart_model_status,
+            commands::download_smart_model,
+            commands::remove_smart_model,
             commands::create_section,
             commands::update_section,
             commands::reorder_sections,

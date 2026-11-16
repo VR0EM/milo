@@ -1,10 +1,10 @@
 import { fmtHour } from "../../lib/time";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, autostart, files } from "../../lib/api";
+import { api, autostart, files, inDesktop, onModelProgress } from "../../lib/api";
 import type { BackupFile } from "../../lib/types";
 import { checkForUpdate, installUpdate, useUpdates } from "../../lib/updates";
-import { useActivities, useSpaces, useTaskTypes } from "../../lib/queries";
+import { useActivities, useSmartModel, useSpaces, useTaskTypes } from "../../lib/queries";
 import { TODAY_BLOCKS, useUi, type Accent, type Font, type TextSize, type Theme } from "../../lib/store";
 import { NAV } from "../spaces/Sidebar";
 import { IS_MAC } from "../shortcuts/keys";
@@ -308,6 +308,7 @@ export function SettingsView() {
             </select>
           </Row>
           <MenuBarNext />
+          <SmartSuggestions />
           <Lists />
         </Section>
 
@@ -374,6 +375,70 @@ function Lists() {
         ))}
       </ListBox>
     </>
+  );
+}
+
+const mb = (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`;
+
+/** The optional model behind the Inbox's "Move to" choices (see src-tauri/src/suggest.rs). */
+function SmartSuggestions() {
+  const qc = useQueryClient();
+  const status = useSmartModel().data;
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["smartModel"] });
+    qc.invalidateQueries({ queryKey: ["suggest"] });
+  };
+
+  const download = async () => {
+    setError(null);
+    setProgress(0);
+    const stop = await onModelProgress((done) => setProgress(done));
+    try {
+      await api.downloadSmartModel();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      stop();
+      setProgress(null);
+      refresh();
+    }
+  };
+
+  const busy = progress !== null || !!status?.downloading;
+  return (
+    <Row
+      title="Smarter suggestions"
+      info={
+        <>
+          For notes in the Inbox, Milo suggests a course or list, learned from what you filed before. This download adds
+          knowledge of words you have not used yet, so that "optics" goes with Physics. It is fetched once from Hugging Face
+          and then works on this computer only; nothing you write is sent anywhere.
+        </>
+      }
+    >
+      <div className="model-row">
+        {status?.installed ? (
+          <>
+            <span className="muted">On · {mb(status.bytes)} on this computer</span>
+            <button className="btn small" onClick={async () => { await api.removeSmartModel().catch((e) => setError(String(e))); refresh(); }}>Remove</button>
+          </>
+        ) : busy ? (
+          <span className="muted tabular" role="status">
+            Downloading… {progress !== null && status ? `${mb(progress)} of ${mb(status.bytes)}` : ""}
+          </span>
+        ) : (
+          <>
+            <span className="muted">Words only</span>
+            <button className="btn small" disabled={!inDesktop || !status} title={inDesktop ? undefined : "Only in the desktop app"} onClick={download}>
+              Download{status ? ` (${mb(status.bytes)})` : ""}
+            </button>
+          </>
+        )}
+        {error && <span className="error small">{error}</span>}
+      </div>
+    </Row>
   );
 }
 

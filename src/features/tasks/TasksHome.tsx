@@ -5,8 +5,8 @@ import { useEffect, useMemo } from "react";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { spaceProgress } from "../../lib/spaces";
-import { useAction, useAllSpaces, useRoutines, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
-import { useUi, type TasksList } from "../../lib/store";
+import { useAction, useAllSpaces, useArchiveWithUndo, useRoutines, useSimilar, useSpaceSuggestions, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
+import { preferredSpace, useUi, type TasksList } from "../../lib/store";
 import { fmtHm, toDateInput } from "../../lib/time";
 import { pastDeadline, todayList, upcoming } from "../../lib/today";
 import { INBOX_ID, type Routine, type Space, type Task, type TaskType } from "../../lib/types";
@@ -14,6 +14,8 @@ import { useNow } from "../../lib/useNow";
 import { SpaceMark } from "../../components/Icon";
 import { ignoreForShortcut } from "../shortcuts/keys";
 import { AllTodos } from "./TasksView";
+import { looksLikeAppointment, parseNote } from "../../lib/quickNote";
+import { pickDefaultSpace } from "../../lib/spaces";
 import { TaskPanel } from "./TaskPanel";
 import { AddTodo, TodoRow, dueText } from "./Todo";
 
@@ -42,11 +44,12 @@ function TasksHome({ list }: { list: Exclude<TasksList, "all"> }) {
   const act = useTaskAction();
   const selected = tasks.find((t) => t.id === selectedId) ?? null;
 
-  /** A new to-do goes to the Inbox; made from the Today list it is also on Today. */
+  /** A new to-do goes to the Inbox (a typed note with its day and steps read from it); made
+   * from the Today list it is also on Today. */
   const add = (title = "", focus = true) =>
     act.mutate(
       async () => {
-        const t = await api.createTask(blank(INBOX_ID, title));
+        const t = title ? await api.addInbox(parseNote(title)) : await api.createTask(blank(INBOX_ID, title));
         return list === "today" ? api.setTaskToday(t.id, toDateInput(new Date())) : t;
       },
       { onSuccess: (t) => focus && useUi.getState().selectTask(t.id, true) },
@@ -258,6 +261,12 @@ function SmartList({ list, now, tasks, spaces, types, onAdd }: {
     : list === "upcoming" ? upcoming(tasks, now)
     : list === "late" ? pastDeadline(tasks, now)
     : tasks.filter((t) => t.spaceId === INBOX_ID && !t.completedAt);
+  const suggestions = useSpaceSuggestions(list === "inbox" ? shown : []).data;
+  const appointments = list === "inbox" ? shown.filter(looksLikeAppointment) : [];
+  const repeats = useSimilar(list === "inbox" ? shown : []).data;
+  const archive = useArchiveWithUndo();
+  const eventSpaces = useSpaceSuggestions(appointments, true).data;
+  const fallback = pickDefaultSpace(spaces.filter((s) => s.kind !== "inbox"), useUi(preferredSpace))?.id ?? null;
   const empty = {
     today: "Nothing on Today yet. Put a to-do here with + Today, or add one below.",
     upcoming: "No deadlines in the next 7 days.",
@@ -278,13 +287,25 @@ function SmartList({ list, now, tasks, spaces, types, onAdd }: {
               space={spaceById.get(t.spaceId)}
               type={t.typeId ? typeById.get(t.typeId) : undefined}
               showSpace={list !== "inbox"}
+              suggestion={suggestions?.get(t.id)}
+              eventSpaceId={(eventSpaces?.get(t.id)?.sure && eventSpaces.get(t.id)!.choices[0]?.spaceId) || fallback}
+              below={repeats?.get(t.id) && (
+                <p className="todo-repeat small">
+                  <span className="muted">Already there: </span>
+                  <button className="link inline-link" onClick={() => useUi.getState().selectTask(repeats.get(t.id)!.taskId)}>
+                    {repeats.get(t.id)!.title}
+                  </button>
+                  <span className="muted"> · {spaceById.get(repeats.get(t.id)!.spaceId)?.name ?? "Inbox"} · </span>
+                  <button className="link inline-link" onClick={() => archive("task", t.id, t.title || "Note")}>Remove this note</button>
+                </p>
+              )}
+              spaceById={spaceById}
               todayChip={list !== "today"}
               steps
             />
           ))}
         </ul>
       )}
-      {list === "inbox" && shown.length > 0 && <MoveHint />}
       {(list === "today" || list === "inbox") && (
         <AddTodo placeholder={list === "today" ? "Add a to-do for today" : "Write something down"} onAdd={onAdd} />
       )}
@@ -292,6 +313,3 @@ function SmartList({ list, now, tasks, spaces, types, onAdd }: {
   );
 }
 
-function MoveHint() {
-  return <p className="muted small">Open a note to give it a space, a deadline or steps.</p>;
-}

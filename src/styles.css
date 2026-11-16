@@ -1227,3 +1227,18 @@ input.todo-check.small { width: 15px; height: 15px; }
 .part-row.sub { padding-left: 24px; }
 .step-under { flex: none; max-width: 150px; background-color: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 .what-now > .link { align-self: flex-start; }
+
+/* Inbox: where a note may belong, one click each. The first is filled in when Milo is sure. */
+.todo-move { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 0 6px 8px 33px; }
+.move-chip { box-shadow: inset 0 0 0 1px var(--line); background: none; }
+.move-chip:hover { box-shadow: inset 0 0 0 1px var(--c); color: var(--text); }
+.move-chip.sure { background: color-mix(in srgb, var(--c) 16%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); color: var(--text); font-weight: 600; }
+.model-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.mapping-row:has(.link-choices) { flex-wrap: wrap; }
+.mapping-row .link-choices { flex-basis: 100%; padding: 2px 0 4px; }
+.todo-repeat { padding: 0 6px 8px 33px; }
+.panel-form .todo-move { padding: 0; margin-top: -6px; }
+
+/* Where an event is ("ELL.01.01"): readable at a glance, a little stronger than the grey around it. */
+.place { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.event-place { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

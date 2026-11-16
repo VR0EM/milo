@@ -12,6 +12,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.3.8",
+    date: "2026-11-16",
+    items: [
+      "Notes in the Inbox show where they may belong: click a course or list to move a note there (Undo is right below).",
+      "Milo learns this from what you filed before, on your own computer. Every note you move makes the next guess better.",
+      "For words you have not used yet, download the small suggestion model once in Settings › Calendar & lists (83 MB). Nothing you write leaves your computer.",
+      "A note like \"labo inleveren vrijdag 23u\" gets its deadline by itself, and a list after a colon becomes steps.",
+      "A note that reads like an appointment (\"tandarts dinsdag 14u30\") can go into the calendar with one click.",
+      "Notes that repeat an open to-do say so, with a way to remove the extra one.",
+      "In a course, to-dos without a part get one-click choices for the part, and the details suggest a type.",
+      "Imported calendar titles without a link get one-click choices too (Settings › Import & export).",
+      "Events have a location. Rooms from a school timetable show on the event in the calendar, in Your day on Today, under Next up and next to the countdown in the menu bar.",
+    ],
+  },
+  {
     version: "0.3.7",
     date: "2026-11-16",
     items: [

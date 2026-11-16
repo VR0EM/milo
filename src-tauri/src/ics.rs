@@ -11,6 +11,8 @@ pub struct Occurrence {
     pub key: String,
     pub title: String,
     pub notes: String,
+    /// LOCATION ("ELL.01.01"), or empty.
+    pub location: String,
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
     pub all_day: bool,
@@ -239,6 +241,7 @@ struct VEvent {
     uid: String,
     title: String,
     notes: String,
+    location: String,
     start: Moment,
     length: Duration,
     cancelled: bool,
@@ -283,13 +286,8 @@ fn read_events(text: &str) -> Vec<VEvent> {
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| format!("{title}|{}", start_p.value.trim()));
 
-            let mut notes = Vec::new();
-            if let Some(l) = get("LOCATION").map(|p| unescape(p.value.trim())).filter(|s| !s.is_empty()) {
-                notes.push(format!("Location: {l}"));
-            }
-            if let Some(d) = get("DESCRIPTION").map(|p| unescape(p.value.trim())).filter(|s| !s.is_empty()) {
-                notes.push(d);
-            }
+            let location = get("LOCATION").map(|p| unescape(p.value.trim())).unwrap_or_default();
+            let notes = get("DESCRIPTION").map(|p| unescape(p.value.trim())).unwrap_or_default();
 
             let end = get("DTEND").and_then(|p| parse_moment(&p.value, &p.params));
             let mut length = match end {
@@ -313,7 +311,8 @@ fn read_events(text: &str) -> Vec<VEvent> {
             Some(VEvent {
                 uid,
                 title,
-                notes: notes.join("\n\n"),
+                notes,
+                location,
                 start,
                 length,
                 cancelled: get("STATUS").is_some_and(|p| p.value.trim().eq_ignore_ascii_case("CANCELLED")),
@@ -360,7 +359,16 @@ pub fn parse(text: &str, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<Vec<O
         // Some feeds reuse one UID for unrelated events; keep each one apart.
         let key = if used.contains(&key) { format!("{key}|{}", start.format("%Y%m%dT%H%M%SZ")) } else { key };
         used.insert(key.clone());
-        out.push(Occurrence { key, title: ev.title.clone(), notes: ev.notes.clone(), start, end, all_day: ev.start.date_only, cancelled: ev.cancelled });
+        out.push(Occurrence {
+            key,
+            title: ev.title.clone(),
+            notes: ev.notes.clone(),
+            location: ev.location.clone(),
+            start,
+            end,
+            all_day: ev.start.date_only,
+            cancelled: ev.cancelled,
+        });
     };
 
     for ev in &events {
@@ -482,7 +490,8 @@ END:VCALENDAR\r
         assert_eq!(moved.start, utc("2026-11-09T12:00:00Z"));
         assert_eq!(moved.key, "analysis-1|20261109T073000Z");
 
-        assert_eq!(analysis[0].notes, "Location: Aula A, building 3\n\nBring the course notes.\nChapter 4 today.");
+        assert_eq!(analysis[0].location, "Aula A, building 3");
+        assert_eq!(analysis[0].notes, "Bring the course notes.\nChapter 4 today.");
         assert_eq!(analysis[0].title, "Analysis 2 - HOC");
 
         let holiday = occ.iter().find(|o| o.key == "holiday").unwrap();

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { colorVar } from "../../lib/colors";
 import { spaceProgress } from "../../lib/spaces";
-import { useAction, useActivities, useEvents, useGroups, useInsights, useSections, useSpaces, useTaskAction, useTaskTypes, useTasks } from "../../lib/queries";
+import { useAction, useActivities, useEvents, useGroups, useInSpaceSuggestions, useInsights, useSections, useSpaces, useTaskAction, useTaskTypes, useTasks, useUpdateTask } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import { addDays, daysFromToday, fmtDuration, fmtRange, fmtRelativeDays, startOfDay, startOfWeek, toDateInput } from "../../lib/time";
 import type { CalEvent, Insights, Section, Space, Task, TaskType } from "../../lib/types";
@@ -11,7 +11,7 @@ import { Icon, SpaceMark } from "../../components/Icon";
 import { openContextMenu, type MenuItem } from "../../components/ContextMenu";
 import { fmtMinutes } from "../insights/Charts";
 import { TaskPanel } from "../tasks/TaskPanel";
-import { AddTodo, TodoRow } from "../tasks/Todo";
+import { AddTodo, Choices, TodoRow } from "../tasks/Todo";
 
 const AHEAD_DAYS = 14;
 const BACK_DAYS = 30;
@@ -168,7 +168,7 @@ function ProjectBody({ space, tasks, types }: { space: Space; tasks: Task[]; typ
           />
         ))}
         {(loose.length > 0 || sections.length === 0) && (
-          <TodoGroup space={space} title={sections.length ? "Not in a part" : null} tasks={loose} typeById={typeById} sectionId={null} />
+          <TodoGroup space={space} title={sections.length ? "Not in a part" : null} tasks={loose} typeById={typeById} sectionId={null} sections={sections} />
         )}
       </section>
     </>
@@ -243,10 +243,16 @@ function SectionCard({ space, section, tasks, typeById, neighbours, order }: {
 }
 
 /** To-dos of a course or a part of it: open first, then the ones done. */
-function TodoGroup({ space, title, tasks, typeById, sectionId }: {
+function TodoGroup({ space, title, tasks, typeById, sectionId, sections = [] }: {
   space: Space; title: string | null; tasks: Task[]; typeById: Map<string, TaskType>; sectionId: string | null;
+  /** For to-dos not in a part yet: the parts to choose from. */
+  sections?: Section[];
 }) {
   const act = useTaskAction();
+  const update = useUpdateTask();
+  const open = tasks.filter((t) => !t.completedAt);
+  const parts = useInSpaceSuggestions(space.id, "section", open, sections.length > 0).data;
+  const sectionName = new Map(sections.map((x) => [x.id, x.name]));
   const sorted = [...tasks].sort(
     (a, b) => Number(!!a.completedAt) - Number(!!b.completedAt) || (a.deadlineAt ?? "9999").localeCompare(b.deadlineAt ?? "9999") || a.sortOrder - b.sortOrder,
   );
@@ -254,7 +260,28 @@ function TodoGroup({ space, title, tasks, typeById, sectionId }: {
     <>
       {sorted.length > 0 && (
         <ul className="todo-list">
-          {sorted.map((t) => <TodoRow key={t.id} task={t} type={t.typeId ? typeById.get(t.typeId) : undefined} steps />)}
+          {sorted.map((t) => {
+            const s = parts?.get(t.id);
+            return (
+              <TodoRow
+                key={t.id}
+                task={t}
+                type={t.typeId ? typeById.get(t.typeId) : undefined}
+                steps
+                below={
+                  s && !t.completedAt && (
+                    <Choices
+                      label="Part"
+                      items={s.choices.map((c) => ({ id: c.spaceId, name: sectionName.get(c.spaceId) ?? "" })).filter((c) => c.name)}
+                      sure={s.sure}
+                      why={s.why}
+                      onPick={(id) => update(t.id, { sectionId: id })}
+                    />
+                  )
+                }
+              />
+            );
+          })}
         </ul>
       )}
       <AddTodo placeholder="Add a to-do" onAdd={(title) => act.mutate(() => api.createTask(blank(space, title, sectionId)))} />

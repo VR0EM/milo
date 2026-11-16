@@ -29,6 +29,9 @@ rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 thiserror = "2"
+tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"] }
+sha2 = "0.11.1"
+unicode-normalization = "0.1.26"
 
 # The updater exists only on desktop.
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

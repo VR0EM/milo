@@ -257,7 +257,7 @@ pub fn apply(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], 
         let mapped = resolve(&mappings, &o.title);
         let existing = tx
             .query_row(
-                "SELECT id, locally_modified, deleted_at, removed_by_sync, title, start_at, end_at, all_day, notes
+                "SELECT id, locally_modified, deleted_at, removed_by_sync, title, start_at, end_at, all_day, notes, location
                  FROM events WHERE source_id = ?1 AND external_uid = ?2",
                 params![source.id, o.key],
                 |r| {
@@ -266,7 +266,14 @@ pub fn apply(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], 
                         r.get::<_, bool>(1)?,
                         r.get::<_, Option<String>>(2)?,
                         r.get::<_, bool>(3)?,
-                        (r.get::<_, String>(4)?, r.get::<_, String>(5)?, r.get::<_, String>(6)?, r.get::<_, bool>(7)?, r.get::<_, String>(8)?),
+                        (
+                            r.get::<_, String>(4)?,
+                            r.get::<_, String>(5)?,
+                            r.get::<_, String>(6)?,
+                            r.get::<_, bool>(7)?,
+                            r.get::<_, String>(8)?,
+                            r.get::<_, String>(9)?,
+                        ),
                     ))
                 },
             )
@@ -282,10 +289,10 @@ pub fn apply(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], 
                     None => (source.space_id.clone(), None),
                 };
                 tx.execute(
-                    "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source,
+                    "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, location, status, source,
                      source_id, external_uid, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'planned', 'import', ?9, ?10, ?11, ?11)",
-                    params![new_id(), space, activity, o.title, start, end, o.all_day, o.notes, source.id, o.key, ts],
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'planned', 'import', ?10, ?11, ?12, ?12)",
+                    params![new_id(), space, activity, o.title, start, end, o.all_day, o.notes, o.location, source.id, o.key, ts],
                 )?;
                 report.added += 1;
             }
@@ -301,15 +308,15 @@ pub fn apply(c: &Connection, source: &ImportSource, occurrences: &[Occurrence], 
                     }
                     continue;
                 }
-                let fresh = (o.title.clone(), start, end, o.all_day, o.notes.clone());
+                let fresh = (o.title.clone(), start, end, o.all_day, o.notes.clone(), o.location.clone());
                 if deleted.is_none() && current == fresh {
                     report.unchanged += 1;
                     continue;
                 }
                 tx.execute(
-                    "UPDATE events SET title = ?2, start_at = ?3, end_at = ?4, all_day = ?5, notes = ?6,
-                     deleted_at = NULL, removed_by_sync = 0, updated_at = ?7 WHERE id = ?1",
-                    params![id, fresh.0, fresh.1, fresh.2, fresh.3, fresh.4, ts],
+                    "UPDATE events SET title = ?2, start_at = ?3, end_at = ?4, all_day = ?5, notes = ?6, location = ?7,
+                     deleted_at = NULL, removed_by_sync = 0, updated_at = ?8 WHERE id = ?1",
+                    params![id, fresh.0, fresh.1, fresh.2, fresh.3, fresh.4, fresh.5, ts],
                 )?;
                 if let Some(m) = mapped {
                     tx.execute("UPDATE events SET space_id = ?2, activity_id = ?3 WHERE id = ?1", params![id, m.space_id, m.activity_id])?;
@@ -366,6 +373,12 @@ fn apply_as_tasks(c: &Connection, source: &ImportSource, occurrences: &[Occurren
     for o in occurrences {
         seen.insert(o.key.as_str());
         let due = iso(due_of(o));
+        // A to-do has no place of its own; the place stays the first line of its notes.
+        let notes = match (o.location.is_empty(), o.notes.is_empty()) {
+            (true, _) => o.notes.clone(),
+            (false, true) => format!("Location: {}", o.location),
+            (false, false) => format!("Location: {}\n\n{}", o.location, o.notes),
+        };
         let space = resolve(&mappings, &o.title).map(|m| m.space_id.clone());
         let existing = tx
             .query_row(
@@ -393,7 +406,7 @@ fn apply_as_tasks(c: &Connection, source: &ImportSource, occurrences: &[Occurren
                 tx.execute(
                     "INSERT INTO tasks (id, space_id, title, notes, deadline_at, source_id, external_uid, sort_order, created_at, updated_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
-                    params![new_id(), space.unwrap_or_else(|| source.space_id.clone()), o.title, o.notes, due, source.id, o.key, sort, ts],
+                    params![new_id(), space.unwrap_or_else(|| source.space_id.clone()), o.title, notes, due, source.id, o.key, sort, ts],
                 )?;
                 report.added += 1;
             }
@@ -409,7 +422,7 @@ fn apply_as_tasks(c: &Connection, source: &ImportSource, occurrences: &[Occurren
                     }
                     continue;
                 }
-                let fresh = (o.title.clone(), o.notes.clone(), Some(due));
+                let fresh = (o.title.clone(), notes, Some(due));
                 if deleted.is_none() && current == fresh {
                     report.unchanged += 1;
                     continue;
@@ -636,7 +649,7 @@ pub fn import_csv(c: &Connection, path: &str, title_column: usize, date_column: 
             .map(|(_, (h, v))| format!("{h}: {}", v.trim()))
             .collect::<Vec<_>>()
             .join("\n");
-        occurrences.push(Occurrence { key: format!("{title}|{date}"), title, notes, start, end, all_day, cancelled: false });
+        occurrences.push(Occurrence { key: format!("{title}|{date}"), title, notes, location: String::new(), start, end, all_day, cancelled: false });
     }
     let source = file_source(c, "csv", path, space_id)?;
     let mut report = apply(c, &source, &occurrences, true)?;
@@ -683,6 +696,25 @@ END:VCALENDAR";
         repo::list_events(c, "2029-01-01T00:00:00.000Z", "2031-01-01T00:00:00.000Z").unwrap()
     }
 
+    /// A real timetable file, read and imported into a database in memory (MILO_ICS=<file.ics>).
+    #[test]
+    #[ignore]
+    fn a_real_timetable_keeps_its_rooms() {
+        let text = std::fs::read_to_string(std::env::var("MILO_ICS").unwrap()).unwrap();
+        let c = open_in_memory().unwrap();
+        let s = source(&c);
+        let n = Utc::now();
+        let occurrences = ics::parse(&text, n - Duration::days(400), n + Duration::days(400)).unwrap();
+        let r = apply(&c, &s, &occurrences, true).unwrap();
+        let all = repo::list_events(&c, &iso(n - Duration::days(400)), &iso(n + Duration::days(400))).unwrap();
+        let with_room = all.iter().filter(|e| !e.location.is_empty()).count();
+        println!("added {} · with a room {} of {} · notes still holding 'Location:' {}", r.added, with_room, all.len(), all.iter().filter(|e| e.notes.contains("Location:")).count());
+        for e in all.iter().take(4) {
+            println!("  {} | {} | {} | notes: {:?}", e.start_at, e.title, e.location, e.notes);
+        }
+        assert_eq!(apply(&c, &s, &occurrences, true).unwrap().unchanged, r.added, "a second sync changes nothing");
+    }
+
     #[test]
     fn sync_updates_keeps_local_edits_and_archives_removed() {
         let c = open_in_memory().unwrap();
@@ -703,8 +735,7 @@ END:VCALENDAR";
         let input = EventInput {
             space_id: a.space_id.clone(), activity_id: None, title: "Analysis (my time)".into(),
             start_at: "2030-01-07T09:00:00.000Z".into(), end_at: "2030-01-07T10:00:00.000Z".into(),
-            all_day: false, notes: String::new(), status: "planned".into(), task_id: None,
-        };
+            all_day: false, notes: String::new(), status: "planned".into(), task_id: None, location: String::new() };
         repo::update_event(&c, &a.id, input.clone()).unwrap();
         let r = apply(&c, &s, &occ(&renamed), true).unwrap();
         assert_eq!(r.kept, 1);

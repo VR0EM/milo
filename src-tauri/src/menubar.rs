@@ -22,6 +22,8 @@ pub struct Slot {
     pub title: String,
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
+    /// Where it is ("ELL.01.01"): shown before it starts, so the way there is known.
+    pub location: String,
 }
 
 pub fn enabled(c: &Connection) -> Result<bool> {
@@ -40,23 +42,24 @@ fn iso(t: DateTime<Utc>) -> String {
 /// events, events marked as not happening, focus sessions and sleep.
 fn upcoming(c: &Connection, now: DateTime<Utc>) -> Result<Vec<Slot>> {
     let mut s = c.prepare(
-        "SELECT e.title, e.start_at, e.end_at FROM events e JOIN spaces s ON s.id = e.space_id
+        "SELECT e.title, e.start_at, e.end_at, e.location FROM events e JOIN spaces s ON s.id = e.space_id
          WHERE e.deleted_at IS NULL AND e.all_day = 0 AND e.status != 'skipped' AND e.source != 'focus'
            AND s.role != 'sleep' AND e.end_at > ?1 AND e.start_at < ?2
          ORDER BY e.start_at, e.end_at LIMIT 8",
     )?;
     let rows = s
         .query_map([iso(now), iso(now + Duration::minutes(HORIZON_MINUTES))], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows
         .into_iter()
-        .filter_map(|(title, a, b)| {
+        .filter_map(|(title, a, b, location)| {
             Some(Slot {
                 title,
                 start: DateTime::parse_from_rfc3339(&a).ok()?.with_timezone(&Utc),
                 end: DateTime::parse_from_rfc3339(&b).ok()?.with_timezone(&Utc),
+                location,
             })
         })
         .collect())
@@ -104,10 +107,14 @@ fn short(title: &str) -> String {
 pub fn label(slot: &Slot, now: DateTime<Utc>) -> String {
     let title = short(&slot.title);
     if slot.start > now {
+        let place = match slot.location.trim() {
+            "" => String::new(),
+            l => format!(" · {}", short(l)),
+        };
         if slot.start - now < Duration::seconds(60) {
-            format!("{title} now")
+            format!("{title} now{place}")
         } else {
-            format!("{title} in {}", span(slot.start - now))
+            format!("{title} in {}{place}", span(slot.start - now))
         }
     } else {
         format!("{title} · {} left", span(slot.end - now))
@@ -135,7 +142,14 @@ mod tests {
     }
 
     fn slot(title: &str, a: DateTime<Utc>, b: DateTime<Utc>) -> Slot {
-        Slot { title: title.into(), start: a, end: b }
+        Slot { title: title.into(), start: a, end: b, location: String::new() }
+    }
+
+    #[test]
+    fn says_where_before_it_starts() {
+        let s = Slot { location: "ELL.01.01".into(), ..slot("Chemistry lab", t(13, 0), t(15, 0)) };
+        assert_eq!(label(&s, t(12, 35)), "Chemistry lab in 25 min · ELL.01.01");
+        assert_eq!(label(&s, t(14, 20)), "Chemistry lab · 40 min left", "once there, the place is known");
     }
 
     fn add(c: &Connection, space: &str, title: &str, a: DateTime<Utc>, b: DateTime<Utc>, all_day: bool) {
@@ -150,8 +164,7 @@ mod tests {
                 all_day,
                 notes: String::new(),
                 status: "planned".into(),
-                task_id: None,
-            },
+                task_id: None, location: String::new() },
             "milo",
         )
         .unwrap();

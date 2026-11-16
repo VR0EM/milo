@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { parseNote } from "../../lib/quickNote";
 import { api, onCaptureOpen } from "../../lib/api";
 import { useAppearance } from "../../lib/useAppearance";
 
@@ -30,7 +31,7 @@ export function CaptureWindow() {
     const t = text.trim();
     if (!t) return;
     try {
-      await api.addInbox(t);
+      await api.addInbox(parseNote(t));
       setText("");
       setError(null);
       await api.hideCapture();

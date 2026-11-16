@@ -303,6 +303,7 @@ fn event_from(r: &Row) -> rusqlite::Result<Event> {
         end_at: r.get("end_at")?,
         all_day: r.get("all_day")?,
         notes: r.get("notes")?,
+        location: r.get("location")?,
         status: r.get("status")?,
         source: r.get("source")?,
         source_id: r.get("source_id")?,
@@ -345,8 +346,8 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
     check_event(&input)?;
     let (id, ts) = (new_id(), now());
     c.execute(
-        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, task_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
+        "INSERT INTO events (id, space_id, activity_id, title, start_at, end_at, all_day, notes, status, source, task_id, location, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
         params![
             id,
             input.space_id,
@@ -359,6 +360,7 @@ pub fn create_event(c: &Connection, input: EventInput, source: &str) -> Result<E
             input.status,
             source,
             input.task_id,
+            input.location.trim(),
             ts
         ],
     )?;
@@ -376,6 +378,7 @@ pub fn update_event(c: &Connection, id: &str, input: EventInput) -> Result<Event
         && before.end_at == input.end_at
         && before.all_day == input.all_day
         && before.notes == input.notes
+        && before.location == input.location.trim()
         && before.status == input.status
         && before.task_id == input.task_id;
     if same {
@@ -392,7 +395,7 @@ pub fn update_event_unlogged(c: &Connection, id: &str, input: EventInput) -> Res
     check_event(&input)?;
     changed(c.execute(
         "UPDATE events SET space_id = ?2, activity_id = ?3, title = ?4, start_at = ?5, end_at = ?6,
-         all_day = ?7, notes = ?8, status = ?9, updated_at = ?10, task_id = ?11,
+         all_day = ?7, notes = ?8, status = ?9, updated_at = ?10, task_id = ?11, location = ?12,
          locally_modified = (source = 'import') OR locally_modified WHERE id = ?1",
         params![
             id,
@@ -405,7 +408,8 @@ pub fn update_event_unlogged(c: &Connection, id: &str, input: EventInput) -> Res
             input.notes,
             input.status,
             now(),
-            input.task_id
+            input.task_id,
+            input.location.trim()
         ],
     )?)?;
     get_event(c, id)
@@ -877,8 +881,7 @@ pub fn finish_focus_at(c: &Connection, id: &str, end: &str) -> Result<Event> {
             end_at: ts.clone(),
             all_day: false,
             notes: String::new(),
-            status: "planned".into(), task_id: session.task_id,
-        },
+            status: "planned".into(), task_id: session.task_id, location: String::new() },
         "focus",
     )?;
     c.execute(
@@ -918,11 +921,17 @@ pub fn discard_focus(c: &Connection, id: &str) -> Result<()> {
 
 /// Saves a quick note as a to-do in the hidden Inbox space, from where it can go on Today, be
 /// ticked off or move to a course.
-pub fn add_inbox(c: &Connection, text: &str) -> Result<Task> {
-    create_task(
+/// The interface reads a day, a time and a list of steps from the note first (quickNote.ts).
+pub fn add_inbox(c: &Connection, text: &str, deadline_at: Option<String>, steps: &[String]) -> Result<Task> {
+    let task = create_task(
         c,
-        TaskInput { space_id: INBOX.into(), type_id: None, title: non_empty(text, "Note")?, notes: String::new(), deadline_at: None, target_at: None, priority: None, section_id: None },
-    )
+        TaskInput { space_id: INBOX.into(), type_id: None, title: non_empty(text, "Note")?, notes: String::new(), deadline_at, target_at: None, priority: None, section_id: None },
+    )?;
+    let mut last = task;
+    for s in steps.iter().filter(|s| !s.trim().is_empty()) {
+        last = create_task_part(c, &last.id, TaskPartInput { title: s.clone(), weight: 1.0 })?;
+    }
+    Ok(last)
 }
 
 // ---------- reminder rules ----------
@@ -1091,7 +1100,7 @@ mod tests {
             end_at: end.into(),
             all_day: false,
             notes: String::new(),
-            status: "planned".into(), task_id: None,
+            status: "planned".into(), task_id: None, location: String::new(),
         }
     }
 
@@ -1114,9 +1123,12 @@ mod tests {
     #[test]
     fn a_quick_note_is_a_todo_in_the_inbox() {
         let c = open_in_memory().unwrap();
-        let t = add_inbox(&c, "  Ask Lotte for the notes ").unwrap();
+        let t = add_inbox(&c, "  Ask Lotte for the notes ", None, &[]).unwrap();
         assert_eq!((t.space_id.as_str(), t.title.as_str()), (INBOX, "Ask Lotte for the notes"));
-        assert!(add_inbox(&c, "   ").is_err());
+        assert!(add_inbox(&c, "   ", None, &[]).is_err());
+        let r = add_inbox(&c, "verslag afwerken", Some("2026-11-27T22:59:00.000Z".into()), &["inleiding".into(), "conclusie".into()]).unwrap();
+        assert_eq!(r.deadline_at.as_deref(), Some("2026-11-27T22:59:00.000Z"));
+        assert_eq!(r.parts.iter().map(|p| p.title.as_str()).collect::<Vec<_>>(), ["inleiding", "conclusie"]);
         let inbox = list_spaces(&c).unwrap().into_iter().find(|s| s.id == INBOX).unwrap();
         assert_eq!(inbox.kind, "inbox");
         // Renaming it leaves it the Inbox.
