@@ -153,7 +153,7 @@ function ExportCsv({ period }: { period: Period }) {
       await api.exportCsv(path, from, to, what);
       notify({ text: `Saved ${path.split(/[\\/]/).pop()}` });
     } catch (e) {
-      notify({ text: `Could not export: ${e}` });
+      notify({ text: `Could not export: ${e}`, error: true });
     }
   };
   return (

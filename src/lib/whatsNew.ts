@@ -12,6 +12,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.3",
+    date: "2026-11-17",
+    items: [
+      "Fewer notices: none when you sort a note from the Inbox, start or drop a focus session, or change how an event repeats, since you see it happen. Ctrl+Z still takes back a move.",
+    ],
+  },
+  {
     version: "0.4.2",
     date: "2026-11-17",
     items: [

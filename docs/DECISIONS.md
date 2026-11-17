@@ -780,3 +780,12 @@ The rest of the first feedback file (docs kept outside the repository):
   page turns it into calendar zoom, and blocks Ctrl+wheel and touch-screen pinch everywhere
   else, so the window itself never zooms. Checked to compile against webview2-com 0.39; not yet
   tried on a Windows machine.
+
+## Which notices stay (0.4.3)
+
+A notice shows only for: an error (it stays until dismissed); something that happened out of
+sight (saved or exported a file, copied, synced a calendar, put a to-do in the calendar,
+restored a backup or an item, added Milo to Claude Desktop); or a bigger change with Undo
+(archiving, a checklist import, deleting for good). A change she sees happen gets none:
+dragging an event, sorting an Inbox note, starting or dropping focus, changing a repeat.
+Moves without a notice still go on the undo list (`remember`), so Ctrl+Z works the same.

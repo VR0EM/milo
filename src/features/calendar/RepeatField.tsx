@@ -4,7 +4,6 @@ import { DateInput } from "../../components/DateInput";
 import { DayToggles } from "../../components/DayToggles";
 import { HelpTip } from "../../components/HelpTip";
 import { useAction, useSeries } from "../../lib/queries";
-import { useUi } from "../../lib/store";
 import { toDateInput } from "../../lib/time";
 import type { CalEvent, RepeatFreq, RepeatRule } from "../../lib/types";
 
@@ -56,10 +55,8 @@ export function RepeatField({ event }: { event: CalEvent }) {
   const [custom, setCustom] = useState(preset === "custom");
 
   const apply = (next: RepeatRule | null) =>
-    act.mutate(() => api.setRepeat(event.id, next), {
-      onSuccess: () =>
-        useUi.getState().notify({ text: next ? `${describeRule(next, start)}, from this event on` : "Stopped repeating after this event" }),
-    });
+    // No notice: the repeats appear or go in the calendar, and the field shows the rule.
+    act.mutate(() => api.setRepeat(event.id, next));
 
   const choose = (p: Preset) => {
     const until = rule?.untilDate ?? null;

@@ -159,7 +159,8 @@ function MoveChoices({ task, suggestion, spaceById }: { task: Task; suggestion: 
   const move = (spaceId: string) => {
     const name = spaceById.get(spaceId)?.name ?? "that space";
     update(task.id, { spaceId, sectionId: null });
-    useUi.getState().notify({ text: `Moved to ${name}`, undo: () => update(task.id, { spaceId: INBOX_ID, sectionId: null }) });
+    // No notice: she clicked the space by name and sees the note leave. Ctrl+Z brings it back.
+    useUi.getState().remember(`Moved to ${name}`, () => update(task.id, { spaceId: INBOX_ID, sectionId: null }));
   };
   return (
     <div className="todo-move" role="group" aria-label={`Move ${task.title || "this note"} to`}>

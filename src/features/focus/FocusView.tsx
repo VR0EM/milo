@@ -179,8 +179,8 @@ function Running({ session }: { session: FocusSession }) {
     });
   const discard = () =>
     act.mutate(async () => {
+      // No notice: she chose this, and the timer is gone.
       await api.discardFocus(session.id);
-      useUi.getState().notify({ text: "Focus session stopped without saving" });
     });
 
   return (

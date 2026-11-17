@@ -111,7 +111,6 @@ function EventForm({ event, spaces, activities }: { event: CalEvent; spaces: Spa
           spaceId: event.spaceId, activityId: event.activityId, taskId: event.taskId, title: event.title,
           plannedMinutes: Math.min(600, Math.max(1, Math.round(left / 60_000))), eventId: event.id,
         }),
-      { onSuccess: () => useUi.getState().notify({ text: "Focus started. This block takes the real times when you stop." }) },
     );
   };
 
