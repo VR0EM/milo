@@ -186,6 +186,8 @@ html, body { overscroll-behavior: none; }
 img, svg, a { -webkit-user-drag: none; }
 input, textarea, select, button { font: inherit; color: inherit; }
 input, textarea { -webkit-user-select: text; user-select: text; }
+/* A pinch on a touch screen scrolls, it never zooms the window (the touchpad pinch zooms the calendar). */
+html { touch-action: pan-x pan-y; }
 ul { list-style: none; margin: 0; padding: 0; }
 h1, h2, p { margin: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -281,7 +283,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 .grid-body { display: flex; position: relative; margin-bottom: 16px; } /* room under 24:00, so late events are not flush with the window edge */
 .hour-label { position: absolute; right: 8px; transform: translateY(-50%); font-size: calc(11px * var(--text-scale)); color: var(--muted); font-variant-numeric: tabular-nums; }
-.grid-cols { flex: 1; min-width: 0; overflow: hidden; position: relative; background-image: linear-gradient(to bottom, var(--line-soft) 1px, transparent 1px); }
+.grid-cols { flex: 1; min-width: 0; overflow: hidden; position: relative; }
+.hour-lines { position: absolute; inset: 0; pointer-events: none; }
+.hour-lines > div { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line-soft); }
 /* The moving strips: header, all-day row and body share one transform. */
 .h-viewport { flex: 1; min-width: 0; overflow: hidden; }
 .h-strip { display: flex; will-change: transform; backface-visibility: hidden; }
@@ -298,6 +302,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   color: color-mix(in oklab, var(--c) var(--ink-mix), var(--ink-base)); }
 .event-title { font-weight: 550; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .event-time { opacity: 0.78; font-variant-numeric: tabular-nums; white-space: nowrap; margin-top: 1px; }
+/* An event drawn on top of another (Notion-style overlap) gets a thin ring in the background colour. */
+.event.nested { box-shadow: 0 0 0 1.5px var(--surface); }
 .event:hover { background: color-mix(in srgb, var(--c) calc(var(--event-mix) + 8%), var(--surface)); }
 .event.past { background: color-mix(in srgb, var(--c) calc(var(--event-mix) * 0.72), var(--surface)); border-left-color: color-mix(in srgb, var(--c) 75%, var(--surface)); }
 .event.past .event-title { font-weight: 500; }
@@ -362,6 +368,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .swatches input:checked + .swatch { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--c); }
 .swatches input:focus-visible + .swatch { outline: 2px solid var(--accent); outline-offset: 5px; }
 .dialog-foot { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+/* In a dialog taller than the window, the buttons stay at its bottom edge while the rest scrolls. */
+.dialog > .dialog-foot, .dialog > form > .dialog-foot {
+  position: sticky; bottom: -20px; z-index: 2; margin: 4px -20px -20px; padding: 12px 20px 16px;
+  background: var(--raised); }
 .spacer { flex: 1; }
 .error { color: var(--danger); }
 
@@ -554,7 +564,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 /* ---------- archive ---------- */
 .archive-row { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 12px; align-items: center; padding: calc(7px * var(--d)) 0; border-bottom: 1px solid var(--line-soft); }
-.archive-more { margin-top: 10px; }
+/* The archive scrolls in its own box, so Settings stays short however much is archived. */
+.archive-list { max-height: min(440px, 55vh); overflow-y: auto; border: 1px solid var(--line); border-radius: calc(10px * var(--r)); padding: 0 12px; background: var(--surface); }
+.archive-list > p { margin: 12px 0; }
+.archive-more { margin: 10px 0 12px; }
 .archive-row:last-child { border-bottom: 0; }
 .archive-kind { font-size: calc(12px * var(--text-scale)); color: var(--muted); }
 .archive-main { min-width: 0; }

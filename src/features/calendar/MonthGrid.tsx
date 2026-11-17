@@ -138,11 +138,11 @@ export function MonthGrid({ month, weekends, events, tasks, spaces, defaultSpace
           patch: { startAt: addDays(new Date(ev.startAt), shift).toISOString(), endAt: addDays(new Date(ev.endAt), shift).toISOString() },
         },
         {
+          // No notice: the event visibly moved. Ctrl+Z still takes it back.
           onSuccess: () =>
-            useUi.getState().notify({
-              text: `Moved to ${fmtLongDay(addDays(new Date(ev.startAt), shift))}`,
-              undo: () => updateEvent.mutate({ id: ev.id, patch: before }),
-            }),
+            useUi.getState().remember(`Moved to ${fmtLongDay(addDays(new Date(ev.startAt), shift))}`, () =>
+              updateEvent.mutate({ id: ev.id, patch: before }),
+            ),
         },
       );
     };

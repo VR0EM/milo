@@ -216,6 +216,8 @@ interface UiState {
   setLastSpace: (id: string) => void;
   openDialog: (d: Dialog | null) => void;
   notify: (n: Notice | null) => void;
+  /** Puts a change on the undo list (Ctrl+Z) without a notice: for direct moves on screen. */
+  remember: (text: string, undo: () => void) => void;
   /** Recent changes that can be undone, newest last (Ctrl/Cmd+Z, or Undo on the notice). */
   undoStack: { text: string; undo: () => void }[];
   /** Undoes the newest change; says so, or that there is nothing to undo. */
@@ -322,6 +324,7 @@ export const useUi = create<UiState>()(
         })),
       setLastSpace: (lastSpaceId) => set({ lastSpaceId }),
       openDialog: (dialog) => set({ dialog }),
+      remember: (text, undo) => set((s) => ({ undoStack: [...s.undoStack, { text, undo }].slice(-20) })),
       // Every notice with an Undo also goes on the undo list (the last 20 changes).
       notify: (notice) =>
         set((s) => ({

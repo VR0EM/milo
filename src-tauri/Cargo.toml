@@ -38,6 +38,11 @@ unicode-normalization = "0.1.26"
 tauri-plugin-updater = "2"
 tauri-plugin-global-shortcut = "2"
 
+# Windows: to turn on the touchpad pinch in WebView2 (see allow_pinch in lib.rs).
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows = "0.62"
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useUi } from "../../lib/store";
@@ -51,8 +51,12 @@ export function ArchiveSettings() {
     const t = setTimeout(() => setQuery(text), 200);
     return () => clearTimeout(t);
   }, [text]);
-  // A new search or kind starts again with the first rows.
-  useEffect(() => setLimit(PAGE), [query, kind]);
+  // A new search or kind starts again with the first rows, at the top of the box.
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setLimit(PAGE);
+    listRef.current?.scrollTo({ top: 0 });
+  }, [query, kind]);
 
   const { data } = useQuery({
     queryKey: ["archive", query, kind, limit],
@@ -148,7 +152,7 @@ export function ArchiveSettings() {
           </span>
         </div>
 
-        <div className="archive-list">
+        <div className="archive-list" ref={listRef}>
           {shown.length === 0 && <p className="muted">{query ? "Nothing archived matches that name." : "Nothing is archived."}</p>}
           {shown.map((item) => (
             <div key={`${item.entity}-${item.id}`} className="archive-row">

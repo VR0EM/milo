@@ -27,6 +27,12 @@ interface Shown {
 const SNAP_MS = SNAP_MINUTES * MINUTE;
 /** The smallest height an event gets, so a one-minute event can still be clicked. */
 const MIN_EVENT_PX = 22;
+/** The room an event's title (up to two lines) and its time take at the top. An event that
+ * starts within it goes beside the other one; a later one may cover the rest. */
+const TITLE_PX = 46;
+/** How far each level of events drawn on top of others moves to the right: a sixth of the
+ * column, at least 14 px, never past half the column. */
+const indent = (level: number) => `min(calc(${level} * max(14px, 16%)), 50%)`;
 /** One line in the all-day row: a bar and the gap under it. Keep in step with .allday-bar. */
 const LANE_PX = 22;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -324,12 +330,11 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
           { id, patch: times },
           {
             onSettled: clear,
-            // One step back is always at hand; older versions are in the panel.
+            // No notice: the event visibly moved. Ctrl+Z still takes it back; older versions are in the panel.
             onSuccess: () =>
-              useUi.getState().notify({
-                text: mode === "move" ? "Event moved" : "Event changed",
-                undo: () => updateEvent.mutate({ id, patch: { startAt: new Date(s0).toISOString(), endAt: new Date(e0).toISOString() } }),
-              }),
+              useUi.getState().remember(mode === "move" ? "Event moved" : "Event changed", () =>
+                updateEvent.mutate({ id, patch: { startAt: new Date(s0).toISOString(), endAt: new Date(e0).toISOString() } }),
+              ),
           },
         );
       } else {
@@ -520,7 +525,12 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
           ))}
         </div>
 
-        <div className="grid-cols" ref={viewportRef} style={{ backgroundSize: `100% ${hourHeight}px` }}>
+        <div className="grid-cols" ref={viewportRef}>
+          {/* One line per hour at its own place: a repeating background drifts when an hour is
+              not a whole number of screen pixels (after resizing, or at 125% on Windows). */}
+          <div className="hour-lines" aria-hidden="true">
+            {HOURS.slice(1).map((h) => <div key={h} style={{ top: h * hourHeight }} />)}
+          </div>
         <div
           className="h-strip body-strip"
           ref={colsRef}
@@ -537,7 +547,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
           {days.map((day) => (
             <div key={day.getTime()} className={`day-col${sameDay(day, now) ? " today" : ""}`}>
               {sameDay(day, now) && <div className="now-line" style={{ top: px(minutesIntoDay(now)) }} />}
-              {layoutDay(shown, day, (MIN_EVENT_PX / hourHeight) * 60).map((seg) => {
+              {layoutDay(shown, day, (MIN_EVENT_PX / hourHeight) * 60, (TITLE_PX / hourHeight) * 60).map((seg) => {
                 const ev = seg.item.event;
                 const space = spaceById.get(ev?.spaceId ?? defaultSpaceId ?? "");
                 // Very short events (a deadline at 23:59) still get a clickable height, and one
@@ -546,6 +556,7 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                 const top = Math.min(px(seg.top), 24 * hourHeight - height);
                 const cls = [
                   "event",
+                  seg.level > 0 ? "nested" : "",
                   ev && ev.id === selectedId ? "selected" : "",
                   ev?.status === "skipped" ? "skipped" : "",
                   seg.item.end < now ? "past" : "",
@@ -559,8 +570,11 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                     style={{
                       top,
                       height: height - 1,
-                      left: `calc(${(seg.col / seg.cols) * 100}% + 1px)`,
-                      width: `calc(${100 / seg.cols}% - 3px)`,
+                      // Each level in sits a little further right (never past half the column);
+                      // events that start together share what is left.
+                      left: `calc(${indent(seg.level)} + (100% - ${indent(seg.level)}) * ${seg.col / seg.cols} + 1px)`,
+                      width: `calc((100% - ${indent(seg.level)}) / ${seg.cols} - 3px)`,
+                      zIndex: 1 + seg.level,
                       ["--c" as string]: colorVar(space?.color ?? "gray"),
                     }}
                     onPointerDown={(e) => {

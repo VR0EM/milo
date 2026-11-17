@@ -2545,6 +2545,8 @@ dependencies = [
  "unicode-normalization",
  "ureq",
  "uuid",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]

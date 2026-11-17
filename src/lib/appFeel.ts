@@ -55,6 +55,15 @@ export function feelLikeAnApp() {
     },
     true,
   );
+  // A pinch on the touchpad arrives as Ctrl + wheel. The calendar uses it to zoom its hours
+  // (and stops it there); anywhere else it must not zoom the whole window.
+  window.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey) e.preventDefault();
+    },
+    { passive: false },
+  );
   // The side buttons of a mouse: "back" and "forward" in a browser.
   for (const type of ["mouseup", "mousedown", "auxclick"] as const) {
     window.addEventListener(type, (e) => {

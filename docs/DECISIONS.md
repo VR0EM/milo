@@ -720,7 +720,8 @@ The rest of the first feedback file (docs kept outside the repository):
   returns 50 at a time, newest first, with the number that match and a count per kind for the
   filter; "Show 50 more" asks for a longer page. Search and filter run in SQL over the whole
   archive, so nothing is out of reach. Before, only events were capped (300) and the rest
-  came whole. No scroll box inside the page: two scrollbars nested is harder to follow.
+  came whole. Since 0.4.2 the list scrolls in its own box (her wish), so the rest of Settings
+  stays in view; a new search or filter starts at the top of the box.
 
 ## Connect AI through MCP (0.4.1)
 
@@ -758,3 +759,24 @@ The rest of the first feedback file (docs kept outside the repository):
 - **Custom CSS** is stored with the other preferences and added last, so it wins. It applies as
   typing pauses. The way out when it hides the screen: Ctrl/⌘K › "Turn off custom CSS", which
   keeps the text. No plugins: code with access to her data is not worth it for one person.
+
+## Quieter moves, pinned dialog buttons (0.4.2)
+
+- Dragging or stretching an event shows no notice: the change is visible where she looks.
+  It still goes on the undo list (`remember` in the UI store), so Ctrl+Z takes it back.
+- The bottom row of every dialog (`.dialog-foot`) sticks to the dialog's bottom edge, so Close
+  or Save is in view however long the content.
+- **Overlap like Notion** (`layoutDay`): events that start within the room the first one's
+  title and time take (46 px, so it depends on the zoom) share the width side by side; one
+  that starts later while another runs is drawn on top of it one level in (a sixth of the
+  column, at least 14 px, never past half), with a ring in the background colour. The first
+  version only kept one title line free and covered titles that wrap to two lines. Before, every overlap split the width into
+  thin columns, which jumped around when the zoom changed the drawn heights.
+- **Hour lines are drawn one by one** at `h × hourHeight`. The repeating background they were
+  drifted: each tile is rounded to whole screen pixels, so with an hour of 38.5 px (after a
+  resize, or at 125 % on Windows) the 22:00 line ended up several pixels from its label.
+- **Pinch on Windows:** Tauri switches WebView2's pinch off together with its zoom keys, so a
+  touchpad pinch never reached the page. `allow_pinch` (lib.rs) turns only pinch back on; the
+  page turns it into calendar zoom, and blocks Ctrl+wheel and touch-screen pinch everywhere
+  else, so the window itself never zooms. Checked to compile against webview2-com 0.39; not yet
+  tried on a Windows machine.

@@ -83,6 +83,23 @@ pub fn run_mcp() -> i32 {
     }
 }
 
+/// Windows: Tauri turns WebView2's pinch off together with its zoom keys, and then a pinch on
+/// the touchpad never reaches the page. Pinch is turned back on (only pinch: the zoom keys and
+/// Ctrl+wheel page zoom stay off). The page turns the pinch into calendar zoom and blocks it
+/// everywhere else (appFeel.ts), so the window itself never zooms.
+#[cfg(windows)]
+fn allow_pinch(window: &tauri::WebviewWindow) {
+    let _ = window.with_webview(|wv| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings5;
+        use windows::core::Interface;
+        let Ok(core) = wv.controller().CoreWebView2() else { return };
+        let Ok(settings) = core.Settings() else { return };
+        if let Ok(s5) = settings.cast::<ICoreWebView2Settings5>() {
+            let _ = s5.SetIsPinchZoomEnabled(true);
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -121,6 +138,8 @@ pub fn run() {
             // Fit the window on smaller screens (a 1366x768 laptop at 125% has about 1090x610
             // points to work with): never larger than 92% of the screen, and centred.
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(windows)]
+                allow_pinch(&window);
                 if let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) {
                     let screen = monitor.size();
                     let (w, h) = ((screen.width as f64 * 0.92) as u32, (screen.height as f64 * 0.92) as u32);

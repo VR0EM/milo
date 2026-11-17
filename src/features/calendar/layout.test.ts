@@ -23,6 +23,38 @@ describe("layoutDay", () => {
   });
 });
 
+describe("layoutDay, like Notion", () => {
+  const lay = (items: ReturnType<typeof ev>[], min = 22) =>
+    Object.fromEntries(layoutDay(items, day, min).map((s) => [s.item.id, [s.level, s.col, s.cols]]));
+
+  it("draws a later event on top of a running one, one level in", () => {
+    expect(lay([ev("cloud", at(9), at(10)), ev("cloud2", at(9, 45), at(11, 45))])).toEqual({ cloud: [0, 0, 1], cloud2: [1, 0, 1] });
+  });
+
+  it("puts events that start together side by side", () => {
+    expect(lay([ev("lunch", at(13, 15), at(14)), ev("lunch2", at(13, 15), at(14))])).toEqual({ lunch: [0, 0, 2], lunch2: [0, 1, 2] });
+    // Ten minutes apart would cover the first title at this zoom: side by side too.
+    expect(lay([ev("a", at(21), at(21, 30)), ev("b", at(21, 10), at(21, 30))])).toEqual({ a: [0, 0, 2], b: [0, 1, 2] });
+  });
+
+  it("keeps the title of the one underneath in view", () => {
+    // With 50 minutes of room for a title and its time, a half-hour-later start goes beside it.
+    const items = [ev("tutorial", at(10), at(12)), ev("exercises", at(10, 30), at(12))];
+    expect(Object.fromEntries(layoutDay(items, day, 25, 50).map((s) => [s.item.id, [s.level, s.col, s.cols]])))
+      .toEqual({ tutorial: [0, 0, 2], exercises: [0, 1, 2] });
+  });
+
+  it("nests short events inside a long one, each at the first free level", () => {
+    const items = [ev("exam", at(14), at(16)), ev("coffee", at(14, 45), at(15)), ev("coffee2", at(15, 30), at(16, 45))];
+    expect(lay(items)).toEqual({ exam: [0, 0, 1], coffee: [1, 0, 1], coffee2: [1, 0, 1] });
+  });
+
+  it("goes a level deeper for each event still running", () => {
+    const items = [ev("a", at(9), at(12)), ev("b", at(9, 30), at(12)), ev("c", at(10), at(11))];
+    expect(lay(items)).toEqual({ a: [0, 0, 1], b: [1, 0, 1], c: [2, 0, 1] });
+  });
+});
+
 describe("turnOver", () => {
   const q = 15 * 60_000;
   const t = (h: number, m = 0) => at(h, m).getTime();

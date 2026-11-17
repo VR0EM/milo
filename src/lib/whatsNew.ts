@@ -12,6 +12,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.2",
+    date: "2026-11-17",
+    items: [
+      "Moving or stretching an event by dragging no longer shows a notice; Ctrl+Z still takes it back.",
+      "The archive in Settings scrolls in its own box, so the rest of Settings stays in view.",
+      "In long windows such as What's new, the buttons stay in view at the bottom.",
+      "Overlapping events look like in Notion: one that starts later is drawn on top, a little to the right; ones that start together sit side by side.",
+      "Windows: pinch on the touchpad zooms the calendar's hours.",
+      "The hour lines stay exactly at their hours after resizing the window.",
+    ],
+  },
+  {
     version: "0.4.1",
     date: "2026-11-16",
     items: [

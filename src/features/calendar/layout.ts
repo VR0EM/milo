@@ -11,19 +11,25 @@ export interface Segment<T extends Timed> {
   /** Minutes from local midnight, clipped to this day. */
   top: number;
   bottom: number;
+  /** Place among events that start together, side by side: `col` of `cols`. */
   col: number;
   cols: number;
+  /** How deep it sits on top of earlier, longer events: each level is drawn a little to the right. */
+  level: number;
   startsHere: boolean;
   endsHere: boolean;
 }
 
 /**
- * The part of each event that falls on `day`, with overlapping events packed
- * side by side. An event that crosses midnight (sleep) yields one segment per day.
- * `minMinutes` is the shortest an event is drawn: a five-minute event drawn as tall as half an
- * hour takes that room, so what follows goes beside it instead of underneath it.
+ * The part of each event that falls on `day`, laid out as in Notion's calendar:
+ * - events that start together (closer than `titleMinutes`: the room the first one's title
+ *   and time take, so a later one would cover them) share the width side by side;
+ * - an event that starts while another is running is drawn on top of it, one level further
+ *   to the right, so the one underneath keeps its title and its left edge in view.
+ * An event that crosses midnight (sleep) yields one segment per day. `minMinutes` is also the
+ * shortest an event is drawn, so a five-minute event takes the room it is drawn with.
  */
-export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0): Segment<T>[] {
+export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0, titleMinutes = minMinutes): Segment<T>[] {
   const dayEnd = addDays(day, 1);
   const segs: Segment<T>[] = [];
   for (const item of items) {
@@ -36,31 +42,37 @@ export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0
       bottom: endsHere && item.end < dayEnd ? minutesIntoDay(item.end) : 1440,
       col: 0,
       cols: 1,
+      level: 0,
       startsHere,
       endsHere,
     });
   }
+  // Earlier first; of two that start together, the longer one first (it goes underneath).
   segs.sort((a, b) => a.top - b.top || b.bottom - a.bottom);
 
-  let cluster: Segment<T>[] = [];
-  let columnEnds: number[] = [];
-  let clusterEnd = -1;
-  const close = () => {
-    for (const s of cluster) s.cols = columnEnds.length;
-    cluster = [];
-    columnEnds = [];
-  };
+  interface Group { top: number; bottom: number; level: number; members: Segment<T>[] }
+  const groups: Group[] = [];
+  const together = Math.max(titleMinutes, 1);
   for (const s of segs) {
-    if (cluster.length && s.top >= clusterEnd) close();
     const drawnBottom = Math.max(s.bottom, s.top + minMinutes);
-    let col = columnEnds.findIndex((end) => end <= s.top);
-    if (col === -1) col = columnEnds.length;
-    columnEnds[col] = drawnBottom;
-    s.col = col;
-    cluster.push(s);
-    clusterEnd = Math.max(clusterEnd, drawnBottom);
+    const running = groups.filter((g) => g.bottom > s.top);
+    // The latest running group it starts together with, if any.
+    const join = [...running].reverse().find((g) => s.top - g.top < together);
+    if (join) {
+      join.members.push(s);
+      join.bottom = Math.max(join.bottom, drawnBottom);
+      s.level = join.level;
+    } else {
+      s.level = running.length ? Math.max(...running.map((g) => g.level)) + 1 : 0;
+      groups.push({ top: s.top, bottom: drawnBottom, level: s.level, members: [s] });
+    }
   }
-  close();
+  for (const g of groups) {
+    g.members.forEach((m, i) => {
+      m.col = i;
+      m.cols = g.members.length;
+    });
+  }
   return segs;
 }
 
