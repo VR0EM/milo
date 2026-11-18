@@ -12,6 +12,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.4",
+    date: "2026-11-18",
+    items: [
+      "Archiving a calendar link now takes its events with it, so a timetable imported twice is single again. Bring the link back from the Archive and its events come back too; delete it for good and they go for good.",
+    ],
+  },
+  {
     version: "0.4.3",
     date: "2026-11-17",
     items: [

@@ -1230,6 +1230,12 @@ pub fn table_of(entity: &str) -> Result<&'static str> {
 pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> Result<()> {
     let table = table_of(entity)?;
     let ts = now();
+    // When the calendar was archived: what was archived at that same moment went with it.
+    let was_archived_at: Option<String> = if entity == "import_source" {
+        c.query_row("SELECT deleted_at FROM import_sources WHERE id = ?1", [id], |r| r.get(0)).optional()?.flatten()
+    } else {
+        None
+    };
     let deleted_at = if archived { Some(ts.as_str()) } else { None };
     changed(c.execute(
         &format!("UPDATE {table} SET deleted_at = ?2, updated_at = ?3 WHERE id = ?1"),
@@ -1237,6 +1243,17 @@ pub fn set_archived(c: &Connection, entity: &str, id: &str, archived: bool) -> R
     )?)?;
     if entity == "task_part" {
         sync_task_completion(c, &task_id_of_part(c, id)?)?;
+    }
+    // A calendar link takes its events (or to-dos) with it, so archiving one of two copies
+    // of a timetable really removes the copy. Bringing it back brings back what went with it.
+    if entity == "import_source" {
+        for t in ["events", "tasks"] {
+            if archived {
+                c.execute(&format!("UPDATE {t} SET deleted_at = ?2, updated_at = ?2 WHERE source_id = ?1 AND deleted_at IS NULL"), params![id, ts])?;
+            } else if let Some(at) = &was_archived_at {
+                c.execute(&format!("UPDATE {t} SET deleted_at = NULL, updated_at = ?3 WHERE source_id = ?1 AND deleted_at = ?2"), params![id, at, ts])?;
+            }
+        }
     }
     // Bringing back an event a sync removed is the user's choice: from now on syncs leave it.
     if (entity == "event" || entity == "task") && !archived {

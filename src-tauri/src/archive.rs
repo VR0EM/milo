@@ -24,7 +24,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("space", "SELECT id, name, NULL, NULL, deleted_at, 0 FROM spaces WHERE deleted_at IS NOT NULL"),
     ("group", "SELECT id, name, NULL, NULL, deleted_at, 0 FROM groups WHERE deleted_at IS NOT NULL"),
     ("activity", "SELECT id, name, NULL, NULL, deleted_at, 0 FROM activities WHERE deleted_at IS NOT NULL"),
-    ("task", "SELECT t.id, t.title, s.name, t.deadline_at, t.deleted_at, 0 FROM tasks t JOIN spaces s ON s.id = t.space_id WHERE t.deleted_at IS NOT NULL"),
+    ("task", "SELECT t.id, t.title, s.name, t.deadline_at, t.deleted_at, 0 FROM tasks t JOIN spaces s ON s.id = t.space_id WHERE t.deleted_at IS NOT NULL AND NOT IN_ARCHIVED_SOURCE(t)"),
     ("task_part", "SELECT p.id, p.title, t.title, NULL, p.deleted_at, 0 FROM task_parts p JOIN tasks t ON t.id = p.task_id WHERE p.deleted_at IS NOT NULL"),
     ("task_type", "SELECT id, name, NULL, NULL, deleted_at, 0 FROM task_types WHERE deleted_at IS NOT NULL"),
     ("section", "SELECT x.id, x.name, s.name, NULL, x.deleted_at, 0 FROM sections x JOIN spaces s ON s.id = x.space_id WHERE x.deleted_at IS NOT NULL"),
@@ -34,13 +34,22 @@ const SOURCES: &[(&str, &str)] = &[
     ("import_source", "SELECT id, name, location, NULL, deleted_at, 0 FROM import_sources WHERE deleted_at IS NOT NULL"),
     ("title_mapping", "SELECT m.id, m.pattern, s.name, NULL, m.deleted_at, 0 FROM title_mappings m JOIN spaces s ON s.id = m.space_id WHERE m.deleted_at IS NOT NULL"),
     ("semester", "SELECT id, name, start_date || ' – ' || end_date, NULL, deleted_at, 0 FROM semesters WHERE deleted_at IS NOT NULL"),
-    ("event", "SELECT e.id, e.title, s.name, e.start_at, e.deleted_at, e.removed_by_sync FROM events e JOIN spaces s ON s.id = e.space_id WHERE e.deleted_at IS NOT NULL AND e.replaced = 0"),
+    ("event", "SELECT e.id, e.title, s.name, e.start_at, e.deleted_at, e.removed_by_sync FROM events e JOIN spaces s ON s.id = e.space_id WHERE e.deleted_at IS NOT NULL AND e.replaced = 0 AND NOT IN_ARCHIVED_SOURCE(e)"),
 ];
 
 /// Everything archived as one table `a(entity, id, label, context, at, archived, sync)`,
 /// narrowed to labels containing ?1 (lower case, "" for all).
 fn archived_cte() -> String {
-    let parts: Vec<String> = SOURCES.iter().map(|(e, sql)| sql.replacen("SELECT ", &format!("SELECT '{e}', "), 1)).collect();
+    // Events and to-dos of an archived calendar are listed as that one calendar, not one by one.
+    let in_archived_source = |x: &str| format!("EXISTS (SELECT 1 FROM import_sources src WHERE src.id = {x}.source_id AND src.deleted_at IS NOT NULL)");
+    let parts: Vec<String> = SOURCES
+        .iter()
+        .map(|(e, sql)| {
+            sql.replacen("SELECT ", &format!("SELECT '{e}', "), 1)
+                .replace("IN_ARCHIVED_SOURCE(t)", &in_archived_source("t"))
+                .replace("IN_ARCHIVED_SOURCE(e)", &in_archived_source("e"))
+        })
+        .collect();
     format!(
         "WITH all_archived(entity, id, label, context, at, archived, sync) AS ({}),
          a AS (SELECT * FROM all_archived WHERE ?1 = '' OR instr(lower(label), ?1) > 0)",
@@ -108,17 +117,27 @@ pub fn delete_forever(c: &Connection, entity: &str, id: &str) -> Result<()> {
                 if imported {
                     return Err(AppError::Invalid("An imported event stays archived, so its calendar link does not add it again".into()));
                 }
-                c.execute("UPDATE focus_sessions SET event_id = NULL WHERE event_id = ?1", [id])?;
+                let_go_of_event(c, id)?;
             }
-            "task" => {
-                c.execute("DELETE FROM change_log WHERE entity_id IN (SELECT id FROM task_parts WHERE task_id = ?1)", [id])?;
-                c.execute("DELETE FROM task_parts WHERE task_id = ?1", [id])?;
-                c.execute("UPDATE events SET task_id = NULL WHERE task_id = ?1", [id])?;
-                c.execute("UPDATE focus_sessions SET task_id = NULL WHERE task_id = ?1", [id])?;
-                c.execute("DELETE FROM focus_session_tasks WHERE task_id = ?1", [id])?;
-                // An older trial table some databases still have.
-                if has_table(c, "proposals")? {
-                    c.execute("DELETE FROM proposals WHERE task_id = ?1", [id])?;
+            "task" => let_go_of_task(c, id)?,
+            "import_source" => {
+                // Its events and to-dos go with it; anything brought back on its own stays,
+                // as an ordinary event or to-do.
+                for t in ["events", "tasks"] {
+                    c.execute(&format!("UPDATE {t} SET source_id = NULL, external_uid = NULL WHERE source_id = ?1 AND deleted_at IS NULL"), [id])?;
+                }
+                let ids = |sql: &str| -> Result<Vec<String>> {
+                    Ok(c.prepare(sql)?.query_map([id], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?)
+                };
+                for e in ids("SELECT id FROM events WHERE source_id = ?1")? {
+                    let_go_of_event(c, &e)?;
+                    c.execute("DELETE FROM change_log WHERE entity_id = ?1", [&e])?;
+                    c.execute("DELETE FROM events WHERE id = ?1", [&e])?;
+                }
+                for t in ids("SELECT id FROM tasks WHERE source_id = ?1")? {
+                    let_go_of_task(c, &t)?;
+                    c.execute("DELETE FROM change_log WHERE entity_id = ?1", [&t])?;
+                    c.execute("DELETE FROM tasks WHERE id = ?1", [&t])?;
                 }
             }
             "routine" => {
@@ -152,6 +171,26 @@ pub fn delete_forever(c: &Connection, entity: &str, id: &str) -> Result<()> {
             c.execute_batch("ROLLBACK TO forever; RELEASE forever")?;
             return Err(e);
         }
+    }
+    Ok(())
+}
+
+/// Clears what points at an event that is about to be deleted.
+fn let_go_of_event(c: &Connection, id: &str) -> Result<()> {
+    c.execute("UPDATE focus_sessions SET event_id = NULL WHERE event_id = ?1", [id])?;
+    Ok(())
+}
+
+/// Deletes a to-do's parts and clears what points at it, before the to-do itself is deleted.
+fn let_go_of_task(c: &Connection, id: &str) -> Result<()> {
+    c.execute("DELETE FROM change_log WHERE entity_id IN (SELECT id FROM task_parts WHERE task_id = ?1)", [id])?;
+    c.execute("DELETE FROM task_parts WHERE task_id = ?1", [id])?;
+    c.execute("UPDATE events SET task_id = NULL WHERE task_id = ?1", [id])?;
+    c.execute("UPDATE focus_sessions SET task_id = NULL WHERE task_id = ?1", [id])?;
+    c.execute("DELETE FROM focus_session_tasks WHERE task_id = ?1", [id])?;
+    // An older trial table some databases still have.
+    if has_table(c, "proposals")? {
+        c.execute("DELETE FROM proposals WHERE task_id = ?1", [id])?;
     }
     Ok(())
 }
@@ -293,6 +332,57 @@ mod tests {
         c.execute("UPDATE events SET source_id = 'src' WHERE id = ?1", [&imp]).unwrap();
         repo::set_archived(&c, "event", &imp, true).unwrap();
         assert!(delete_forever(&c, "event", &imp).is_err());
+    }
+
+    fn count(c: &Connection, sql: &str) -> i64 {
+        c.query_row(sql, [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn a_calendar_imported_twice_goes_away_with_its_events() {
+        let c = open_in_memory().unwrap();
+        for src in ["first", "second"] {
+            c.execute(&format!("INSERT INTO import_sources (id, kind, name, location, space_id, enabled, created_at, updated_at) VALUES ('{src}', 'ics_url', 'Timetable', 'https://x', 'seed-space-personal', 1, '2026-01-01', '2026-01-01')"), []).unwrap();
+            for n in 0..3 {
+                let e = event(&c, &format!("Class {n}"));
+                c.execute("UPDATE events SET source = 'import', source_id = ?1, external_uid = ?2 WHERE id = ?3", [src, &n.to_string(), &e]).unwrap();
+            }
+        }
+        // One the user changed, and one a sync had already removed.
+        c.execute("UPDATE events SET locally_modified = 1 WHERE source_id = 'second' AND external_uid = '0'", []).unwrap();
+        c.execute("UPDATE events SET deleted_at = '2026-02-01T00:00:00.000Z', removed_by_sync = 1 WHERE source_id = 'second' AND external_uid = '2'", []).unwrap();
+        let live = |c: &Connection| count(c, "SELECT COUNT(*) FROM events WHERE deleted_at IS NULL");
+        assert_eq!(live(&c), 5);
+
+        repo::set_archived(&c, "import_source", "second", true).unwrap();
+        assert_eq!(live(&c), 3, "the copy's classes leave the calendar");
+        let listed = list_archived(&c, "").unwrap();
+        assert_eq!(listed.len(), 1, "the archive shows the calendar, not each class");
+        assert_eq!(listed[0].entity, "import_source");
+
+        repo::set_archived(&c, "import_source", "second", false).unwrap();
+        assert_eq!(live(&c), 5, "bringing it back brings back what went with it, not what a sync removed");
+
+        repo::set_archived(&c, "import_source", "second", true).unwrap();
+        delete_forever(&c, "import_source", "second").unwrap();
+        assert_eq!(count(&c, "SELECT COUNT(*) FROM events WHERE source_id = 'second'"), 0);
+        assert_eq!(count(&c, "SELECT COUNT(*) FROM import_sources WHERE id = 'second'"), 0);
+        assert_eq!(live(&c), 3);
+        assert!(list_archived(&c, "").unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_update_archives_classes_of_calendars_archived_before() {
+        let c = open_in_memory().unwrap();
+        c.execute("INSERT INTO import_sources (id, kind, name, location, space_id, enabled, created_at, updated_at, deleted_at) VALUES ('old', 'ics_url', 'Timetable', 'https://x', 'seed-space-personal', 1, '2026-01-01', '2026-01-01', '2026-11-18T05:30:00.000Z')", []).unwrap();
+        let e = event(&c, "Class");
+        let mine = event(&c, "Mine");
+        c.execute("UPDATE events SET source_id = 'old', external_uid = '1' WHERE id = ?1", [&e]).unwrap();
+        c.execute_batch(include_str!("db/migrations/015_archived_calendars.sql")).unwrap();
+        assert_eq!(count(&c, "SELECT COUNT(*) FROM events WHERE deleted_at = '2026-11-18T05:30:00.000Z'"), 1);
+        assert!(repo::get_event(&c, &mine).unwrap().deleted_at.is_none());
+        repo::set_archived(&c, "import_source", "old", false).unwrap();
+        assert!(repo::get_event(&c, &e).unwrap().deleted_at.is_none());
     }
 
     #[test]

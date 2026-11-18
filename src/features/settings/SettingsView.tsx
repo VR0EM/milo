@@ -443,7 +443,7 @@ export function SettingsView() {
         <Section id="ai" title="Connect AI">
           <AiSettings />
         </Section>
-        <Section id="archive" title="Archive" info="Everything you archive stays here and can be brought back, until you delete it for good. Spaces and groups something still belongs to, and events from an imported calendar, always stay. Deleting happens after the daily backup, so a mistake can still be undone with Restore a backup.">
+        <Section id="archive" title="Archive" info="Everything you archive stays here and can be brought back, until you delete it for good. A calendar link takes its events with it. Spaces and groups something still belongs to, and single events from a calendar link, always stay. Deleting happens after the daily backup, so a mistake can still be undone with Restore a backup.">
           <ArchiveSettings />
         </Section>
         <Section id="data" title="Data &amp; app">

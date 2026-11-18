@@ -87,7 +87,9 @@ export function useSetArchived() {
       if (entity === "event" && archived) patchEvents(qc, (list) => list.filter((e) => e.id !== id));
     },
     onError: report,
-    onSettled: (_d, _e, { entity }) => qc.invalidateQueries({ queryKey: [plural[entity]] }),
+    // A calendar link takes its events and to-dos with it, so every screen can change.
+    onSettled: (_d, _e, { entity }) =>
+      entity === "import_source" ? qc.invalidateQueries() : qc.invalidateQueries({ queryKey: [plural[entity]] }),
   });
 }
 

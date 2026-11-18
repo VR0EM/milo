@@ -789,3 +789,15 @@ restored a backup or an item, added Milo to Claude Desktop); or a bigger change 
 (archiving, a checklist import, deleting for good). A change she sees happen gets none:
 dragging an event, sorting an Inbox note, starting or dropping focus, changing a repeat.
 Moves without a notice still go on the undo list (`remember`), so Ctrl+Z works the same.
+
+## A calendar link takes its events with it (0.4.4)
+
+- Importing the same timetable twice made two links, each with its own copy of every class.
+  Archiving one link only hid the link: its events stayed in the calendar, and "delete for
+  good" quietly failed because those events still pointed at it. So the timetable stayed double.
+- Now archiving a link archives its live events and to-dos at the very same moment. Bringing
+  the link back restores exactly what has that moment, not what a sync or she removed before.
+- In the Archive they show as the one calendar, not as a hundred classes.
+- Deleting the link for good deletes its events and to-dos too. Anything that is not archived
+  (brought back on its own) is kept as an ordinary event or to-do.
+- Migration 015 does the same for links archived before this version.
