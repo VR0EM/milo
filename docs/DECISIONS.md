@@ -801,3 +801,21 @@ Moves without a notice still go on the undo list (`remember`), so Ctrl+Z works t
 - Deleting the link for good deletes its events and to-dos too. Anything that is not archived
   (brought back on its own) is kept as an ordinary event or to-do.
 - Migration 015 does the same for links archived before this version.
+
+## Glass as a material (0.4.5)
+
+- Settings › Appearance › Material: Solid (as before) or Glass. Off by default. All of it lives
+  in `src/glass.css`, active only with `:root[data-glass]`.
+- The wallpaper is made from her theme and accent (the accent and two neighbours on the colour
+  wheel, mixed into the theme background), so it fits every theme instead of being a fixed
+  picture. A few large, soft blobs and nothing that moves, to keep it calm.
+- The theme colours are kept as `--solid-*` on the root; inside `.app` the usual tokens become
+  see-through versions, so every screen follows without rules of its own. Events, chips and the
+  side lines keep solid colours, so overlapping events stay readable.
+- The big panes do not use `backdrop-filter`: the wallpaper is already smooth, so a blur would
+  look the same and only cost time while scrolling (her Windows laptop). Only what floats over
+  text blurs: menus, dialogs, popovers, the sticky day row and a dialog's pinned buttons.
+- Grey text is mixed 22% toward the text colour in Glass. Worst case (sidebar on the strongest
+  part of the wallpaper) it is then at least as readable as on Solid, light and dark.
+- High contrast and the system's "Reduce transparency" make the panes almost solid.
+- The resize handle of the side panel sits in the gap beside it, so the panel cannot clip it.

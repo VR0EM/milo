@@ -7,6 +7,7 @@ import { CaptureWindow } from "./features/capture/CaptureWindow";
 import { files, onDataChanged, windowKind } from "./lib/api";
 import { feelLikeAnApp } from "./lib/appFeel";
 import "./styles.css";
+import "./glass.css";
 
 // No browser menus, reloads or "back" buttons: Milo is an app, not a web page.
 feelLikeAnApp();

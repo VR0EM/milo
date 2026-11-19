@@ -18,7 +18,7 @@ function useMode(theme: string): "light" | "dark" {
 /** Applies theme, colours, shape, typeface, text size and her own CSS from Settings to the page. */
 export function useAppearance() {
   const prefs = useUi((s) => s.prefs);
-  const { theme, accent, customAccent, font, textSize, palette, corners, density, highContrast, sidebarWidth, customCss, customCssOn } = prefs;
+  const { theme, accent, customAccent, font, textSize, palette, corners, density, highContrast, sidebarWidth, customCss, customCssOn, glass } = prefs;
   const strength = prefs.eventStrength;
   const clock = prefs.timeFormat;
   const mode = useMode(theme);
@@ -35,6 +35,8 @@ export function useAppearance() {
     root.dataset.corners = corners;
     root.dataset.density = density;
     root.dataset.sidebar = sidebarWidth;
+    if (glass) root.dataset.glass = "";
+    else root.removeAttribute("data-glass");
     if (highContrast) root.dataset.contrast = "high";
     else root.removeAttribute("data-contrast");
     root.dataset.accent = accent;
@@ -48,7 +50,7 @@ export function useAppearance() {
     }
     root.dataset.font = font;
     root.style.setProperty("--text-scale", String(TEXT_SCALE[textSize]));
-  }, [theme, mode, palette, corners, density, sidebarWidth, highContrast, accent, customAccent, font, textSize]);
+  }, [theme, mode, palette, corners, density, sidebarWidth, highContrast, glass, accent, customAccent, font, textSize]);
   // Her own CSS comes last, so it wins over Milo's.
   useEffect(() => {
     let el = document.getElementById("milo-custom-css") as HTMLStyleElement | null;

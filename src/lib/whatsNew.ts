@@ -12,6 +12,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.5",
+    date: "2026-11-18",
+    items: [
+      "Glass: in Settings › Appearance › Material, choose Glass and Milo floats on a soft background made from your colours, with see-through panes and frosted menus and dialogs. It follows every colour theme and accent, in light and dark. Grey text stays as easy to read as on Solid, and with High contrast or Reduce transparency on your computer the panes turn solid.",
+    ],
+  },
+  {
     version: "0.4.4",
     date: "2026-11-18",
     items: [

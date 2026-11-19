@@ -297,6 +297,9 @@ export function SettingsView() {
               ))}
             </div>
           </Row>
+          <Row title="Material" info="Glass lets the window float on a soft background made from your colours, with see-through panes. Solid is plain and flat.">
+            <Choice<"solid" | "glass"> value={prefs.glass ? "glass" : "solid"} label="Material" options={[["solid", "Solid"], ["glass", "Glass"]]} onChange={(m) => setPrefs({ glass: m === "glass" })} />
+          </Row>
           <Row title="Accent colour">
             <div className="accent-picker" role="radiogroup" aria-label="Accent colour">
               {ACCENTS.map(([a, label]) => (

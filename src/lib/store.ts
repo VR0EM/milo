@@ -43,6 +43,8 @@ export interface Prefs {
   /** Grey text and lines closer to the text colour. */
   highContrast: boolean;
   sidebarWidth: SidebarWidth;
+  /** Glass: the window floats on a soft wallpaper of her colours, as frosted panes (glass.css). */
+  glass: boolean;
   /** Her own CSS, added after Milo's, and whether it is used. */
   customCss: string;
   customCssOn: boolean;
@@ -92,7 +94,7 @@ export type TasksList = "overview" | "today" | "upcoming" | "inbox" | "late" | "
 export const DEFAULT_PREFS: Prefs = {
   theme: "system", accent: "blue", customAccent: "#3fa7d6", font: "system", textSize: "default", focusMini: true,
   palette: "neutral", corners: "soft", density: "comfortable", highContrast: false, sidebarWidth: "default",
-  customCss: "", customCssOn: true,
+  customCss: "", customCssOn: true, glass: false,
   autoUpdates: true, showWeekends: true, eventMinutes: 60, dayStartHour: 7,
   eventStrength: "normal", timeFormat: "24h", weekStart: 1, startView: "last", hiddenScreens: [],
   todayOrder: TODAY_BLOCKS.map(([b]) => b), todayHidden: [], setupDone: false, startCardHidden: false,

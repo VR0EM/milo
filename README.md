@@ -135,7 +135,7 @@ overview of its time, tasks and what is coming up.
 - **Reminders** before events, at set times, or every so often (water, a break), and checks
   like medication taken.
 - **Welcome guide** on the first start: courses, timetable link, rhythm.
-- **Make it yours:** light or dark, five colour themes, accent colour, typeface, text size,
+- **Make it yours:** light or dark, five colour themes, solid or glass, accent colour, typeface, text size,
   corners, spacing, contrast, sidebar width, 12 or 24-hour clock, first day of the week, which
   screens and Today blocks to show, and your own CSS.
 - **Updates inside the app**, only installed when you click.

@@ -1,0 +1,236 @@
+/* Glass (Settings › Appearance › Material).
+   The window gets a soft wallpaper made from her own theme and accent colour. The sidebar, the
+   page and the side panel float on it as panes of frosted glass with a light rim; menus, dialogs
+   and notices are clearer glass that blurs what is behind them.
+
+   How it stays calm, readable and fast:
+   - The panes are mostly opaque (text never sits on a busy background), and the wallpaper is
+     only a few large, soft blurs of colour, so nothing moves or flickers behind the text.
+   - The wallpaper is smooth, so blurring it would change nothing: the big panes have no
+     backdrop-filter. Only things that float over text (menus, dialogs, the sticky day row)
+     blur, and they are small or short-lived. This keeps scrolling smooth on any laptop.
+   - Events, chips and the time grid keep solid colours, so overlapping events stay readable.
+   - "Reduce transparency" on the computer, or High contrast in Milo, makes the panes solid.
+
+   The theme's own colours are kept as --solid-* on the root; inside the window the usual
+   tokens become see-through versions of them, so every screen follows without its own rules. */
+
+:root[data-glass] {
+  --solid-bg: var(--bg);
+  --solid-surface: var(--surface);
+  --solid-raised: var(--raised);
+  --solid-sunken: var(--sunken);
+  --solid-muted: var(--muted);
+
+  /* How much of the theme colour a pane keeps; the rest is wallpaper. */
+  --pane: 72%;
+  --card: 70%;
+  --float: 78%;
+
+  --rim: rgb(255 255 255 / 0.75);
+  --rim-soft: rgb(255 255 255 / 0.45);
+  --shine: inset 0 1px 0 rgb(255 255 255 / 0.85);
+  --pane-shadow: 0 1px 2px rgb(30 30 60 / 0.05), 0 12px 32px -6px rgb(30 30 60 / 0.12);
+  --float-shadow: 0 2px 6px rgb(30 30 60 / 0.08), 0 18px 48px -8px rgb(30 30 60 / 0.22);
+  --frost: blur(22px) saturate(160%);
+
+  /* Wallpaper colours: the accent, and two neighbours of it on the colour wheel. */
+  --wall-1: color-mix(in oklab, var(--accent) 34%, var(--solid-bg));
+  --wall-2: color-mix(in oklab, var(--accent) 18%, var(--solid-bg));
+  --wall-3: color-mix(in oklab, var(--accent) 24%, var(--solid-bg));
+}
+@supports (color: oklch(from red l c h)) {
+  :root[data-glass] {
+    --wall-2: color-mix(in oklab, oklch(from var(--accent) 0.8 0.11 calc(h + 55)) 42%, var(--solid-bg));
+    --wall-3: color-mix(in oklab, oklch(from var(--accent) 0.8 0.1 calc(h - 70)) 38%, var(--solid-bg));
+  }
+}
+:root[data-glass][data-mode="dark"] {
+  --pane: 66%;
+  --card: 58%;
+  --float: 76%;
+  --rim: rgb(255 255 255 / 0.13);
+  --rim-soft: rgb(255 255 255 / 0.08);
+  --shine: inset 0 1px 0 rgb(255 255 255 / 0.09);
+  --pane-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -8px rgb(0 0 0 / 0.5);
+  --float-shadow: 0 2px 8px rgb(0 0 0 / 0.35), 0 24px 56px -10px rgb(0 0 0 / 0.6);
+  --wall-1: color-mix(in oklab, var(--accent) 42%, var(--solid-bg));
+  --wall-2: color-mix(in oklab, var(--accent) 20%, var(--solid-bg));
+  --wall-3: color-mix(in oklab, var(--accent) 28%, var(--solid-bg));
+}
+@supports (color: oklch(from red l c h)) {
+  :root[data-glass][data-mode="dark"] {
+    --wall-2: color-mix(in oklab, oklch(from var(--accent) 0.5 0.12 calc(h + 55)) 55%, var(--solid-bg));
+    --wall-3: color-mix(in oklab, oklch(from var(--accent) 0.5 0.11 calc(h - 70)) 50%, var(--solid-bg));
+  }
+}
+/* Solid panes when transparency gets in the way. */
+:root[data-glass][data-contrast="high"] { --pane: 94%; --card: 96%; --float: 97%; }
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-glass] { --pane: 96%; --card: 97%; --float: 98%; }
+}
+
+/* ---------- the window ---------- */
+
+:root[data-glass] .app {
+  /* Glass versions of the theme colours, for everything inside the window. */
+  --bg: color-mix(in srgb, var(--solid-bg) var(--pane), transparent);
+  --surface: color-mix(in srgb, var(--solid-surface) var(--pane), transparent);
+  --sunken: color-mix(in srgb, var(--solid-sunken) calc(var(--pane) - 14%), transparent);
+  --raised: color-mix(in srgb, var(--solid-raised) var(--card), transparent);
+  --line: color-mix(in srgb, var(--text) 11%, transparent);
+  --line-soft: color-mix(in srgb, var(--text) 6%, transparent);
+  /* Grey text a step closer to the text colour: the wallpaper shows a little through the panes,
+     and grey must stay as easy to read as on Solid. */
+  --muted: color-mix(in srgb, var(--solid-muted) 78%, var(--text));
+
+  padding: 8px;
+  gap: 8px;
+  background:
+    radial-gradient(70% 80% at 0% 0%, var(--wall-1), transparent 72%),
+    radial-gradient(60% 70% at 100% 8%, var(--wall-2), transparent 70%),
+    radial-gradient(80% 75% at 85% 100%, var(--wall-3), transparent 72%),
+    radial-gradient(55% 60% at 8% 100%, var(--wall-2), transparent 70%),
+    var(--solid-bg);
+}
+:root[data-glass][data-contrast="high"] .app {
+  --line: color-mix(in srgb, var(--text) 22%, transparent);
+  --line-soft: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+/* The three panes: sidebar, page and side panel. */
+:root[data-glass] .sidebar,
+:root[data-glass] .calendar,
+:root[data-glass] .page,
+:root[data-glass] .tasks,
+:root[data-glass] .panel {
+  border: 1px solid var(--rim-soft);
+  border-radius: calc(14px * var(--r));
+  box-shadow: var(--shine), var(--pane-shadow);
+  overflow: hidden;
+}
+:root[data-glass] .sidebar {
+  /* The sidebar is a little clearer than the page, so the page reads as the main thing. */
+  background: color-mix(in srgb, var(--solid-sunken) calc(var(--pane) - 16%), transparent);
+  overflow-y: auto;
+}
+:root[data-glass] .panel { border-left: 1px solid var(--rim-soft); overflow: visible; }
+/* The handle to drag the panel wider sits in the gap beside it. */
+:root[data-glass] .panel-edge { left: -8px; }
+
+/* The day row above the week stays on top while the hours scroll under it: real frost. */
+:root[data-glass] .grid-header,
+:root[data-glass] .tr.th {
+  background: color-mix(in srgb, var(--solid-surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* ---------- cards and controls ---------- */
+
+:root[data-glass] .block,
+:root[data-glass] .stat,
+:root[data-glass] .reminder-card,
+:root[data-glass] .section-card,
+:root[data-glass] .tile,
+:root[data-glass] .course-card,
+:root[data-glass] .list-card,
+:root[data-glass] .next-up-item {
+  border-color: var(--rim-soft);
+  box-shadow: var(--shine), 0 1px 2px rgb(30 30 60 / 0.04), 0 6px 18px -6px rgb(30 30 60 / 0.1);
+}
+:root[data-glass][data-mode="dark"] .block,
+:root[data-glass][data-mode="dark"] .stat,
+:root[data-glass][data-mode="dark"] .reminder-card,
+:root[data-glass][data-mode="dark"] .section-card,
+:root[data-glass][data-mode="dark"] .tile,
+:root[data-glass][data-mode="dark"] .course-card,
+:root[data-glass][data-mode="dark"] .list-card,
+:root[data-glass][data-mode="dark"] .next-up-item { box-shadow: var(--shine), 0 6px 18px -6px rgb(0 0 0 / 0.4); }
+
+:root[data-glass] .btn { border-color: var(--rim-soft); box-shadow: var(--shine), 0 1px 2px rgb(30 30 60 / 0.06); }
+:root[data-glass] .btn:hover { background: color-mix(in srgb, var(--solid-raised) 92%, transparent); }
+:root[data-glass][data-mode="dark"] .btn:hover { background: color-mix(in srgb, var(--solid-raised) 80%, white 6%); }
+:root[data-glass] .btn.primary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 86%, white), var(--accent));
+  border-color: color-mix(in oklab, var(--accent) 70%, black);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+:root[data-glass] .segmented { background: color-mix(in srgb, var(--text) 6%, transparent); border-color: var(--rim-soft); }
+:root[data-glass] .segmented button.on,
+:root[data-glass] .segmented .day-button > button.on + .day-more {
+  background: color-mix(in srgb, var(--solid-raised) 94%, transparent);
+  box-shadow: var(--shine), 0 1px 3px rgb(30 30 60 / 0.12);
+}
+
+/* Fields: a touch more solid than the pane, so what she types stands out. */
+:root[data-glass] .app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+:root[data-glass] .app textarea,
+:root[data-glass] .app select {
+  background-color: color-mix(in srgb, var(--solid-surface) 86%, transparent);
+}
+
+:root[data-glass] .nav button.current,
+:root[data-glass] .side-row.current,
+:root[data-glass] .side-foot button.current {
+  background: color-mix(in srgb, var(--accent) 16%, color-mix(in srgb, var(--solid-raised) 55%, transparent));
+  box-shadow: var(--shine);
+}
+
+/* ---------- the calendar keeps solid colours ---------- */
+
+:root[data-glass] .event,
+:root[data-glass] .task-chip,
+:root[data-glass] .month-event { --surface: var(--solid-surface); }
+:root[data-glass] .event.nested { box-shadow: 0 0 0 1.5px var(--solid-surface); }
+
+/* ---------- things that float: clear glass that blurs what is behind ---------- */
+
+:root[data-glass] .dialog,
+:root[data-glass] .menu,
+:root[data-glass] .help-pop,
+:root[data-glass] .date-pop,
+:root[data-glass] .time-list,
+:root[data-glass] .tooltip,
+:root[data-glass] .task-ghost {
+  --raised: color-mix(in srgb, var(--solid-raised) 90%, transparent);
+  --surface: color-mix(in srgb, var(--solid-surface) 88%, transparent);
+  background: color-mix(in srgb, var(--solid-raised) var(--float), transparent);
+  -webkit-backdrop-filter: var(--frost);
+  backdrop-filter: var(--frost);
+  border: 1px solid var(--rim);
+  box-shadow: var(--shine), var(--float-shadow);
+}
+:root[data-glass][data-mode="dark"] .dialog,
+:root[data-glass][data-mode="dark"] .menu,
+:root[data-glass][data-mode="dark"] .help-pop,
+:root[data-glass][data-mode="dark"] .date-pop,
+:root[data-glass][data-mode="dark"] .time-list,
+:root[data-glass][data-mode="dark"] .tooltip,
+:root[data-glass][data-mode="dark"] .task-ghost { border-color: rgb(255 255 255 / 0.14); }
+:root[data-glass] .dialog { border-radius: calc(18px * var(--r)); }
+/* The pinned buttons at the foot of a long dialog are frosted too, so text scrolls under them. */
+:root[data-glass] .dialog > .dialog-foot,
+:root[data-glass] .dialog > form > .dialog-foot {
+  background: color-mix(in srgb, var(--solid-raised) 88%, transparent);
+  -webkit-backdrop-filter: var(--frost);
+  backdrop-filter: var(--frost);
+}
+:root[data-glass] .dialog::backdrop {
+  background: rgb(20 20 40 / 0.16);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+:root[data-glass][data-mode="dark"] .dialog::backdrop { background: rgb(0 0 0 / 0.38); }
+
+:root[data-glass] .notice { --bg: var(--solid-bg); }
+:root[data-glass] .notice:not(.error) {
+  background: color-mix(in srgb, var(--text) 82%, transparent);
+  -webkit-backdrop-filter: var(--frost);
+  backdrop-filter: var(--frost);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), var(--float-shadow);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-glass] .dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
