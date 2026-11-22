@@ -415,7 +415,7 @@ pub fn set_confirmed(db: State<Db>, rule_id: String, occurrence: String, done: b
 }
 
 fn backup_dir(app: &AppHandle) -> Result<std::path::PathBuf> {
-    Ok(app.path().app_data_dir().map_err(|e| crate::error::AppError::Invalid(e.to_string()))?.join("backups"))
+    Ok(crate::app_dir(app)?.join("backups"))
 }
 
 #[tauri::command(async)]
@@ -430,6 +430,8 @@ pub async fn set_backup_mirror(app: AppHandle, path: Option<String>) -> Result<u
     off_main(app.clone(), move |db| {
         repo::set_setting(&db.lock(), "backup_mirror_dir", path.as_deref())?;
         match path {
+            // A test copy (development build) never writes into the real second folder.
+            Some(_) if crate::works_on_copy() => Ok(0),
             Some(p) => backup::mirror(&backup_dir(&app)?, std::path::Path::new(&p)),
             None => Ok(0),
         }
@@ -523,7 +525,7 @@ pub fn show_main_window(app: AppHandle) -> Result<()> {
 /// Where Milo keeps its data, for the Settings screen. Off the main thread: it reads the disk.
 #[tauri::command(async)]
 pub fn app_info(app: AppHandle) -> Result<AppInfo> {
-    let dir = app.path().app_data_dir().map_err(|e| crate::error::AppError::Invalid(e.to_string()))?;
+    let dir = crate::app_dir(&app)?;
     let backups = dir.join("backups");
     let mut names: Vec<String> = std::fs::read_dir(&backups)
         .map(|it| it.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.ends_with(".sqlite")).collect())

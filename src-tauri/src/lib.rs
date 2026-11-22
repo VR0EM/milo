@@ -33,6 +33,42 @@ pub(crate) fn notify(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
+/// A development build (`npm run tauri dev`) works on a copy of the real data, in a folder next
+/// to it (`app.milo.desktop-dev`), so trying a change never touches the Milo used every day.
+/// `MILO_REAL_DATA=1` uses the real data anyway; `MILO_DATA_DIR` picks any folder.
+pub(crate) fn works_on_copy() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("MILO_DATA_DIR").is_none() && std::env::var_os("MILO_REAL_DATA").is_none()
+}
+
+/// The folder with milo.sqlite and the backups, for this build (see `works_on_copy`).
+pub(crate) fn app_dir(app: &AppHandle) -> error::Result<std::path::PathBuf> {
+    if let Some(d) = std::env::var_os("MILO_DATA_DIR") {
+        return Ok(d.into());
+    }
+    let real = app.path().app_data_dir().map_err(|e| error::AppError::Invalid(e.to_string()))?;
+    if !works_on_copy() {
+        return Ok(real);
+    }
+    let name = real.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "milo".into());
+    Ok(real.with_file_name(format!("{name}-dev")))
+}
+
+/// The first time a development build starts, it copies the real database into its own folder
+/// (read-only on the real one), so it has her real spaces and events to work with. Delete the
+/// `-dev` folder to start again from a fresh copy.
+fn copy_real_data(real: &std::path::Path, copy: &std::path::Path) {
+    let (from, to) = (real.join("milo.sqlite"), copy.join("milo.sqlite"));
+    if to.exists() || !from.exists() {
+        return;
+    }
+    let made = rusqlite::Connection::open_with_flags(&from, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .and_then(|c| c.execute("VACUUM INTO ?1", [to.to_string_lossy()]));
+    match made {
+        Ok(_) => eprintln!("Development build: working on a copy of your data in {}", copy.display()),
+        Err(e) => eprintln!("Development build: could not copy your data ({e}); starting empty"),
+    }
+}
+
 pub(crate) fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -160,11 +196,19 @@ pub fn run() {
                 }
             }
 
-            let dir = app.path().app_data_dir()?;
+            let real_dir = app.path().app_data_dir()?;
+            let dir = app_dir(app.handle())?;
             std::fs::create_dir_all(&dir)?;
+            if works_on_copy() {
+                copy_real_data(&real_dir, &dir);
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_title("Milo (test copy)");
+                }
+            }
             let conn = db::open(&dir.join("milo.sqlite"))?;
             app.manage(Db(Mutex::new(conn)));
-            app.manage(suggest::Suggester::new(&dir));
+            // The suggestion model is the same file for every build: no second download.
+            app.manage(suggest::Suggester::new(&real_dir));
 
             let open = MenuItem::with_id(app, "open", "Open Milo", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Milo", true, None::<&str>)?;
@@ -213,8 +257,9 @@ pub fn run() {
                         }
                     }
                     // The optional second folder (Settings > Your data) gets a copy as well.
+                    // Never from a test copy: its backups must not mix with the real ones.
                     if let Ok(Some(to)) = repo::get_setting(&conn, "backup_mirror_dir") {
-                        if !to.is_empty() {
+                        if !to.is_empty() && !works_on_copy() {
                             if let Err(e) = backup::mirror(&backups, std::path::Path::new(&to)) {
                                 eprintln!("copying backups to {to} failed: {e}");
                             }

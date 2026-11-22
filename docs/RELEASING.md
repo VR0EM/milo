@@ -1,49 +1,52 @@
-# Een nieuwe versie van Milo uitbrengen
+# Releasing a new version
 
-Geïnstalleerde Milo's vragen GitHub welke versie de nieuwste is (Settings > Updates, en
-hooguit één keer per dag bij het opstarten). Ze installeren een update pas als je vriendin op
-**Install and restart** klikt. Haar gegevens blijven staan.
+Installed copies of Milo ask GitHub for the newest version (Settings > Updates, and at most
+once a day at start-up). They install it only when you click **Install and restart**; the
+data stays where it is. With Claude, `/release` walks through all of this.
 
-## Eenmalig: de ondertekensleutel
+## Once: the signing key
 
-Updates worden ondertekend, zodat Milo alleen updates van jou aanvaardt.
+Updates are signed, so Milo only accepts updates made by you.
 
-- De **geheime sleutel** staat in `~/.tauri/milo.key` op deze Mac. **Maak er een backup van**
-  (bv. in je wachtwoordmanager). Ben je hem kwijt, dan kunnen geïnstalleerde Milo's geen
-  updates meer aanvaarden en moet ze opnieuw handmatig installeren.
-- De **publieke sleutel** staat in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
-- GitHub heeft de geheime sleutel nodig als repository secret:
+- The **private key** is a file, `milo.key`, kept in `~/.tauri/` (Windows:
+  `%USERPROFILE%\.tauri\milo.key`). Keep a backup of it in a password manager.
+  **It never goes into the repository, a chat or an email.** If it is lost, installed copies
+  can no longer accept updates and Milo has to be installed again by hand once, with a new key.
+- The **public key** is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
+- GitHub needs the private key as a repository secret named `TAURI_SIGNING_PRIVATE_KEY`
+  (Settings > Secrets and variables > Actions). Set it yourself, in a terminal:
 
   ```bash
   gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/milo.key
   ```
 
-  De sleutel heeft geen wachtwoord, dus `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is niet nodig.
+  The key has no password, so `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is not needed.
 
-## Elke keer: een versie uitbrengen
+## Every time: a new version
 
-1. Schrijf bovenaan `src/lib/whatsNew.ts` wat de nieuwe versie brengt, in gewone woorden voor
-   haar (Engels, zoals de app). Milo toont dat één keer op Today na de update. Het
-   release-script weigert een versie zonder notities, en `npm test` ook.
-2. Zorg dat alles gecommit is.
-3. Kies een nieuw versienummer, hoger dan het vorige:
-
-   ```bash
-   npm run release -- 0.3.0
-   ```
-
-   Dit zet het nummer in `package.json`, `tauri.conf.json` en `Cargo.toml`, commit dat en maakt
-   de tag `v0.3.0`.
-4. Push de commit en de tag:
+1. Write what the version brings at the top of `src/lib/whatsNew.ts`, in plain words (English,
+   like the app). Milo shows it once on Today after the update. The release script refuses a
+   version without notes, and `npm test` fails too.
+2. Commit everything, and run `npm run check`.
+3. Pick a higher version number (fixes: 0.4.6 to 0.4.7; a bigger feature: 0.4.6 to 0.5.0):
 
    ```bash
-   git push && git push origin v0.3.0
+   npm run release -- 0.4.7
    ```
 
-5. GitHub Actions (workflow **Release**) bouwt Milo voor Windows en macOS en zet het op de
-   Releases-pagina, samen met `latest.json`. Na ongeveer tien minuten ziet Milo de update.
+   This sets the number in `package.json`, `tauri.conf.json` and `Cargo.toml`, commits it and
+   creates the tag `v0.4.7`.
+4. Push the commit and the tag:
 
-## De eerste keer op haar laptop
+   ```bash
+   git push && git push origin v0.4.7
+   ```
 
-De versie die ze nu heeft (uit de Artifacts van de gewone build) kent de updater nog niet.
-Installeer één keer de `-setup.exe` van de eerste Release; vanaf dan werkt Milo zichzelf bij.
+5. GitHub Actions (workflow **Release**) builds Milo for Windows and macOS and publishes it on
+   the Releases page with `latest.json`. Follow it with `gh run list --limit 3`. After about
+   ten to fifteen minutes installed copies see the update.
+
+## If a release fails
+
+Read the log (`gh run view <id> --log-failed`), fix the cause, and release the next patch
+version. Never move, delete or reuse a tag that was pushed.

@@ -222,13 +222,14 @@ TypeScript interface.
 
 ```bash
 npm install
-npm run tauri dev   # the desktop app, on your real data folder
+npm run tauri dev   # the desktop app, on a test copy of your data (see docs/HANDOVER.md)
 npm run dev         # the interface only, in a browser, on in-memory data
 ```
 
 Open the browser version with `?demo` (<http://localhost:1420/?demo>) for a sample student week.
 
 ```bash
+npm run check                 # everything CI checks: types, Vitest and Rust tests
 npm test                      # the interface's logic (Vitest)
 cd src-tauri && cargo test    # the data layer (Rust)
 npx tsc --noEmit              # types
@@ -251,11 +252,20 @@ src-tauri/src/        Rust backend
   importer.rs, ics.rs calendar links
   reminders.rs        reminders and checks
   menubar.rs          the next event by the tray icon
-docs/                 decisions, releasing, Windows test notes, screenshots
+docs/                 architecture, principles, decisions, releasing, handover, screenshots
 ```
+
+### Working on Milo with Claude Code
+
+`CLAUDE.md` tells Claude Code how this project works, and `.claude/skills/` adds `/feature`,
+`/fix`, `/explain`, `/check` and `/release`. New to the project? Start with
+[`docs/HANDOVER.md`](docs/HANDOVER.md).
 
 ### Documentation
 
+- [docs/HANDOVER.md](docs/HANDOVER.md): setting up, your data while developing, working with Claude Code
+- [docs/PRINCIPLES.md](docs/PRINCIPLES.md): what Milo should feel like, and the rules for the interface
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is built, with recipes for common changes
 - [docs/DECISIONS.md](docs/DECISIONS.md): why things work the way they do
 - [docs/RELEASING.md](docs/RELEASING.md): publishing a version that installed copies update to
 - [docs/WINDOWS-TEST.md](docs/WINDOWS-TEST.md): testing on Windows

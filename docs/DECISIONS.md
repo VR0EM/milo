@@ -831,3 +831,24 @@ Moves without a notice still go on the undo list (`remember`), so Ctrl+Z works t
 - Text follows the height, like Notion: from 36 px title and time on separate lines; below that
   title and start time on one line, the time giving way first; below 20 px a smaller line; below
   11 px no text at all (half-cut letters are noise) but the title shows on hover.
+
+## Handover: a project Claude can carry (after 0.4.6)
+
+Milo changes owner. The new owner works with Claude Code and should not need long prompts.
+
+- `CLAUDE.md` holds the way of working (understand, ask little, plan small, prove, record,
+  report), the non-negotiables, a map and the definition of done. Details are in
+  `docs/ARCHITECTURE.md` (with recipes) and `docs/PRINCIPLES.md` (what Milo should feel like);
+  this file stays the project's memory.
+- `.claude/skills/` gives fixed procedures: `/feature`, `/fix`, `/explain`, `/check`,
+  `/release`. `.claude/settings.json` allows the usual checks without prompts and blocks
+  reading the signing key, force pushes, deleting tags and changing secrets.
+- `npm run check` runs what CI runs (types, Vitest, `cargo test`).
+- **Development builds work on a test copy.** The owner develops on the laptop she uses Milo
+  on, so a debug build now uses `app.milo.desktop-dev` next to the real folder, copied
+  read-only from the real database the first time, with the window title "Milo (test copy)".
+  It never writes into the second backup folder. `MILO_REAL_DATA=1` opts back into the real
+  data; `MILO_DATA_DIR` still picks any folder. The MCP server (`milo --mcp`) keeps using the
+  real folder, since Claude Desktop points at an installed copy.
+- `docs/HANDOVER.md`: moving the repository (transfer keeps the update address working through
+  GitHub's redirect), handing over the signing key, and setting up Windows.
