@@ -3,7 +3,7 @@ import { colorVar } from "../../lib/colors";
 import { useActivities, useCreateEvent, useUpdateEvent } from "../../lib/queries";
 import { useUi } from "../../lib/store";
 import {
-  MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtWeekday, minutesIntoDay, sameDay, snapMinutes, startOfDay, fmtHour,
+  MINUTE, SNAP_MINUTES, addDays, atMinutes, fmtRange, fmtTime, fmtWeekday, minutesIntoDay, sameDay, snapMinutes, startOfDay, fmtHour,
 } from "../../lib/time";
 import type { CalEvent, Space, Task } from "../../lib/types";
 import { firstShown, shiftShown, shownDistance } from "./days";
@@ -26,7 +26,7 @@ interface Shown {
 
 const SNAP_MS = SNAP_MINUTES * MINUTE;
 /** The smallest height an event gets, so a one-minute event can still be clicked. */
-const MIN_EVENT_PX = 22;
+const MIN_EVENT_PX = 16;
 /** The room an event's title (up to two lines) and its time take at the top. An event that
  * starts within it goes beside the other one; a later one may cover the rest. */
 const TITLE_PX = 46;
@@ -550,10 +550,14 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
               {layoutDay(shown, day, (MIN_EVENT_PX / hourHeight) * 60, (TITLE_PX / hourHeight) * 60).map((seg) => {
                 const ev = seg.item.event;
                 const space = spaceById.get(ev?.spaceId ?? defaultSpaceId ?? "");
-                // Very short events (a deadline at 23:59) still get a clickable height, and one
-                // that would run past midnight is lifted so it stays inside the day.
-                const height = Math.max(px(seg.bottom - seg.top), MIN_EVENT_PX);
+                // Very short events (a deadline at 23:59) get a clickable height where there is
+                // room, and one that would run past midnight is lifted so it stays inside the day.
+                const height = Math.max(px(seg.drawnBottom - seg.top), 3);
                 const top = Math.min(px(seg.top), 24 * hourHeight - height);
+                // Like Notion: an event too low for its title and time shows them on one line,
+                // and a very low one gets a smaller line that fits.
+                // Below a readable line only the coloured block is left; its title shows on hover.
+                const fit = height < 11 ? "tiny sliver" : height < 20 ? "tiny" : height < 36 ? "short" : "";
                 const cls = [
                   "event",
                   seg.level > 0 ? "nested" : "",
@@ -562,11 +566,13 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                   seg.item.end < now ? "past" : "",
                   seg.item.id === draft?.id || seg.item.id === "task-drop" ? "dragging" : "",
                   ev?.taskId ? "task-block" : "",
+                  fit,
                 ].join(" ");
                 return (
                   <div
                     key={seg.item.id}
                     className={cls}
+                    title={height < 11 && ev ? `${ev.title || "Untitled"}, ${fmtRange(seg.item.start, seg.item.end)}` : undefined}
                     style={{
                       top,
                       height: height - 1,
@@ -589,7 +595,11 @@ export function WeekGrid({ days, visibleCount, buffer, weekends, events, tasks, 
                     }}
                   >
                     <div className="event-title">{ev?.title || (ev ? "Untitled" : seg.item.id === "task-drop" ? dragTask?.title || "Untitled task" : "New event")}</div>
-                    {height >= 36 && <div className="event-time">{fmtRange(seg.item.start, seg.item.end)}</div>}
+                    {fit ? (
+                      <div className="event-time">{seg.startsHere ? fmtTime(seg.item.start) : fmtRange(seg.item.start, seg.item.end)}</div>
+                    ) : (
+                      <div className="event-time">{fmtRange(seg.item.start, seg.item.end)}</div>
+                    )}
                     {height >= 52 && ev?.location && <div className="event-time event-place">{ev.location}</div>}
                     {ev && seg.startsHere && (
                       <div className="handle top" onPointerDown={(e) => { e.stopPropagation(); select(ev.id); beginDrag(e, "start", ev); }} />

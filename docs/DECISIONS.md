@@ -819,3 +819,15 @@ Moves without a notice still go on the undo list (`remember`), so Ctrl+Z works t
   part of the wallpaper) it is then at least as readable as on Solid, light and dark.
 - High contrast and the system's "Reduce transparency" make the panes almost solid.
 - The resize handle of the side panel sits in the gap beside it, so the panel cannot clip it.
+
+## Short events when zoomed out (0.4.6)
+
+- Every event was drawn at least 22 px tall, and that inflated height also counted as overlap.
+  Zoomed out, a quarter of an hour is less than that, so back-to-back events (a routine split in
+  quarters, a night routine right before sleep) "overlapped" and were pushed aside or stepped in.
+- Now an event is drawn its real height, raised to the minimum (16 px) only as far as the next
+  event that starts after it ends (`drawnBottom` in `layout.ts`). Events back to back never
+  overlap, so they stay full width, one under the other, as in Notion. Real overlaps still nest.
+- Text follows the height, like Notion: from 36 px title and time on separate lines; below that
+  title and start time on one line, the time giving way first; below 20 px a smaller line; below
+  11 px no text at all (half-cut letters are noise) but the title shows on hover.

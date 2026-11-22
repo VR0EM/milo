@@ -11,6 +11,9 @@ export interface Segment<T extends Timed> {
   /** Minutes from local midnight, clipped to this day. */
   top: number;
   bottom: number;
+  /** Where it is drawn to: its end, or lower when it is shorter than `minMinutes`, but never
+   * into an event that starts after it ends, so events back to back stay one under the other. */
+  drawnBottom: number;
   /** Place among events that start together, side by side: `col` of `cols`. */
   col: number;
   cols: number;
@@ -26,8 +29,9 @@ export interface Segment<T extends Timed> {
  *   and time take, so a later one would cover them) share the width side by side;
  * - an event that starts while another is running is drawn on top of it, one level further
  *   to the right, so the one underneath keeps its title and its left edge in view.
- * An event that crosses midnight (sleep) yields one segment per day. `minMinutes` is also the
- * shortest an event is drawn, so a five-minute event takes the room it is drawn with.
+ * An event that crosses midnight (sleep) yields one segment per day. `minMinutes` is the
+ * shortest an event is drawn, as far as there is room before the next event: zoomed out, a row
+ * of quarter-hour events stays a neat stack instead of being pushed aside by each other.
  */
 export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0, titleMinutes = minMinutes): Segment<T>[] {
   const dayEnd = addDays(day, 1);
@@ -40,6 +44,7 @@ export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0
       item,
       top: startsHere ? minutesIntoDay(item.start) : 0,
       bottom: endsHere && item.end < dayEnd ? minutesIntoDay(item.end) : 1440,
+      drawnBottom: 0,
       col: 0,
       cols: 1,
       level: 0,
@@ -49,12 +54,17 @@ export function layoutDay<T extends Timed>(items: T[], day: Date, minMinutes = 0
   }
   // Earlier first; of two that start together, the longer one first (it goes underneath).
   segs.sort((a, b) => a.top - b.top || b.bottom - a.bottom);
+  for (const s of segs) {
+    const next = segs.find((o) => o.top >= s.bottom && o !== s);
+    const room = next ? next.top : 1440;
+    s.drawnBottom = Math.max(s.bottom, Math.min(s.top + minMinutes, room));
+  }
 
   interface Group { top: number; bottom: number; level: number; members: Segment<T>[] }
   const groups: Group[] = [];
   const together = Math.max(titleMinutes, 1);
   for (const s of segs) {
-    const drawnBottom = Math.max(s.bottom, s.top + minMinutes);
+    const drawnBottom = s.drawnBottom;
     const running = groups.filter((g) => g.bottom > s.top);
     // The latest running group it starts together with, if any.
     const join = [...running].reverse().find((g) => s.top - g.top < together);

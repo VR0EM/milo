@@ -12,6 +12,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.4.6",
+    date: "2026-11-22",
+    items: [
+      "Zoomed out, short events that follow each other (a morning routine in quarters, a night routine right before sleep) stay neatly under each other instead of stepping aside. Like in Notion, a low event shows its title and start time on one line, and a very thin one shows its title when you point at it.",
+    ],
+  },
+  {
     version: "0.4.5",
     date: "2026-11-18",
     items: [

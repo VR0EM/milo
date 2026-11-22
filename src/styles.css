@@ -313,6 +313,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .event.selected { background: color-mix(in srgb, var(--c) var(--event-mix-selected), var(--surface)); box-shadow: 0 0 0 1.5px var(--c), var(--shadow); z-index: 2; }
 .event.dragging { z-index: 4; box-shadow: var(--shadow-lift); cursor: grabbing; }
 .handle { position: absolute; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+/* Low events, as in Notion: title and start time on one line; the time gives way first.
+   Very low ones get a smaller line and thinner edges to pull, so the middle still moves it. */
+.event.short, .event.tiny { display: flex; align-items: center; gap: 6px; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
+.event.short .event-title, .event.tiny .event-title { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event.short .event-time, .event.tiny .event-time { flex: 0 1000 auto; min-width: 0; margin: 0; overflow: hidden; }
+.event.tiny { font-size: calc(11px * var(--text-scale)); line-height: 1.1; border-radius: calc(4px * var(--r)); }
+.event.tiny .handle { height: 3px; }
+.event.sliver { border-radius: calc(2px * var(--r)); }
+.event.sliver .event-title, .event.sliver .event-time { visibility: hidden; }
 .handle.top { top: 0; }
 .handle.bottom { bottom: 0; }
 
